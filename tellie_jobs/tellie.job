@@ -1,0 +1,32 @@
+# Options for the batch system
+# ----------------------------
+# Shell used to interpret this script
+#$ -S /bin/bash
+# Execute job from current working directory
+#$ -cwd
+# Merge stderr and stdout
+#$ -j y
+#$ -o /home/m/mn/mn372/Software/SNOP/work/tellie_jobs/logs/bash/
+
+# Job script
+# ----------
+cd /home/m/mn/mn372/Software/SNOP/work/tellie_jobs
+if [ "$SGE_TASK_ID" = "undefined" ] || [ "$SGE_TASK_ID" = "" ]
+then
+  export CHANNEL=1
+else
+  export CHANNEL=$SGE_TASK_ID
+fi
+export LIST=${PWD}/tellie_fibres.list
+export FIBRE=`sed "${CHANNEL}q;d" ${LIST}`
+echo "CHANNEL=$CHANNEL"
+echo "LIST=$LIST"
+echo "FIBRE=$FIBRE"
+echo "Running job script #${CHANNEL} (TELLIE ${FIBRE})"
+cd logs/rat_logs/
+source /home/m/mn/mn372/Software/SNOP/snoing/install/env_rat-6.2.5.sh 
+rat -b 'postgres://snoplus@pgsql.snopl.us:5400/ratdb' /home/m/mn/mn372/Software/SNOP/work/tellie_jobs/macros/TELLIE_${FIBRE}.mac
+echo "Finished job script #${CHANNEL}"
+unset FIBRE LIST CHANNEL
+cd /home/m/mn/mn372/Software/SNOP/work/tellie_jobs
+

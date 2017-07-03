@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+'''Generate loads of jobs to produce a new data set
+'''
+import subprocess
+import argparse
+import os
+import sys
+
+sh = '''#!/bin/bash
+#PBS -e {0}
+#PBS -o {0}
+cd {1}
+source {2} 
+rat {3}
+'''
+
+def check_dir(dname):
+    """Check if directory exists, create it if it doesn't"""
+    if(dname[-1] != "/"):
+        dname = dname + "/"
+    direc = os.path.dirname(dname)
+    try:
+        os.stat(direc)
+    except:
+        os.makedirs(direc)
+        print "Made directory %s...." % dname
+    return dname
+
+def write_macro(macname, outfile):
+    with open(macname, "w") as f:
+        f.write(mac.format(os.path.abspath(outfile)))
+
+def write_shell_script(bash_log_path, run_path, env_path, mac_name, shell_name):
+    with open(shell_name, "w") as f:
+        f.write(sh.format(bash_log_path, run_path, os.path.abspath(env_path), mac_name))
+    return shell_name
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser("Reprocess a dir of root files")
+    parser.add_argument('macro', type=str, help='template macro file to load')
+    parser.add_argument('out_dir', type=str, help='directory to place reprocessed files')
+    parser.add_argument('-e', '--env_file', type=str,
+                        help='path to environment file reprocessed files',
+                        default="/home/leming/rat-env/env_rat-dev.sh")
+    parser.add_argument('-batch_command', type = str,
+                        default = 'qsub -l cput=11:59:59',
+                        help = 'Batch submit file')
+    parser.add_argument("-r", "--run_directory", type=str,
+                       default="/home/leming/sim_submission/",
+                       help="base directory from which the scripts will be run")
+    parser.add_argument("-n", "--no_sims", type=int,
+                       default=100,
+                       help="how many identical sims would you like to launch?")
+    args = parser.parse_args()
+
+    try:
+        mac = open(args.macro, "r").read()
+    except:
+        print "template macro could not be read"
+        sys.exit(1)
+
+    out_dir = check_dir(args.out_dir)
+    bash_log_dir = check_dir("{0}/logs/bash/".format(args.run_directory))
+    run_dir = check_dir("{0}/logs/rat_logs/".format(args.run_directory))
+    mac_dir = check_dir("{0}/macros/".format(args.run_directory))
+    script_dir = check_dir("{0}/scripts/".format(args.run_directory))
+    base_name = args.macro.split("/")[-1].replace(".mac","")
+
+    for i in range(args.no_sims):
+        write_macro("{0}{1}_{2}.mac".format(mac_dir, base_name, i), 
+                    "{0}{1}_{2}.root".format(out_dir, base_name, i))
+
+        sh_name = write_shell_script(bash_log_dir,
+                                     run_dir,
+                                     args.env_file, 
+                                     "{0}{1}_{2}.mac".format(mac_dir, base_name, i),
+                                     "{0}{1}_{2}.sh".format(script_dir, base_name, i))
+
+        subprocess.check_call("{0} {1}".format(args.batch_command, sh_name), shell = True)
+        

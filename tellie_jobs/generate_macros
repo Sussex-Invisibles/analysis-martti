@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+'''Generate loads of macros to produce a new data set
+'''
+#import subprocess
+import argparse
+import os
+import sys
+
+def check_dir(dname):
+    """Check if directory exists, create it if it doesn't"""
+    if(dname[-1] != "/"):
+        dname = dname + "/"
+    direc = os.path.dirname(dname)
+    try:
+        os.stat(direc)
+    except:
+        os.makedirs(direc)
+        print "Made directory %s...." % dname
+    return dname
+
+def write_macro(macname, outfile, fibre):
+    with open(macname, "w") as f:
+        f.write(mac.format(fibre, os.path.abspath(outfile)))
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser("Reprocess a list of macros")
+    parser.add_argument('macro', type=str, help='template macro file to load')
+    parser.add_argument('input_list', type=str, help='list of fibres')
+    args = parser.parse_args()
+    
+    try:
+        mac = open(args.macro, "r").read()
+    except:
+        print "template macro could not be read"
+        sys.exit(1)
+
+    mac_dir = os.environ["PWD"]+"/macros/"
+    out_dir = os.environ["PWD"]+"/output/"
+    base_name = args.macro.split("/")[-1].replace("_template.mac","")
+    input_list = args.input_list
+
+    # Write a macro for all fibres in list
+    with open(input_list) as f:
+        for line in f:
+            fibre = line.rstrip('\n')
+            write_macro("{0}{1}_{2}.mac".format(mac_dir, base_name, fibre),
+                        "{0}{1}_{2}.root".format(out_dir, base_name, fibre),
+                        str(fibre))
+
+

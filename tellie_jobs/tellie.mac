@@ -1,0 +1,18 @@
+/rat/physics_list/OmitMuonicProcesses true
+/rat/physics_list/OmitHadronicProcesses true
+/rat/db/load geo/snoplus_water.geo
+/rat/db/set DAQ_RUN_LEVEL trigger_mask 32768
+/rat/db/set DAQ_RUN_LEVEL trigger_enable 35967
+/rat/db/set ELLIE intensity 1000
+/rat/db/set ELLIE fibre_id "{0}"
+/run/initialize
+/rat/proc frontend
+/rat/proc trigger
+/rat/proc eventbuilder
+/rat/proc count
+/rat/procset update 100
+/rat/proclast outroot
+/rat/procset file "TELLIE_MC_{0}.root"
+/generator/add combo vertexellie:posellie:poisson
+/rat/run/start 1000
+exit

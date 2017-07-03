@@ -1,0 +1,11 @@
+*.exe
+*.out
+*.pdf
+*.png
+*/.compiled
+*/.executed
+fibre_validation/output
+tellie_jobs/logs
+tellie_jobs/macros
+tellie_jobs/output
+
