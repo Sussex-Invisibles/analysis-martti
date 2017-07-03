@@ -3,7 +3,10 @@
 #include <TVector2.h>
 #include <TVector3.h>
 #include <TGaxis.h>
+#include <TGraph2D.h>
 #include <TH1F.h>
+#include "TF2.h"
+#include "TPad.h"
 using namespace std;
 
 // Global constants
@@ -17,8 +20,9 @@ string printVector(const TVector3&);
 void GetRotationAngles(const TVector3&, double&, double&);
 void GetHotLimit(int*, int&);
 void GetMaxColVal(const TVector3&, int*, int, int&, int&, const RAT::DU::PMTInfo&);
-void FillHemisphere(const TVector3&, int*, int, TGraph**, int, int, const RAT::DU::PMTInfo&);
+void FillHemisphere(const TVector3&, int*, int, TGraph**, TGraph2D*, int, int, const RAT::DU::PMTInfo&);
 void DrawCircle(const TVector3&, double, TVector3**, int);
+void FitLightSpot(TGraph2D*, double, double, double*);
 
 // Display vector as string
 string printVector(const TVector3& v) {
@@ -102,7 +106,7 @@ void GetMaxColVal(const TVector3& center, int* pmthitcount, int NPMTS, int &near
 }
 
 // Create detector view from above central point
-void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph** dots, int NCOL, int MAXVAL, const RAT::DU::PMTInfo& pmtinfo) {
+void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph** dots, TGraph2D* graph, int NCOL, int MAXVAL, const RAT::DU::PMTInfo& pmtinfo) {
   
   // Get maximum value for color scale
   int HOTLIMIT;
@@ -121,6 +125,7 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
   GetRotationAngles(center,rot_Z,rot_X);
   
   // Loop over all PMTs
+  int counter=0;
   TVector3 pmtpos, newpos;
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
@@ -131,7 +136,8 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
     newpos = pmtpos;
     newpos.RotateZ(-rot_X);
     newpos.RotateY(-rot_Z);
-    
+
+    // Fill graph
     int step = (int)TMath::Ceil(pmthitcount[id]/(1.*MAXVAL/NCOL))+1;
     if (pmthitcount[id] > MAXVAL) step = NCOL+1;   // cap color range
     if (pmthitcount[id] > HOTLIMIT) step = 0;      // hot PMT
@@ -139,7 +145,20 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
     dotx[step][ndot[step]]=newpos.X()/1e3;
     doty[step][ndot[step]]=newpos.Y()/1e3;
     ndot[step]++;
+    
+    // Fill 2D graph (more effective?)
+    if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT (remove OWLEs)
+    if (pmthitcount[id]==0 || pmthitcount[id]>HOTLIMIT) continue;  // hot/off PMT
+    if (newpos.Z() <= 0) continue;              // not in hemisphere (safety check)
+    double xpt = newpos.X()/1e3;//*cos(pi/4)/cos(newpos.Theta());
+    double ypt = newpos.Y()/1e3;//*cos(pi/4)/cos(newpos.Theta());
+    //if(fabs(xpt)>10 || fabs(ypt)>10) continue;
+    graph->SetPoint(counter, xpt, ypt, pmthitcount[id]);
+    counter++;
+    //for (int n=0; n<pmthitcount[id]; n++) 
+    //  hist->Fill(newpos.X()/1e3*cos(pi/4)/cos(newpos.Theta()), newpos.Y()/1e3*cos(pi/4)/cos(newpos.Theta()));
   }
+
   for (int s=0; s<NCOL+2; s++) {
     int col;
     if      (s==0) col=1;  // hot PMTs
@@ -152,6 +171,31 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
     dots[s]->SetMarkerColor(col);
   }
 
+}
+
+void FitLightSpot(TGraph2D* graph, double radius, double angle, double* params) {
+  int npts = graph->GetN();
+  double *xpts = graph->GetX();
+  double *ypts = graph->GetY();
+  double *zpts = graph->GetZ();
+  TGraph2D *graf = new TGraph2D();//graph->Clone();
+  int pts=0;
+  for (int n=0; n<npts; n++) {
+    double rpt = sqrt(xpts[n]*xpts[n] + ypts[n]*ypts[n]);
+    if (asin(rpt/radius) > angle/180*pi) continue;
+    graf->SetPoint(pts,xpts[n],ypts[n],zpts[n]);
+  }
+  TF2 *fit = new TF2("gaus2d","[0]*TMath::Gaus(x,[1],[2])*TMath::Gaus(y,[3],[4])",-10,10,-10,10);
+  fit->SetParameters(*max_element(zpts,zpts+npts),0.,2.,0.,2.);
+  graf->Fit("gaus2d");
+  for (int par=0; par<5; par++) params[par]=fit->GetParameter(par);
+/*
+  params[0] = fit->GetParameter(0); // Amplitude
+  params[1] = fit->GetParameter(1); // x mean
+  params[2] = fit->GetParameter(3); // y mean
+  params[3] = fit->GetParameter(2)+fit->GetParameter(4))/2.; // 1 sigma deviation (x-y-averaged)
+  params[4] = fit->GetParameter(4); // y deviation
+*/
 }
 
 void DrawCircle(const TVector3& center, double angle, TVector3** dots, int NDOTS) {

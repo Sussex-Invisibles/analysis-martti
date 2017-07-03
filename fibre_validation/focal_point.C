@@ -14,6 +14,7 @@
 #include "TROOT.h"
 #include "TCanvas.h"
 #include "TFile.h"
+#include "TF2.h"
 #include "TH2.h"
 #include "TLegend.h"
 #include "TLatex.h"
@@ -37,7 +38,7 @@
 #include "Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER=1;    // whether running on cluster (0=local)
+const int RUN_CLUSTER=0;    // whether running on cluster (0=local)
 const int IS_MC = 0;        // Monte-Carlo flag 
 const int NCOL=20;          // number of colors (max. 50)
 const int NDOTS = 360;      // number of points in circle
@@ -52,7 +53,7 @@ using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 101842;
+  const int TEST = (RUN_CLUSTER) ? 0 : 101849;
   
   // Loop over all fibres in list
   string input = (RUN_CLUSTER) ? "../pca_runs/TELLIE_PCA.txt" : "TELLIE_PCA.txt";
@@ -86,9 +87,15 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   if(!TEST) printf("*****\n");
   printf("Checking files for run %d... ", run);
   string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
-  string fname = Form("%s/Analysis_r0000%d_s000_p000.root",fpath.c_str(),run);
+  string fname = "";
+  fstream f;
+  for (int pass=3;pass>=0;pass--) {
+    fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+    f.open(fname.c_str());
+    if (f.good()) break;
+  }
   string out   = Form("./output/PCA_%s.pdf",fibre.c_str());
-  ifstream f(fname.c_str());
+  //ifstream f(fname.c_str());
   ifstream g(out.c_str());
   if (!TEST && g.good()) {   // file downloaded and processed
     printf("already processed! Skipping fibre %s.\n",fibre.c_str());
@@ -260,9 +267,11 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   // ********************************************************************
   
   for(int id=0; id<NPMTS; id++) {
+    pmtpos = pmtinfo.GetPosition(id);
+    if (pmtpos.Mag()==0) continue;            // not a valid PMT
+    if (pmtinfo.GetType(id) != 1) continue;   // not a normal PMT
     if (pmthitcount[id] == 0) continue;       // off PMTs
     if (pmthitcount[id] > HOTLIMIT) continue; // hot PMTs
-    pmtpos = pmtinfo.GetPosition(id);
     for (int j=0; j<pmthitcount[id]; j++) {
       hcoarse->Fill(pmtpos.Phi()/pi, -pmtpos.Theta()/pi);  // negative theta (neck on top)
     }
@@ -514,9 +523,19 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   
   // Fill histogram with new view
   TGraph *gDir[NCOL+2], *gRef[NCOL+2];
-  FillHemisphere(direct, pmthitcount, NPMTS, gDir, NCOL, nearmax, pmtinfo);
-  FillHemisphere(reflected, pmthitcount, NPMTS, gRef, NCOL, farmax, pmtinfo);
+  float hlimD = 10;//3*DIR_CONE/180;
+  //TH2F *hDir = new TH2F("hDir","Direct fit;X'/R*#theta (m #pi);Y'/R*#theta (m #pi)",100,-hlimD,hlimD,100,-hlimD,hlimD);
+  TGraph2D *gDir2 = new TGraph2D();
+  //TH2F *hRef = new TH2F("hRef","Histogram",100,-2,2,100,-2,2);
+  TGraph2D *gRef2 = new TGraph2D();
+  FillHemisphere(direct, pmthitcount, NPMTS, gDir, gDir2, NCOL, nearmax, pmtinfo);
+  FillHemisphere(reflected, pmthitcount, NPMTS, gRef, gRef2, NCOL, farmax, pmtinfo);
+
+  //double parDir[5], parRef[5];
+  //FitLightSpot(gDir2,pmtrad,DIR_CONE,parDir);
+  //FitLightSpot(gRef2,pmtrad,2*REF_CONE,parRef);
   
+
   // ********************************************************************
   // Plotting section
   // ********************************************************************
@@ -598,8 +617,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   hhitshi->SetFillColor(1);
   double hotlimedge;
   for (int b=0; b<hhitshi->GetNbinsX(); b++) {
-    if(hhitshi->GetBinLowEdge(b)<HOTLIMIT) continue;
-    hotlimedge = hhitshi->GetBinLowEdge(b+1);
+    if(hhitshi->GetBinCenter(b)<HOTLIMIT) continue;
+    hotlimedge = hhitshi->GetBinCenter(b);
     break;
   }
   hhitshi->GetXaxis()->SetRangeUser(hotlimedge,2e5);
@@ -653,8 +672,15 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   if(pcircD2) pcircD2->Draw("P same");
   txtD->Draw();  
   
-  // View from reflected light spot (fitted)
   pad4->cd()->SetGrid();
+/*
+  // View from reflected light spot (fitted)
+  //gDir2->Draw("scat");
+  //gDir2->SetMarkerStyle(7);
+  //gDir2->Draw("pcol");
+  gDir2->Draw("surf1");
+  gDir2->Draw("cont1 same");
+*/
   hfineR->SetTitle("Reflected light (PMT hit sum);X'' [m];Y'' [m]");
   hfineR->GetXaxis()->SetTitleOffset(1.3);
   hfineR->GetYaxis()->SetTitleOffset(1.4);
@@ -688,6 +714,14 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   if(hfineD) delete hfineD;
   if(hfineR) delete hfineR;
   if(hhits) delete hhits;
+  //if(hDir) delete hDir;
+  //if(hRef) delete hRef;
+  //if(gDir2) delete gDir2;
+  //if(gRef2) delete gRef2;
+  //if(fDir2) delete fDir2;
+  //if(fRef2) delete fRef2;
+  //if(fitDir) delete fitDir;
+  //if(fitRef) delete fitRef;
   if (icos) { for(int s=0; s<NCOL+2; s++) delete icos[s]; }
   if (gDir) { for(int s=0; s<NCOL+2; s++) delete gDir[s]; }
   if (gRef) { for(int s=0; s<NCOL+2; s++) delete gRef[s]; }
