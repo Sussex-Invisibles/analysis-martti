@@ -159,13 +159,16 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   // ********************************************************************
   // Sum PMT hit counts for entire run
   // ********************************************************************
-  int pmthitcount[NPMTS], avgnhit=0, count=0;
+  int pmthitcount[NPMTS], pmtlightcone[NPMTS];
   memset( pmthitcount, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+  memset( pmtlightcone, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+  int avgnhit=0, count=0;
   if (scanned_file) {
-    int pmtid, pmthits;
+    int pmtid, pmthits, onspot;
     while (g.good()) {
-      g >> pmtid >> pmthits;
+      g >> pmtid >> pmthits >> onspot;
       pmthitcount[pmtid]=pmthits;
+      pmtlightcone[pmtid]=onspot;
       avgnhit += pmthits;
       count++;
     }
@@ -174,15 +177,15 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
       const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
       
       // Loop over triggered events in each entry
-      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {        // mostly 1 event per entry
+      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) { // mostly 1 event per entry
         const RAT::DS::EV& ev = ds.GetEV(iEv);
         
         // Trigger type
         int trig = ev.GetTrigType();
-        if (!(trig & 0x8000)) continue;                   // EXT trigger only
+        if (!(trig & 0x8000)) continue;            // EXT trigger only
         
         // Event observables
-        int nhits = ev.GetNhits();			// normal/inward looking PMT hits
+        int nhits = ev.GetNhits();                 // normal/inward looking PMT hits
         avgnhit += nhits;
         count++;
         
@@ -197,8 +200,13 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
 
     // Write PMT hit count to output file (saves time when rerunning)
     FILE *outFile = fopen(out.c_str(),"w");
+    TVector3 pmtpos;
     for(int id=0; id<NPMTS; id++) {
-      fprintf(outFile, "%d %d\n", id, pmthitcount[id]);
+      pmtpos = pmtinfo.GetPosition(id);
+      int in_spot = 0;
+      if (pmtpos.Angle(lightpos) < DIR_CONE/180*pi) in_spot = 1;
+      else if (pmtpos.Angle(fibrepos) < REF_CONE/180*pi) in_spot = 2;
+      fprintf(outFile, "%d %d %d\n", id, pmthitcount[id], in_spot);
     }
     fclose(outFile);
     scanned_file = 1;
