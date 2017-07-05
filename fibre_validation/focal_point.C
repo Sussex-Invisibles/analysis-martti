@@ -38,7 +38,7 @@
 #include "Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER=0;    // whether running on cluster (0=local)
+const int RUN_CLUSTER=1;    // whether running on cluster (0=local)
 const int IS_MC = 0;        // Monte-Carlo flag 
 const int NCOL=20;          // number of colors (max. 50)
 const int NDOTS = 360;      // number of points in circle
@@ -88,7 +88,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   printf("Checking files for run %d... ", run);
   string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
   string fname = "";
-  fstream f;
+  ifstream f;
   for (int pass=3;pass>=0;pass--) {
     fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
     f.open(fname.c_str());
@@ -100,7 +100,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   if (!TEST && g.good()) {   // file downloaded and processed
     printf("already processed! Skipping fibre %s.\n",fibre.c_str());
     return;
-  } else  if(!f.good()) {    // file not downloaded
+  } else if(!f.good()) {    // file not downloaded
     printf("not downloaded! Skipping fibre %s.\n",fibre.c_str());
     return;
   } else {                   // file downloaded, but not processed
@@ -111,7 +111,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   RAT::DU::DSReader dsreader(fname);
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   const int NPMTS = pmtinfo.GetCount();
- 
+
+/*
   // Get fibre info (from RATDB) 
   RAT::DB *db = RAT::DB::Get();
   //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
@@ -119,29 +120,28 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   TVector3 fibrepos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
   TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
   TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
-  //cout << "DB: pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
-  
-  /*
+  cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+*/
+ 
   // Get fibre information (without using RATDB) 
-  ifstream tab("TELLIE_FIBRES.txt");
-  if (!tab) { cerr<<"Failed to open TELLIE_FIBRES.txt"<<endl; exit(1); }
-  string line, ff;
+  string fibre_table = "Fibre_Positions_DocDB1730.csv";
+  ifstream tab(fibre_table.c_str());
+  if (!tab) { cerr<<"Failed to open "<<fibre_table<<endl; exit(1); }
+  string line, ff, fn;
   double fx,fy,fz,fu,fv,fw;
-  for (int hdr=0; hdr<2; hdr++) {
-    getline(tab,line);      // header
-  }
+  getline(tab,line);      // header
   while (tab.good()) {
-    tab >> ff >> fx >> fy >> fz >> fu >> fv >> fw;
+    tab >> ff >> fx >> fy >> fz >> fu >> fv >> fw >> fn;
     if (!tab.good()) break;
     if (ff==fibre) break;
   }
   if(ff!=fibre) { cerr << "Failed to find information for fibre " << fibre << endl; exit(1); }
-  //cout << Form("%s %f %f %f %f %f %f\n",ff.c_str(),fx,fy,fz,fu,fv,fw) << endl;
-  TVector3 fibrepos(fx,fy,fz); // position of fibre
-  TVector3 fibredir(fu,fv,fz); // direction of fibre
+  //cout << Form("%s %f %f %f %f %f %f %s\n",ff.c_str(),fx,fy,fz,fu,fv,fw,fn.c_str()) << endl;
+  TVector3 fibrepos(10*fx,10*fy,10*fz); // position of fibre [mm]
+  TVector3 fibredir(fu,fv,fw); // direction of fibre
   TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre 
-  */
-  
+  cout << "DocDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+
   // Initialise histograms
   TH2D *hicos = new TH2D("hicos","PMT positions",200,0,1,200,0,1); // icosahedral
   TH2D *hcoarse = new TH2D("hcoarse","PMT positions",20,-1,1.001,10,-1.001,0); // units of pi

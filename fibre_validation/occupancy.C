@@ -38,14 +38,16 @@
 #include "Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER=0;    // whether running on cluster (0=local)
+const int RUN_CLUSTER=1;    // whether running on cluster (0=local)
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
-void occupancy(string, int, bool, bool);
+void occupancy(string, int, int*, bool, bool);
+void GetProjection(TGraph2D*, int*);
+using namespace std;
+
 
 // Main program
-using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
@@ -61,19 +63,73 @@ int main(int argc, char** argv) {
   for (int hdr=0; hdr<2; hdr++) {
     getline(in,line);      // header
   }
+  int cvrg[10000] = {-99999};
+  //memset( cvrg, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
   while (true) {
     in >> node >> fibre >> channel >> run >> ipw >> photons >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
     //printf("%6s %2d %6d %5d %6d\n", fibre.c_str(), channel, run, ipw, photons);
-    occupancy(fibre, run, IS_MC, TEST);
+    occupancy(fibre, run, cvrg, IS_MC, TEST);
   }
+  TGraph2D *coverage = new TGraph2D();
+  GetProjection(coverage,cvrg);
 
+
+  // ********************************************************************
+  // Plotting section
+  // ********************************************************************
+  TCanvas *c0 = new TCanvas("","",1600,800);
+  //gStyle->SetOptStat(111111);
+  //gStyle->SetTitleOffset(1.4,"z");
+  gStyle->SetPadRightMargin(0.15); // for TH2 color scale
+  gStyle->SetPadLeftMargin(0.05);
+  gStyle->SetPadTopMargin(0.05);
+  gStyle->SetPadBottomMargin(0.05);
+  
+  /*
+  TPad *pad0 = new TPad("pad0","Text",0.01,0.75,0.50,0.99);
+  TPad *pad1 = new TPad("pad1","Hist",0.50,0.75,1.00,0.99);
+  TPad *pad2 = new TPad("pad2","Icos",0.05,0.41,0.95,0.74);
+  TPad *pad3 = new TPad("pad3","Hist",0.01,0.01,0.50,0.40);
+  TPad *pad4 = new TPad("pad4","Hist",0.50,0.01,1.00,0.40);
+  pad0->Draw();
+  pad1->Draw();
+  pad2->Draw();
+  pad3->Draw();
+  pad4->Draw();
+  */
+  
+  // PMT hit count histogram
+  c0->cd()->SetGrid();
+  coverage->SetMarkerStyle(7);
+  //hicos->Draw(); // can't draw points over same plot?
+  coverage->SetMaximum(10); // max. coverage
+  coverage->Draw("pcolz,ah,fb,bb");
+  gPad->SetLineColor(0);
+  gPad->SetTheta(90);
+  gPad->SetPhi(0);
+  gPad->Modified();
+  gPad->Update();
+ 
+/*
+  coverage->GetXaxis()->SetTickLength(0);
+  coverage->GetXaxis()->SetLabelOffset(999);
+  coverage->GetYaxis()->SetTickLength(0);
+  coverage->GetYaxis()->SetLabelOffset(999);
+ */
+  // Save canvas and close
+  string outfile = "occupancy";
+  c0->Print(Form("%s.png",outfile.c_str()));
+  c0->Print(Form("%s.pdf",outfile.c_str()));
+  c0->Close();
+  
+  if(coverage) delete coverage;
   return 0;
 }
 
 // Returns the fitted light position for a given fibre/run
-void occupancy(string fibre, int run, bool isMC=false, bool TEST=false) {
+void occupancy(string fibre, int run, int* cvrg, bool isMC=false, bool TEST=false) {
 
   // ********************************************************************
   // Initialisation
@@ -83,17 +139,17 @@ void occupancy(string fibre, int run, bool isMC=false, bool TEST=false) {
   if(!TEST) printf("*****\n");
   printf("Checking files for run %d... ", run);
   string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
-  string fname = Form("%s/Analysis_r0000%d_s000_p000.root",fpath.c_str(),run);
-  string out   = Form("./output/PCA_%s.pdf",fibre.c_str());
-  ifstream f(fname.c_str());
-  ifstream g(out.c_str());
-  if (!TEST && g.good()) {   // file downloaded and processed
-    printf("already processed! Skipping fibre %s.\n",fibre.c_str());
-    return;
-  } else  if(!f.good()) {    // file not downloaded
+  string fname = "";
+  ifstream f;
+  for (int pass=3;pass>=0;pass--) {
+    fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+    f.open(fname.c_str());
+    if (f.good()) break;
+  }
+  if(!f.good()) {  // file not downloaded
     printf("not downloaded! Skipping fibre %s.\n",fibre.c_str());
     return;
-  } else {                   // file downloaded, but not processed
+  } else {         // file downloaded
     printf("OK. Processing fibre %s.\n",fibre.c_str());
   }
 
@@ -150,14 +206,49 @@ void occupancy(string fibre, int run, bool isMC=false, bool TEST=false) {
   printf("Found screamer threshold: %d\n", HOTLIMIT);
   
   // ********************************************************************
+  // Increase counter for PMTs with more than 5000 nhit for this run
+  // ********************************************************************
+  for(int id=0; id<NPMTS; id++) {
+    if (cvrg[id]<0) cvrg[id]=0; // valid PMT ID
+    int step = (int)TMath::Floor(pmthitcount[id]/1.e3);
+    if (pmthitcount[id] > HOTLIMIT) step = -1; // hot PMT
+    if (step >= 5) cvrg[id] += 1; // good coverage for this fibre
+  }
+  printf("done.\n");
+  
+  // Delete pointers created with 'new'
+  if(hicos) delete hicos;
+  if(hhits) delete hhits;
+ 
+}
+
+void GetProjection(TGraph2D *coverage, int* cvrg) {
+  
+  // Some dummy file you know exists (FT001A).
+  int run = 102260;
+  string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
+  //string fname = Form("%s/Analysis_r0000%d_s000_p000.root",fpath.c_str(),run);
+  string fname = "";
+  ifstream f;
+  for (int pass=3;pass>=0;pass--) {
+    fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+    f.open(fname.c_str());
+    if (f.good()) break;
+  }
+ 
+  // Initialise RAT
+  RAT::DU::DSReader dsreader(fname);
+  const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
+  const int NPMTS = pmtinfo.GetCount();
+  printf("Initialised DSReader & PMTInfo.\n");
+ 
+  // ********************************************************************
   // Get icosahedral projection of detector
   // ********************************************************************
   // Use icosahedral projection functions from HelperFunc.C
   using namespace func;
-  TGraph2D *occupy = new TGraph2D();
   TVector2 icospos;
   TVector3 pmtpos;
-  int goodpmts=0;
   printf("Generating icosahedral projection... ");
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
@@ -165,66 +256,9 @@ void occupancy(string fibre, int run, bool isMC=false, bool TEST=false) {
     if (pmtinfo.GetType(id) != 1) continue; // not a normal PMT
     int face; // side of icosahedron containing PMT
     icospos = func::IcosProject(pmtpos,face);
-    //for(int j=0; j<pmthitcount[id]; j++) hicos->Fill(icospos.X(),icospos.Y());
-    int step = (int)TMath::Floor(pmthitcount[id]/1.e3);
-    if (pmthitcount[id] > HOTLIMIT) step=0; // hot PMT
-    occupy->SetPoint(goodpmts,icospos.X(),icospos.Y(),step);
-    goodpmts++;
+    if(cvrg[id]>=0) coverage->SetPoint(id,icospos.X(),icospos.Y(),cvrg[id]);
+    else printf("*** WARNING *** No valid PMT with ID #%d\n",id);
   }
   printf("done.\n");
-  
-  // ********************************************************************
-  // Plotting section
-  // ********************************************************************
-  TCanvas *c0 = new TCanvas("","",1600,800);
-  //gStyle->SetOptStat(111111);
-  //gStyle->SetTitleOffset(1.4,"z");
-  gStyle->SetPadRightMargin(0.15); // for TH2 color scale
-  gStyle->SetPadLeftMargin(0.05);
-  gStyle->SetPadTopMargin(0.05);
-  gStyle->SetPadBottomMargin(0.05);
-  
-  /*
-  TPad *pad0 = new TPad("pad0","Text",0.01,0.75,0.50,0.99);
-  TPad *pad1 = new TPad("pad1","Hist",0.50,0.75,1.00,0.99);
-  TPad *pad2 = new TPad("pad2","Icos",0.05,0.41,0.95,0.74);
-  TPad *pad3 = new TPad("pad3","Hist",0.01,0.01,0.50,0.40);
-  TPad *pad4 = new TPad("pad4","Hist",0.50,0.01,1.00,0.40);
-  pad0->Draw();
-  pad1->Draw();
-  pad2->Draw();
-  pad3->Draw();
-  pad4->Draw();
-  */
-  
-  // PMT hit count histogram
-  c0->cd()->SetGrid();
-  occupy->SetMarkerStyle(7);
-  //hicos->Draw(); // can't draw points over same plot?
-  occupy->Draw("pcolz,ah,fb,bb");
-  gPad->SetLineColor(0);
-  gPad->SetTheta(90);
-  gPad->SetPhi(0);
-  gPad->Modified();
-  gPad->Update();
- 
-/*
-  occupy->GetXaxis()->SetTickLength(0);
-  occupy->GetXaxis()->SetLabelOffset(999);
-  occupy->GetYaxis()->SetTickLength(0);
-  occupy->GetYaxis()->SetLabelOffset(999);
- */
-  // Save canvas and close
-  string outfile;
-  if (!TEST) outfile = Form("output/PCA_%s",fibre.c_str());
-  else       outfile = "occupancy";
-  c0->Print(Form("%s.png",outfile.c_str()));
-  c0->Print(Form("%s.pdf",outfile.c_str()));
-  c0->Close();
-  
-  // Delete pointers created with 'new'
-  if(occupy) delete occupy;
-  if(hicos) delete hicos;
-  if(hhits) delete hhits;
-  
+    
 }
