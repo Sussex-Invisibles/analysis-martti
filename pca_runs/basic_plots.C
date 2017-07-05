@@ -13,20 +13,22 @@ int main() {
 }
 
 void basic_plots() {
-  ifstream in("spreadsheet.txt");
+  ifstream in("TELLIE_PCA.txt");
   string fibre;
-  int channel, run, ipw, photons;
+  int node, channel, run, ipw, photons;
   float nhit;
   //TFile *f = new TFile("pca.root","RECREATE");
   TH1F *h[4];
   h[0] = new TH1F("h1","Run number (10xxxx)",100,0,3000);
-  h[1] = new TH1F("h2","Pulse width (IPW setpoint)",30,0,15000);
-  h[2] = new TH1F("h3","Photons/pulse (from calibDB)",40,0,2e5);
-  h[3] = new TH1F("h4","NHit/pulse (observed)",30,0,60);
+  h[1] = new TH1F("h2","Pulse width (IPW setpoint)",20,0,12000);
+  h[2] = new TH1F("h3","Photons/pulse (from calibDB)",20,0,2e5);
+  h[3] = new TH1F("h4","NHit/pulse (observed)",20,0,60);
   //TNtuple *ntuple = new TNtuple("ntuple","data from ascii file","channel:run:ipw:photons:nhit");
+  string line;
+  for (int l=0; l<2; l++) getline(in,line); // ignore header
   int nlines=0;
   while (1) {
-     in >> fibre >> channel >> run >> ipw >> photons >> nhit;
+     in >> node >> fibre >> channel >> run >> ipw >> photons >> nhit;
      if (!in.good()) break;
      if(run>0)     h[0]->Fill(run-1e5);
      if(ipw>0)     h[1]->Fill(ipw);
