@@ -94,17 +94,23 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
     f.open(fname.c_str());
     if (f.good()) break;
   }
-  string out   = Form("./output/PCA_%s.pdf",fibre.c_str());
+  string out = Form("./output/PCA_%s.out",fibre.c_str());
+  string img = Form("./images/PCA_%s.pdf",fibre.c_str());
   //ifstream f(fname.c_str());
   ifstream g(out.c_str());
-  if (!TEST && g.good()) {   // file downloaded and processed
+  ifstream h(img.c_str());
+  int scanned_file = 0;
+  if (!TEST && h.good()) {  // file downloaded and processed
     printf("already processed! Skipping fibre %s.\n",fibre.c_str());
     return;
+  } else if(g.good()) {     // file extracted, but not processed
+    printf("not processed! Generating plots for fibre %s.\n",fibre.c_str());
+    scanned_file = 1;
   } else if(!f.good()) {    // file not downloaded
     printf("not downloaded! Skipping fibre %s.\n",fibre.c_str());
     return;
   } else {                   // file downloaded, but not processed
-    printf("OK. Processing fibre %s.\n",fibre.c_str());
+    printf("OK. Extracting data for fibre %s.\n",fibre.c_str());
   }
 
   // Initialise RAT
@@ -153,37 +159,51 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   // ********************************************************************
   // Sum PMT hit counts for entire run
   // ********************************************************************
-  int count=0, avgnhit=0, hitpmts=0, init=0;
-  int pmthitcount[NPMTS];
+  int pmthitcount[NPMTS], avgnhit=0, count=0;
   memset( pmthitcount, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
-  double pmtrad = 0;
-  TVector3 pmtsum(0,0,0);
-  for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
-    const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
-    //RAT::DS::MC mc;
-    //if (isMC) mc = ds.GetMC();  // don't initialise this for real data (crashes)
-    
-    // Loop over triggered events in each entry
-    for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {        // mostly 1 event per entry
-      const RAT::DS::EV& ev = ds.GetEV(iEv);
-      
-      // Trigger type
-      int trig = ev.GetTrigType();
-      if (!(trig & 0x8000)) continue;                   // EXT trigger only
-      
-      // Event observables
-      int nhits = ev.GetNhits();			// normal/inward looking PMT hits
-      avgnhit += nhits;
+  if (scanned_file) {
+    int pmtid, pmthits;
+    while (g.good()) {
+      g >> pmtid >> pmthits;
+      pmthitcount[pmtid]=pmthits;
+      avgnhit += pmthits;
       count++;
+    }
+  } else {
+    for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
+      const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
       
-      // PMT information
-      const RAT::DS::UncalPMTs& pmts = ev.GetUncalPMTs();
-      for(int iPMT=0; iPMT<pmts.GetCount(); iPMT++) {
-        int pmtID = pmts.GetPMT(iPMT).GetID();
-        pmthitcount[pmtID]++;
-      } // pmt loop
-    } // event loop
-  } // entry loop
+      // Loop over triggered events in each entry
+      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {        // mostly 1 event per entry
+        const RAT::DS::EV& ev = ds.GetEV(iEv);
+        
+        // Trigger type
+        int trig = ev.GetTrigType();
+        if (!(trig & 0x8000)) continue;                   // EXT trigger only
+        
+        // Event observables
+        int nhits = ev.GetNhits();			// normal/inward looking PMT hits
+        avgnhit += nhits;
+        count++;
+        
+        // PMT information
+        const RAT::DS::UncalPMTs& pmts = ev.GetUncalPMTs();
+        for(int iPMT=0; iPMT<pmts.GetCount(); iPMT++) {
+          int pmtID = pmts.GetPMT(iPMT).GetID();
+          pmthitcount[pmtID]++;
+        } // pmt loop
+      } // event loop
+    } // entry loop
+
+    // Write PMT hit count to output file (saves time when rerunning)
+    FILE *outFile = fopen(out.c_str(),"w");
+    for(int id=0; id<NPMTS; id++) {
+      fprintf(outFile, "%d %d\n", id, pmthitcount[id]);
+    }
+    fclose(outFile);
+    scanned_file = 1;
+  
+  } // else condition
   
   // Find threshold for "screamers"
   int HOTLIMIT;
@@ -265,7 +285,9 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   // ********************************************************************
   // First iteration: Fill coarse histogram with PMT hit positions
   // ********************************************************************
-  
+  int hitpmts=0, init=0;
+  double pmtrad = 0;
+  TVector3 pmtsum(0,0,0);
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
     if (pmtpos.Mag()==0) continue;            // not a valid PMT
@@ -554,7 +576,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   pad3->Draw();
   pad4->Draw();
   
-  // Some output text
+  // Run summary
   pad0->cd();
   TLatex *title, *t[6], *v[6];
   float nhit = (float)avgnhit/count;
@@ -572,6 +594,12 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
                     Form("%.2f#circ",DIRANG/pi*180),
                     Form("%.2f#circ",REFANG/pi*180)
                   };
+  // Highlight unsatisfactory values in bold
+  if (count < 0.99*2e5) vals[2] = Form("#bf{%s}",vals[2]);     // lost more than 1% of triggers
+  if (nhit<25 || nhit>45) vals[3] = Form("#bf{%s}",vals[3]);   // nhit far outside optimal range (30-40)
+  if (DIRANG/pi*180 >= 10.) vals[4] = Form("#bf{%s}",vals[4]); // bad direct light fit
+  if (REFANG/pi*180 >= 10.) vals[5] = Form("#bf{%s}",vals[5]); // bad reflected light fit
+  // Place text in pad
   title = new TLatex(0.05,0.9,"SNO+ TELLIE PCA data");
   title->SetTextAlign(12);
   title->SetTextFont(62);
@@ -588,7 +616,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
     v[l]->SetTextFont(82);
     v[l]->SetTextSize(0.08);
     v[l]->Draw();
-  } 
+  }
+  // Indicate colour scale
   TLatex *txtD = new TLatex(9.5,9.5,Form("NHit/PMT #leq %d",nearmax));
   txtD->SetTextAlign(33);
   txtD->SetTextFont(82);
@@ -696,7 +725,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   
   // Save canvas and close
   string outfile;
-  if (!TEST) outfile = Form("output/PCA_%s",fibre.c_str());
+  if (!TEST) outfile = Form("images/PCA_%s",fibre.c_str());
   else       outfile = "focal_point";
   c0->Print(Form("%s.png",outfile.c_str()));
   c0->Print(Form("%s.pdf",outfile.c_str()));
