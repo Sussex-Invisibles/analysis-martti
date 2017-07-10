@@ -21,7 +21,7 @@ void basic_plots() {
   TH1F *h[4];
   h[0] = new TH1F("h1","Run number (10xxxx)",100,0,3000);
   h[1] = new TH1F("h2","Pulse width (IPW setpoint)",20,0,12000);
-  h[2] = new TH1F("h3","Photons/pulse (from calibDB)",20,0,2e5);
+  h[2] = new TH1F("h3","Photons/pulse (from calibDB)",25,0,2.5e5);
   h[3] = new TH1F("h4","NHit/pulse (observed)",20,0,60);
   //TNtuple *ntuple = new TNtuple("ntuple","data from ascii file","channel:run:ipw:photons:nhit");
   string line;
@@ -49,6 +49,7 @@ void basic_plots() {
     h[i]->Draw();
   }
   c->Print("basic_plots.png");
+  c->Print("basic_plots.pdf");
   c->Close();
   
   //f->Write();
