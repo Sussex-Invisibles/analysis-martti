@@ -15,7 +15,7 @@
 #include "TCanvas.h"
 #include "TFile.h"
 #include "TF2.h"
-#include "TH2.h"
+#include "TH3.h"
 #include "TLegend.h"
 #include "TLatex.h"
 #include "TMarker.h"
@@ -42,8 +42,8 @@ const int RUN_CLUSTER=1;    // whether running on cluster (0=local)
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
-void occupancy(string, int, int*, bool, bool);
-void GetProjection(TGraph2D*, int*);
+void occupancy(string, int, int*, int, bool, bool);
+void GetProjection(TGraph2D*, TGraph2D*, int*, const int, const RAT::DU::PMTInfo&);
 using namespace std;
 
 
@@ -63,29 +63,38 @@ int main(int argc, char** argv) {
   for (int hdr=0; hdr<2; hdr++) {
     getline(in,line);      // header
   }
-  int cvrg[10000] = {-99999};
-  //memset( cvrg, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+  
+  string example = "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED/Analysis_r0000102315_s000_p000.root";
+  // Initialise RAT
+  RAT::DU::DSReader dsreader(example);
+  const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
+  const int NPMTS = pmtinfo.GetCount();
+  printf("Initialised DSReader & PMTInfo.\n");
+  
+  int cvrg[NPMTS];
+  memset( cvrg, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+  for (int id=0; id<NPMTS; id++) cvrg[id]=-99999;
+  
   while (true) {
     in >> node >> fibre >> channel >> run >> ipw >> photons >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
     //printf("%6s %2d %6d %5d %6d\n", fibre.c_str(), channel, run, ipw, photons);
-    occupancy(fibre, run, cvrg, IS_MC, TEST);
+    occupancy(fibre, run, cvrg, NPMTS, IS_MC, TEST);
   }
   TGraph2D *coverage = new TGraph2D();
-  GetProjection(coverage,cvrg);
-
-
+  TGraph2D *offpmts = new TGraph2D();
+  GetProjection(coverage, offpmts, cvrg, NPMTS, pmtinfo);
+  printf("Graph has %d good PMTs and %d bad PMTs.\n", coverage->GetN(), offpmts->GetN());
+  
   // ********************************************************************
   // Plotting section
   // ********************************************************************
   TCanvas *c0 = new TCanvas("","",1600,800);
-  //gStyle->SetOptStat(111111);
-  //gStyle->SetTitleOffset(1.4,"z");
-  gStyle->SetPadRightMargin(0.15); // for TH2 color scale
-  gStyle->SetPadLeftMargin(0.05);
-  gStyle->SetPadTopMargin(0.05);
-  gStyle->SetPadBottomMargin(0.05);
+  gStyle->SetOptStat(0);
+  gStyle->SetLabelOffset(999,"XY");
+  gStyle->SetCanvasBorderSize(0);
+  gStyle->SetFrameBorderSize(0);
   
   /*
   TPad *pad0 = new TPad("pad0","Text",0.01,0.75,0.50,0.99);
@@ -100,109 +109,82 @@ int main(int argc, char** argv) {
   pad4->Draw();
   */
   
-  // PMT hit count histogram
-  c0->cd()->SetGrid();
+  // Configure pad
+  c0->SetGrid();
+  c0->SetLeftMargin(0.005);
+  c0->SetRightMargin(0.075); // for TH2 color scale
+  c0->SetTopMargin(0.02);
+  c0->SetBottomMargin(0.02);
+  c0->SetBorderSize(0);
+  
+  // Draw empty 3D histogram as boundary for 2D graphs
+  TH3F *hicos = new TH3F("hicos","",10,0,1,10,0,1,10,0,10); // flat map
+  hicos->Draw("a,fb,bb");     // suppress axis, front box, back box
+  c0->SetTheta(90-0.001);     // view from above
+  c0->SetPhi(0+0.001);        // no x-y rotation
+  
+  // Draw active PMT coverage
   coverage->SetMarkerStyle(7);
-  //hicos->Draw(); // can't draw points over same plot?
-  coverage->SetMaximum(10); // max. coverage
-  coverage->Draw("pcolz,ah,fb,bb");
-  gPad->SetLineColor(0);
-  gPad->SetTheta(90);
-  gPad->SetPhi(0);
-  gPad->Modified();
-  gPad->Update();
- 
-/*
-  coverage->GetXaxis()->SetTickLength(0);
-  coverage->GetXaxis()->SetLabelOffset(999);
-  coverage->GetYaxis()->SetTickLength(0);
-  coverage->GetYaxis()->SetLabelOffset(999);
- */
+  //coverage->SetMinimum(0);                      // TODO - takes >10min (!?)
+  //coverage->GetZaxis()->SetRangeUser(0,10);     // TODO - doesn't work
+  coverage->Draw("pcolz,a,fb,bb,same");
+  
+  // Draw inactive PMTs (grey)
+  offpmts->SetMarkerStyle(7);
+  offpmts->SetMarkerColor(16);
+  offpmts->Draw("p,a,fb,bb,same");
+  
   // Save canvas and close
   string outfile = "occupancy";
   c0->Print(Form("%s.png",outfile.c_str()));
   c0->Print(Form("%s.pdf",outfile.c_str()));
   c0->Close();
   
+  // Delete pointers
   if(coverage) delete coverage;
+  if(hicos) delete hicos;
+  if(offpmts) delete offpmts;
   return 0;
 }
 
 // Returns the fitted light position for a given fibre/run
-void occupancy(string fibre, int run, int* cvrg, bool isMC=false, bool TEST=false) {
+void occupancy(string fibre, int run, int* cvrg, int NPMTS, bool isMC=false, bool TEST=false) {
 
   // ********************************************************************
   // Initialisation
   // ********************************************************************
   
   // Check files for given run
-  if(!TEST) printf("*****\n");
+  if(!TEST) printf("-----\n");
   printf("Checking files for run %d... ", run);
-  string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
-  string fname = "";
-  ifstream f;
-  for (int pass=3;pass>=0;pass--) {
-    fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
-    f.open(fname.c_str());
-    if (f.good()) break;
-  }
-  if(!f.good()) {  // file not downloaded
-    printf("not downloaded! Skipping fibre %s.\n",fibre.c_str());
+  string out = Form("./output/PCA_%s.out",fibre.c_str());
+  ifstream g(out.c_str());
+  if(g.good()) {            // file extracted
+    printf("OK! Adding direct light for fibre %s.\n",fibre.c_str());
+  } else {    // file not available
+    printf("not available! Skipping fibre %s.\n",fibre.c_str());
     return;
-  } else {         // file downloaded
-    printf("OK. Processing fibre %s.\n",fibre.c_str());
   }
-
-  // Initialise RAT
-  RAT::DU::DSReader dsreader(fname);
-  const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
-  const int NPMTS = pmtinfo.GetCount();
-  printf("Initialised DSReader & PMTInfo.\n");
-  
-  // Initialise histograms
-  TH2D *hicos = new TH2D("hicos","PMT positions",200,0,1,200,0,1); // icosahedral
-  TH1I *hhits = new TH1I("hhits","PMT hit count",50,0,3e5);
-  BinLog(hhits->GetXaxis(),0.3);
   
   // ********************************************************************
   // Sum PMT hit counts for entire run
   // ********************************************************************
-  int count=0, avgnhit=0, hitpmts=0, init=0;
-  int pmthitcount[NPMTS];
+  int pmthitcount[NPMTS], pmtlightcone[NPMTS];
   memset( pmthitcount, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
-  printf("Looping over events...\n");
-  for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
-    if (iEntry % 10000 == 0) printf("%d / %d\n",iEntry,(int)dsreader.GetEntryCount());
-    const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
-    
-    // Loop over triggered events in each entry
-    for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {        // mostly 1 event per entry
-      const RAT::DS::EV& ev = ds.GetEV(iEv);
-      // Trigger type
-      int trig = ev.GetTrigType();
-      if (!(trig & 0x8000)) continue;                   // EXTA trigger only
-      // Event observables
-      int nhits = ev.GetNhits();			            // normal/inward looking PMT hits
-      avgnhit += nhits;
-      count++;
-      
-      // PMT information
-      const RAT::DS::UncalPMTs& pmts = ev.GetUncalPMTs();
-      for(int iPMT=0; iPMT<pmts.GetCount(); iPMT++) {
-        int pmtID = pmts.GetPMT(iPMT).GetID();
-        pmthitcount[pmtID]++;
-      } // pmt loop
-    } // event loop
-  } // entry loop
-  printf("Finished loop.\n");
+  memset( pmtlightcone, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+  int avgnhit=0, count=0;
+  int pmtid, pmthits, onspot;
+  while (g.good()) {
+    g >> pmtid >> pmthits >> onspot;
+    pmthitcount[pmtid]=pmthits;
+    pmtlightcone[pmtid]=onspot;
+    avgnhit += pmthits;
+    count++;
+  }
   
   // Find threshold for "screamers"
   int HOTLIMIT;
   GetHotLimit(pmthitcount, NPMTS, HOTLIMIT);
-  for(int id=0; id<NPMTS; id++) {
-    if(pmthitcount[id]==0) hhits->Fill(0.5); // visible on log scale
-    else hhits->Fill(pmthitcount[id]);
-  }
   printf("Found screamer threshold: %d\n", HOTLIMIT);
   
   // ********************************************************************
@@ -210,55 +192,46 @@ void occupancy(string fibre, int run, int* cvrg, bool isMC=false, bool TEST=fals
   // ********************************************************************
   for(int id=0; id<NPMTS; id++) {
     if (cvrg[id]<0) cvrg[id]=0; // valid PMT ID
+    if (pmthitcount[id] == 0) continue;         // off PMT
+    if (pmthitcount[id] > HOTLIMIT) continue;   // hot PMT
     int step = (int)TMath::Floor(pmthitcount[id]/1.e3);
-    if (pmthitcount[id] > HOTLIMIT) step = -1; // hot PMT
     if (step >= 5) cvrg[id] += 1; // good coverage for this fibre
   }
-  printf("done.\n");
-  
-  // Delete pointers created with 'new'
-  if(hicos) delete hicos;
-  if(hhits) delete hhits;
  
 }
 
-void GetProjection(TGraph2D *coverage, int* cvrg) {
+void GetProjection(TGraph2D *coverage, TGraph2D* offpmts, int* cvrg, const int NPMTS, const RAT::DU::PMTInfo& pmtinfo) {
   
-  // Some dummy file you know exists (FT001A).
-  int run = 102260;
-  string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
-  //string fname = Form("%s/Analysis_r0000%d_s000_p000.root",fpath.c_str(),run);
-  string fname = "";
-  ifstream f;
-  for (int pass=3;pass>=0;pass--) {
-    fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
-    f.open(fname.c_str());
-    if (f.good()) break;
-  }
- 
-  // Initialise RAT
-  RAT::DU::DSReader dsreader(fname);
-  const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
-  const int NPMTS = pmtinfo.GetCount();
-  printf("Initialised DSReader & PMTInfo.\n");
- 
-  // ********************************************************************
-  // Get icosahedral projection of detector
-  // ********************************************************************
-  // Use icosahedral projection functions from HelperFunc.C
+  // Use icosahedral projection function from HelperFunc.C
   using namespace func;
   TVector2 icospos;
   TVector3 pmtpos;
   printf("Generating icosahedral projection... ");
+  int goodpmts=0, badpmts=0;
+  double offx[NPMTS], offy[NPMTS];
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
-    if (pmtpos.Mag()==0) continue; // not a valid PMT
-    if (pmtinfo.GetType(id) != 1) continue; // not a normal PMT
-    int face; // side of icosahedron containing PMT
-    icospos = func::IcosProject(pmtpos,face);
-    if(cvrg[id]>=0) coverage->SetPoint(id,icospos.X(),icospos.Y(),cvrg[id]);
-    else printf("*** WARNING *** No valid PMT with ID #%d\n",id);
+    if (pmtpos.Mag()==0) continue;              // not a valid PMT
+    if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT
+    int face;                                   // side of PSUP icosahedron
+    icospos = func::IcosProject(pmtpos,face);   // PMT position on flatmap
+    if(cvrg[id] <= 0) {                         // inactive PMT
+      offpmts->SetPoint(badpmts,icospos.X(),icospos.Y(),0.001); // non-zero Z
+      offx[badpmts] = icospos.X();
+      offy[badpmts] = icospos.Y();
+      //printf("Bad PMT #%d at ( %.3f | %.3f )\t",id,icospos.X(),icospos.Y());
+      //printf(" position ( %.3f | %.3f | %.3f )\n",id,pmtpos.X(),pmtpos.Y(),pmtpos.Z());
+      badpmts++;
+    } else {
+      if(cvrg[id] > 10) {                       // unrecognised hot PMT
+        printf("*** WARNING *** PMT #%d has coverage %d - setting to 10.\n",id,cvrg[id]);
+        cvrg[id]=10;
+      }
+      coverage->SetPoint(goodpmts,icospos.X(),icospos.Y(),cvrg[id]);
+      goodpmts++;
+    }
   }
+  //offpmts = new TGraph(badpmts,offx,offy);
   printf("done.\n");
-    
+  
 }

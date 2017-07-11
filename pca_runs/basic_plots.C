@@ -40,7 +40,7 @@ void basic_plots() {
   in.close();
   printf(" found %d points\n",nlines);
 
-  TCanvas *c = new TCanvas("c","",1200,400); 
+  TCanvas *c = new TCanvas("c","",900,300); 
   c->Divide(3,1);
   for (int i=1; i<4; i++) {
     c->cd(i)->SetGrid();
