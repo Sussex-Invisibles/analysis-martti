@@ -52,7 +52,8 @@ int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
   const int TEST = (RUN_CLUSTER) ? 0 : 101849;
-  
+  //const int TEST = 102278;  
+
   // Loop over all fibres in list
   string input = (RUN_CLUSTER) ? "../pca_runs/TELLIE_PCA.txt" : "TELLIE_PCA.txt";
   ifstream in(input.c_str());
@@ -135,7 +136,8 @@ int main(int argc, char** argv) {
   offpmts->Draw("p,a,fb,bb,same");
   
   // Save canvas and close
-  string outfile = "occupancy";
+  string outfile = "coverage";
+  if (TEST) outfile = Form("coverage_%d",TEST);
   c0->Print(Form("%s.png",outfile.c_str()));
   c0->Print(Form("%s.pdf",outfile.c_str()));
   c0->Close();
@@ -172,14 +174,25 @@ void occupancy(string fibre, int run, int* cvrg, int NPMTS, bool isMC=false, boo
   int pmthitcount[NPMTS], pmtlightcone[NPMTS];
   memset( pmthitcount, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
   memset( pmtlightcone, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
-  int avgnhit=0, count=0;
   int pmtid, pmthits, onspot;
+  int checkrun, count, totalnhit;
+  string dummy;
+  g >> dummy >> checkrun;
+  if(!g.good()) printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),checkrun);
+  if(checkrun != run) { printf("*** ERROR *** Bad run number %d\n",checkrun); return; }
+  g >> dummy >> count;
+  if(!g.good()) { printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),count); return; }
+  g >> dummy >> totalnhit;
+  if(!g.good()) { printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),totalnhit); return; }
+  // Print run info here
+  printf("*** INFO *** Run %d has %d EXTA events with %d total NHits.\n",checkrun,count,totalnhit);
+  float avgnhit = (float)totalnhit/count;  
+    
   while (g.good()) {
     g >> pmtid >> pmthits >> onspot;
+    if(!g.good()) break;
     pmthitcount[pmtid]=pmthits;
     pmtlightcone[pmtid]=onspot;
-    avgnhit += pmthits;
-    count++;
   }
   
   // Find threshold for "screamers"
@@ -191,11 +204,11 @@ void occupancy(string fibre, int run, int* cvrg, int NPMTS, bool isMC=false, boo
   // Increase counter for PMTs with more than 5000 nhit for this run
   // ********************************************************************
   for(int id=0; id<NPMTS; id++) {
-    if (cvrg[id]<0) cvrg[id]=0; // valid PMT ID
-    if (pmthitcount[id] == 0) continue;         // off PMT
-    if (pmthitcount[id] > HOTLIMIT) continue;   // hot PMT
-    int step = (int)TMath::Floor(pmthitcount[id]/1.e3);
-    if (step >= 5) cvrg[id] += 1; // good coverage for this fibre
+    if (cvrg[id]<0) cvrg[id]=0;                     // valid PMT ID, reset counter
+    if (pmtlightcone[id] != 1) continue;            // not in direct light cone
+    if (pmthitcount[id] == 0) continue;             // off PMT
+    if (pmthitcount[id] > HOTLIMIT) continue;       // hot PMT
+    if (pmthitcount[id] >= count/100.) cvrg[id]++;  // good coverage for this fibre
   }
  
 }

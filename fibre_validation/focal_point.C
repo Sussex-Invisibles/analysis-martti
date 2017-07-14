@@ -46,15 +46,15 @@ const double DIR_CONE = 48; // opening angle to search for direct light (using a
 const double REF_CONE = 20; // opening angle to search for reflected light (using aperture: 9.874 deg)
 
 // Initialise functions
-void focal_point(string, int, int, int, int, bool, bool);
+void focal_point(string, int, int, int, int, float, bool, bool);
 
 // Main program
 using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 101849;
-  
+  const int TEST = (RUN_CLUSTER) ? 0 : 102260;
+   
   // Loop over all fibres in list
   string input = (RUN_CLUSTER) ? "../pca_runs/TELLIE_PCA.txt" : "TELLIE_PCA.txt";
   ifstream in(input.c_str());
@@ -70,14 +70,14 @@ int main(int argc, char** argv) {
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
     //printf("%6s %2d %6d %5d %6d\n", fibre.c_str(), channel, run, ipw, photons);
-    focal_point(fibre, channel, run, ipw, photons, (bool)IS_MC, (bool)TEST);
+    focal_point(fibre, channel, run, ipw, photons, nhit, (bool)IS_MC, (bool)TEST);
   }
 
   return 0;
 }
 
 // Returns the fitted light position for a given fibre/run
-void focal_point(string fibre, int channel, int run, int ipw, int photons, bool isMC=false, bool TEST=false) {
+void focal_point(string fibre, int channel, int run, int ipw, int photons, float nhit, bool isMC=false, bool TEST=false) {
 
   // ********************************************************************
   // Initialisation
@@ -115,6 +115,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
 
   // Initialise RAT
   RAT::DU::DSReader dsreader(fname);
+  const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   const int NPMTS = pmtinfo.GetCount();
 
@@ -162,15 +163,26 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   int pmthitcount[NPMTS], pmtlightcone[NPMTS];
   memset( pmthitcount, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
   memset( pmtlightcone, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
-  int avgnhit=0, count=0;
+  int totalnhit=0, directnhit=0, reflectednhit=0, count=0;
   if (scanned_file) {
+    int checkrun;
+    string dummy;
+    g >> dummy >> checkrun;
+    if(!g.good()) printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),checkrun);
+    if(checkrun != run) { printf("*** ERROR *** Bad run number %d\n",checkrun); return; }
+    g >> dummy >> count;
+    if(!g.good()) { printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),count); return; }
+    g >> dummy >> totalnhit;
+    if(!g.good()) { printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),totalnhit); return; }
+    // Print run info here
+    printf("*** INFO *** Run %d has %d EXTA events with %d total NHits.\n",checkrun,count,totalnhit);
     int pmtid, pmthits, onspot;
     while (g.good()) {
       g >> pmtid >> pmthits >> onspot;
       pmthitcount[pmtid]=pmthits;
       pmtlightcone[pmtid]=onspot;
-      avgnhit += pmthits;
-      count++;
+      if(onspot==1) directnhit += pmthits;
+      else if(onspot==2) reflectednhit += pmthits;
     }
   } else {
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
@@ -185,22 +197,32 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
         if (!(trig & 0x8000)) continue;            // EXT trigger only
         
         // Event observables
-        int nhits = ev.GetNhits();                 // normal/inward looking PMT hits
-        avgnhit += nhits;
+        int nhitscleaned = ev.GetNhitsCleaned();   // calibrated PMT hits with removed crosstalk
+        totalnhit += nhitscleaned;
         count++;
         
         // PMT information
-        const RAT::DS::UncalPMTs& pmts = ev.GetUncalPMTs();
-        for(int iPMT=0; iPMT<pmts.GetCount(); iPMT++) {
-          int pmtID = pmts.GetPMT(iPMT).GetID();
+        const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
+        //int eventnhit=0;
+        for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
+          RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
+          int pmtID = pmt.GetID();
+          if (!chs.IsTubeOnline(pmtID)) continue;                   // test CHS
+          if (pmt.GetCrossTalkFlag()) continue;                     // remove crosstalk
+          if (pmt.GetStatus().GetULong64_t(0) != 0) continue;       // test PCA
           pmthitcount[pmtID]++;
+          //eventnhit++;
         } // pmt loop
+        //if(nhitscleaned!=eventnhit) printf("*** WARNING *** - cleaned nhits %d != %d CalPMT nhits!\n",nhitscleaned,eventnhit);
       } // event loop
     } // entry loop
 
     // Write PMT hit count to output file (saves time when rerunning)
     FILE *outFile = fopen(out.c_str(),"w");
     TVector3 pmtpos;
+    fprintf(outFile, "Run: %d\n", run);             // run number
+    fprintf(outFile, "Events: %d\n", count);        // events with EXTA trigger
+    fprintf(outFile, "TotalNHit: %d\n", totalnhit); // calibrated PMT hits with removed crosstalk
     for(int id=0; id<NPMTS; id++) {
       pmtpos = pmtinfo.GetPosition(id);
       int in_spot = 0;
@@ -257,14 +279,15 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
     nfacegoodpmts[face-1]++;
   }
   int maxface=-1;
-  double faceheat[20], maxfaceheat=-1;
+  double faceheat[20]={0}, maxfaceheat=-1;
   for(int fc=0; fc<20; fc++) {
+    if (nfacepmts[fc]==0 || nfacegoodpmts[fc]==0) continue;
     facecenter[fc] *= 1./nfacepmts[fc];     // all PMTs weighted equally
     faceweight[fc] *= 1./nfacegoodpmts[fc]; // good PMTS weighted by intensity
     faceheat[fc] = faceweight[fc].Mag();
     //printf("Face #%2d has intensity %6.2lfM\n",fc+1,faceheat[fc]/1e6);
     if (faceheat[fc]>maxfaceheat) { maxfaceheat=faceheat[fc]; maxface=fc+1; }
-  } 
+  }
   //printf("Hot faces: ");
   TVector3 bestguess(0,0,0);
   int hotfaces=0;
@@ -274,7 +297,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
     bestguess += faceweight[fc];
     hotfaces++;
   }
-  bestguess *= 1./hotfaces;
+  if (hotfaces>0) { bestguess *= 1./hotfaces; }
+  else { cerr<<"Something went wrong! No hot faces found."<<endl; return; }
   //printf(" -> best guess direction: %s\n",printVector(bestguess.Unit()).c_str());
   
   // Make graphs for icosahedral projection
@@ -312,6 +336,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   pmtrad /= hitpmts;
   if(fabs(lightpos.Mag()/pmtrad-1.) > 0.01) {  // tolerate 1%
     cout << "*** WARNING *** Projected light position deviates from PSUP sphere!" << endl;
+    return;
   }
   //printf("PMT radius = %.3lf\n",pmtrad);
 
@@ -404,6 +429,9 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   int weight, nearmax, farmax, empty1, empty2;
   GetMaxColVal(guess_dir, pmthitcount, NPMTS, nearmax, empty1, pmtinfo);
   GetMaxColVal(guess_ref, pmthitcount, NPMTS, farmax, empty2, pmtinfo);
+  
+  if(nearmax==0) cout << "*** WARNING *** No good PMTs in direct light cone!" << endl;
+  if(farmax==0) cout << "*** WARNING *** No good PMTs in reflected light cone!" << endl;
   /*
   // Output (TODO: Optimise criteria?)
   printf("HOTLIMIT=%d, MAXPMT=%d\n",HOTLIMIT,*max_element(pmthitcount,pmthitcount+NPMTS));  
@@ -422,9 +450,17 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
     if (pmtpos.Angle(guess_ref) < pi*REF_CONE/180.) // within cone of reflected light spot
       reflected += pmtpos*(1.*weight/hitpmts);
   }
+  if (direct.Mag() == 0) {
+    cout << "*** WARNING *** No good PMTs in direct light cone! Setting to z-axis." << endl;
+    direct.SetXYZ(0,0,1);
+  }
+  if (reflected.Mag() == 0) { 
+    cout << "*** WARNING *** No good PMTs in reflected light cone! Setting to z-axis." << endl;
+    reflected.SetXYZ(0,0,1);
+  }
   direct.SetMag(pmtrad);
   reflected.SetMag(pmtrad);
-
+  
   // Output values
   double DIRANG = lightpos.Angle(direct);      // angle between projected and direct light spot
   double REFANG = fibrepos.Angle(reflected);   // angle between fibre position and reflected light spot
@@ -587,7 +623,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   // Run summary
   pad0->cd();
   TLatex *title, *t[6], *v[6];
-  float nhit = (float)avgnhit/count;
+  float avgnhit = (float)totalnhit/count;
   char* text[6] = { Form(" - Run number:"),
                     Form(" - Fibre name:"),
                     Form(" - Number of events:"),
@@ -598,13 +634,13 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, bool 
   char* vals[6] = { Form("%d",run),
                     Form("%s",fibre.c_str()),
                     Form("%d",count),
-                    Form("%.2f",nhit),
+                    Form("%.2f",avgnhit),
                     Form("%.2f#circ",DIRANG/pi*180),
                     Form("%.2f#circ",REFANG/pi*180)
                   };
   // Highlight unsatisfactory values in bold
   if (count < 0.99*2e5) vals[2] = Form("#bf{%s}",vals[2]);     // lost more than 1% of triggers
-  if (nhit<25 || nhit>45) vals[3] = Form("#bf{%s}",vals[3]);   // nhit far outside optimal range (30-40)
+  if (avgnhit<25 || avgnhit>45) vals[3] = Form("#bf{%s}",vals[3]);   // nhit far outside optimal range (30-40)
   if (DIRANG/pi*180 >= 10.) vals[4] = Form("#bf{%s}",vals[4]); // bad direct light fit
   if (REFANG/pi*180 >= 10.) vals[5] = Form("#bf{%s}",vals[5]); // bad reflected light fit
   // Place text in pad

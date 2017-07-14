@@ -48,8 +48,11 @@ void GetHotLimit(int* pmthitcount, int NPMTS, int &maxnhit) {
   const int NBINS = 100;
   int MAX_NHIT = *max_element(pmthitcount,pmthitcount+NPMTS);   // hottest PMT
   TH1F *hCount = new TH1F("hCount","",NBINS,0.,log10(MAX_NHIT+1.));
-  for(int id=0; id<NPMTS; id++) hCount->Fill(log10(pmthitcount[id]));
-  int i=NBINS/2; // start in center of log-log plot
+  for(int id=0; id<NPMTS; id++) {
+    if (pmthitcount[id]==0) continue; 
+    hCount->Fill(log10(pmthitcount[id]));
+  }
+  int i = hCount->GetMaximumBin(); // start at max. bin
   while (hCount->GetBinContent(i) > 1) i++;
   maxnhit = (int)round(pow(10.,hCount->GetBinLowEdge(i)));
   /*
@@ -112,14 +115,14 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
   int HOTLIMIT;
   GetHotLimit(pmthitcount, NPMTS, HOTLIMIT);
   //GetMaxColVal(center, pmthitcount, NPMTS, MAXVAL, empty, pmtinfo);
-  
+   
   int ndot[NCOL+2];
   double dotx[NCOL+2][NPMTS], doty[NCOL+2][NPMTS];
   // Constants only known at runtime
   memset( ndot, 0, (NCOL+2)*sizeof(int) );
-  memset( dotx, -999, (NCOL+2)*NPMTS*sizeof(double) );
-  memset( doty, -999, (NCOL+2)*NPMTS*sizeof(double) );
-  
+  memset( dotx, 0, (NCOL+2)*NPMTS*sizeof(double) );
+  memset( doty, 0, (NCOL+2)*NPMTS*sizeof(double) );
+
   // Find rotation angles for this frame
   double rot_X, rot_Z;
   GetRotationAngles(center,rot_Z,rot_X);
@@ -128,6 +131,7 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
   int counter=0;
   TVector3 pmtpos, newpos;
   for(int id=0; id<NPMTS; id++) {
+    
     pmtpos = pmtinfo.GetPosition(id);
     if (pmtpos.Mag()==0) continue;                 // not a valid PMT position
     if (center.Angle(pmtpos) > pi/2.) continue;    // not in same hemisphere as central point
@@ -139,8 +143,8 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 
     // Fill graph
     int step = (int)TMath::Ceil(pmthitcount[id]/(1.*MAXVAL/NCOL))+1;
-    if (pmthitcount[id] > MAXVAL) step = NCOL+1;   // cap color range
-    if (pmthitcount[id] > HOTLIMIT) step = 0;      // hot PMT
+    if (pmthitcount[id] >= MAXVAL) step = NCOL+1;   // cap color range
+    if (pmthitcount[id] >= HOTLIMIT) step = 0;      // hot PMT
     //if (newpos.Perp()<1e3) printf("%s has step %d\n",printVector(newpos).c_str(),step);
     dotx[step][ndot[step]]=newpos.X()/1e3;
     doty[step][ndot[step]]=newpos.Y()/1e3;
