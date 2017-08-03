@@ -1,5 +1,5 @@
 // ---------------------------------------------------------
-// Goal:            Figure out which TELLIE fibres hit a given crate
+// Goal:            Print PMT positions in 3D and 2D (flatmap)
 // Author:          Martti Nirkko, 26/04/2017
 // Compile & run:   clear && g++ -g -o positions.exe positions.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./positions.exe
 // ---------------------------------------------------------
