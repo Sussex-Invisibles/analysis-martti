@@ -38,7 +38,7 @@
 #include "Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER=1;    // whether running on cluster (0=local)
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
@@ -51,13 +51,12 @@ using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 101849;
-  //const int TEST = 102278;  
+  const int TEST = (RUN_CLUSTER) ? 0 : 101834;
 
   // Loop over all fibres in list
-  string input = (RUN_CLUSTER) ? "../pca_runs/TELLIE_PCA.txt" : "TELLIE_PCA.txt";
+  string input = "../pca_runs/TELLIE_PCA.txt";
   ifstream in(input.c_str());
-  if (!in) { cerr<<"Failed to open TELLIE_PCA.txt"<<endl; exit(1); }
+  if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;
   int node, channel, run, ipw, photons;
   float nhit;
@@ -65,8 +64,8 @@ int main(int argc, char** argv) {
     getline(in,line);      // header
   }
   
-  string example = "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED/Analysis_r0000102315_s000_p000.root";
   // Initialise RAT
+  string example = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED/Analysis_r0000102315_s000_p000.root" : "/home/nirkko/Desktop/fibre_validation/Analysis_r0000101834_s000_p000.root";
   RAT::DU::DSReader dsreader(example);
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   const int NPMTS = pmtinfo.GetCount();
@@ -76,13 +75,18 @@ int main(int argc, char** argv) {
   memset( cvrg, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
   for (int id=0; id<NPMTS; id++) cvrg[id]=-99999;
   
+  int nfiles=0; 
   while (true) {
     in >> node >> fibre >> channel >> run >> ipw >> photons >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
     //printf("%6s %2d %6d %5d %6d\n", fibre.c_str(), channel, run, ipw, photons);
     occupancy(fibre, run, cvrg, NPMTS, IS_MC, TEST);
+    nfiles++;
   }
+  printf("Ran over %d files.\n",nfiles);
+  if (nfiles==0) { cerr<<"*** ERROR *** No input files found."<<endl; return 1; }
+
   TGraph2D *coverage = new TGraph2D();
   TGraph2D *offpmts = new TGraph2D();
   GetProjection(coverage, offpmts, cvrg, NPMTS, pmtinfo);
@@ -161,9 +165,9 @@ void occupancy(string fibre, int run, int* cvrg, int NPMTS, bool isMC=false, boo
   printf("Checking files for run %d... ", run);
   string out = Form("./output/PCA_%s.out",fibre.c_str());
   ifstream g(out.c_str());
-  if(g.good()) {            // file extracted
+  if(g.good()) {  // file extracted
     printf("OK! Adding direct light for fibre %s.\n",fibre.c_str());
-  } else {    // file not available
+  } else {        // file not available
     printf("not available! Skipping fibre %s.\n",fibre.c_str());
     return;
   }
@@ -221,7 +225,7 @@ void GetProjection(TGraph2D *coverage, TGraph2D* offpmts, int* cvrg, const int N
   TVector3 pmtpos;
   printf("Generating icosahedral projection... ");
   int goodpmts=0, badpmts=0;
-  double offx[NPMTS], offy[NPMTS];
+  //double offx[NPMTS], offy[NPMTS];
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
     if (pmtpos.Mag()==0) continue;              // not a valid PMT
@@ -229,14 +233,14 @@ void GetProjection(TGraph2D *coverage, TGraph2D* offpmts, int* cvrg, const int N
     int face;                                   // side of PSUP icosahedron
     icospos = func::IcosProject(pmtpos,face);   // PMT position on flatmap
     if(cvrg[id] <= 0) {                         // inactive PMT
-      offpmts->SetPoint(badpmts,icospos.X(),icospos.Y(),0.001); // non-zero Z
-      offx[badpmts] = icospos.X();
-      offy[badpmts] = icospos.Y();
+      offpmts->SetPoint(badpmts,icospos.X(),icospos.Y(),0.001); // non-zero Z important!
+      //offx[badpmts] = icospos.X();
+      //offy[badpmts] = icospos.Y();
       //printf("Bad PMT #%d at ( %.3f | %.3f )\t",id,icospos.X(),icospos.Y());
       //printf(" position ( %.3f | %.3f | %.3f )\n",id,pmtpos.X(),pmtpos.Y(),pmtpos.Z());
       badpmts++;
     } else {
-      if(cvrg[id] > 10) {                       // unrecognised hot PMT
+      if(cvrg[id] > 10) {                       // cap coverage to fixed value
         printf("*** WARNING *** PMT #%d has coverage %d - setting to 10.\n",id,cvrg[id]);
         cvrg[id]=10;
       }

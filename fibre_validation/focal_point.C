@@ -38,9 +38,9 @@
 #include "Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER=1;    // whether running on cluster (0=local)
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int IS_MC = 0;        // Monte-Carlo flag 
-const int NCOL=20;          // number of colors (max. 50)
+const int NCOL = 20;        // number of colors (max. 50)
 const int NDOTS = 360;      // number of points in circle
 const double DIR_CONE = 48; // opening angle to search for direct light (using aperture: 24 deg)
 const double REF_CONE = 20; // opening angle to search for reflected light (using aperture: 9.874 deg)
@@ -53,10 +53,10 @@ using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 102260;
+  const int TEST = (RUN_CLUSTER) ? 0 : 101834;
    
   // Loop over all fibres in list
-  string input = (RUN_CLUSTER) ? "../pca_runs/TELLIE_PCA.txt" : "TELLIE_PCA.txt";
+  string input = "../pca_runs/TELLIE_PCA.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open TELLIE_PCA.txt"<<endl; exit(1); }
   string line, fibre;
@@ -65,14 +65,20 @@ int main(int argc, char** argv) {
   for (int hdr=0; hdr<2; hdr++) {
     getline(in,line);      // header
   }
+  int nfiles=0;
   while (true) {
     in >> node >> fibre >> channel >> run >> ipw >> photons >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
     //printf("%6s %2d %6d %5d %6d\n", fibre.c_str(), channel, run, ipw, photons);
     focal_point(fibre, channel, run, ipw, photons, nhit, (bool)IS_MC, (bool)TEST);
+    nfiles++;
   }
-
+  printf("Ran over %d files.\n",nfiles);
+  if (nfiles==0) { 
+    cerr<<"*** ERROR *** No input files found."<<endl;
+    return 1; 
+  }
   return 0;
 }
 
