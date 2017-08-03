@@ -39,6 +39,7 @@
 
 // Global constants
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
+const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 const int NCOL = 20;        // number of colors (max. 50)
 const int NDOTS = 360;      // number of points in circle
@@ -54,7 +55,7 @@ int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
   const int TEST = (RUN_CLUSTER) ? 0 : 101834;
-   
+
   // Loop over all fibres in list
   string input = "../pca_runs/TELLIE_PCA.txt";
   ifstream in(input.c_str());
@@ -291,21 +292,31 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     facecenter[fc] *= 1./nfacepmts[fc];     // all PMTs weighted equally
     faceweight[fc] *= 1./nfacegoodpmts[fc]; // good PMTS weighted by intensity
     faceheat[fc] = faceweight[fc].Mag();
-    //printf("Face #%2d has intensity %6.2lfM\n",fc+1,faceheat[fc]/1e6);
+    if (VERBOSE) printf("Face #%2d has intensity %6.2lfM\n",fc+1,faceheat[fc]/1e6);
     if (faceheat[fc]>maxfaceheat) { maxfaceheat=faceheat[fc]; maxface=fc+1; }
   }
-  //printf("Hot faces: ");
+  if (VERBOSE) printf("Hot faces: ");
   TVector3 bestguess(0,0,0);
   int hotfaces=0;
   for(int fc=0; fc<20; fc++) {
-    if(faceheat[fc]<maxfaceheat/5.) continue;
-    //printf("%d ",fc+1);
+    if(faceheat[fc]<maxfaceheat/5.) continue; // face is "hot" if intensity is >20% of hottest face
+    if (VERBOSE) printf("%d ",fc+1);
     bestguess += faceweight[fc];
     hotfaces++;
   }
   if (hotfaces>0) { bestguess *= 1./hotfaces; }
   else { cerr<<"Something went wrong! No hot faces found."<<endl; return; }
-  //printf(" -> best guess direction: %s\n",printVector(bestguess.Unit()).c_str());
+  if (VERBOSE) printf(" -> best guess direction: %s\n",printVector(bestguess.Unit()).c_str());
+  
+  // Initial guess for reflected light (TODO - currently not used)
+  int refface=-1;
+  double reffaceheat=-1;
+  for(int fc=0; fc<20; fc++) {
+    if(faceheat[fc]>=maxfaceheat/5.) continue; // hot faces used for direct light
+    if(faceweight[fc].Angle(bestguess) < 120 * pi/180.) continue; // too close to direct light spot
+    if (faceheat[fc]>reffaceheat) { reffaceheat=faceheat[fc]; refface=fc+1; }
+  }
+  TVector3 bestguess2 = faceweight[refface-1];
   
   // Make graphs for icosahedral projection
   TGraph *icos[NCOL+2];
@@ -344,12 +355,13 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     cout << "*** WARNING *** Projected light position deviates from PSUP sphere!" << endl;
     return;
   }
-  //printf("PMT radius = %.3lf\n",pmtrad);
+  if(VERBOSE) printf("PMT radius = %.3lf mm\n",pmtrad);
 
   // Get the maximum bin as guesstimate for light spot
   bestguess.SetMag(pmtrad);
+  bestguess2.SetMag(pmtrad);
   TVector3 guess_dir =  bestguess;
-  TVector3 guess_ref = -bestguess;
+  TVector3 guess_ref = -bestguess;  // TODO - improve guesstimate for reflected light
   /*
   int x,y,z;
   //int maxbin = hcoarse->GetMaximumBin();
