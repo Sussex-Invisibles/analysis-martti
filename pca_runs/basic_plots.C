@@ -15,7 +15,7 @@ int main() {
 void basic_plots() {
   ifstream in("TELLIE_PCA.txt");
   string fibre;
-  int node, channel, run, ipw, photons;
+  int node, channel, run, ipw, photons, pin, rms;
   float nhit;
   //TFile *f = new TFile("pca.root","RECREATE");
   TH1F *h[4];
@@ -28,7 +28,7 @@ void basic_plots() {
   for (int l=0; l<2; l++) getline(in,line); // ignore header
   int nlines=0;
   while (1) {
-     in >> node >> fibre >> channel >> run >> ipw >> photons >> nhit;
+     in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
      if (!in.good()) break;
      if(run>0)     h[0]->Fill(run-1e5);
      if(ipw>0)     h[1]->Fill(ipw);

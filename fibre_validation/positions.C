@@ -26,7 +26,7 @@
 #include "HelperFunc.C"
 
 // Global constants
-const int RUN_CLUSTER=0;    // whether running on cluster (0=local)
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
@@ -40,17 +40,17 @@ int main(int argc, char** argv) {
   const int TEST = (RUN_CLUSTER) ? 0 : 101849;
   
   // Loop over all fibres in list
-  string input = (RUN_CLUSTER) ? "../pca_runs/TELLIE_PCA.txt" : "TELLIE_PCA.txt";
+  string input = "../pca_runs/TELLIE_PCA.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open TELLIE_PCA.txt"<<endl; exit(1); }
   string line, fibre;
-  int node, channel, run, ipw, photons;
+  int node, channel, run, ipw, photons, pin, rms;
   float nhit;
   for (int hdr=0; hdr<2; hdr++) {
     getline(in,line);      // header
   }
   while (true) {
-    in >> node >> fibre >> channel >> run >> ipw >> photons >> nhit;
+    in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
     //printf("%6s %2d %6d %5d %6d\n", fibre.c_str(), channel, run, ipw, photons);

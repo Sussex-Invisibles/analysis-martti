@@ -61,17 +61,17 @@ int main(int argc, char** argv) {
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open TELLIE_PCA.txt"<<endl; exit(1); }
   string line, fibre;
-  int node, channel, run, ipw, photons;
+  int node, channel, run, ipw, photons, pin, rms;
   float nhit;
   for (int hdr=0; hdr<2; hdr++) {
     getline(in,line);      // header
   }
   int nfiles=0;
   while (true) {
-    in >> node >> fibre >> channel >> run >> ipw >> photons >> nhit;
+    in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
-    //printf("%6s %2d %6d %5d %6d\n", fibre.c_str(), channel, run, ipw, photons);
+    if (VERBOSE) printf("%6s %2d %6d %5d %6d %5d %5d %.2f\n", fibre.c_str(), channel, run, ipw, photons, pin, rms, nhit);
     focal_point(fibre, channel, run, ipw, photons, nhit, (bool)IS_MC, (bool)TEST);
     nfiles++;
   }
