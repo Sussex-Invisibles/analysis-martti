@@ -612,9 +612,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   // Plotting section
   // ********************************************************************
   TCanvas *c0 = new TCanvas("","",1200,1500);
-  //gStyle->SetOptStat(111111);
   gStyle->SetTitleOffset(1.2,"xyz");
-  //gStyle->SetPadRightMargin(0.12); // for TH2 color scale
   TPad *pad0 = new TPad("pad0","Text",0.01,0.75,0.50,0.99);
   TPad *pad1 = new TPad("pad1","Hist",0.50,0.75,1.00,0.99);
   TPad *pad2 = new TPad("pad2","Icos",0.05,0.41,0.95,0.74);
@@ -644,11 +642,13 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
                     Form("%.2f#circ",DIRANG/pi*180),
                     Form("%.2f#circ",REFANG/pi*180)
                   };
+  
   // Highlight unsatisfactory values in bold
   if (count < 0.99*2e5) vals[2] = Form("#bf{%s}",vals[2]);     // lost more than 1% of triggers
   if (avgnhit<25 || avgnhit>45) vals[3] = Form("#bf{%s}",vals[3]);   // nhit far outside optimal range (30-40)
   if (DIRANG/pi*180 >= 10.) vals[4] = Form("#bf{%s}",vals[4]); // bad direct light fit
   if (REFANG/pi*180 >= 10.) vals[5] = Form("#bf{%s}",vals[5]); // bad reflected light fit
+  
   // Place text in pad
   title = new TLatex(0.05,0.9,"SNO+ TELLIE PCA data");
   title->SetTextAlign(12);
@@ -667,6 +667,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     v[l]->SetTextSize(0.08);
     v[l]->Draw();
   }
+  
   // Indicate colour scale
   TLatex *txtD = new TLatex(9.5,9.5,Form("NHit/PMT #leq %d",nearmax));
   txtD->SetTextAlign(33);
@@ -687,6 +688,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   hhits->SetLineWidth(2);
   hhits->GetXaxis()->SetTitleOffset(1.3);
   hhits->Draw();
+  
   // Draw off and hot PMT bins in their respective colour
   TH1I *hhitslo = (TH1I*)hhits->Clone();
   hhitslo->SetFillColor(16);
@@ -751,15 +753,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   if(pcircD2) pcircD2->Draw("P same");
   txtD->Draw();  
   
-  pad4->cd()->SetGrid();
-/*
   // View from reflected light spot (fitted)
-  //gDir2->Draw("scat");
-  //gDir2->SetMarkerStyle(7);
-  //gDir2->Draw("pcol");
-  gDir2->Draw("surf1");
-  gDir2->Draw("cont1 same");
-*/
+  pad4->cd()->SetGrid();
   hfineR->SetTitle("Reflected light (PMT hit sum);X'' [m];Y'' [m]");
   hfineR->GetXaxis()->SetTitleOffset(1.3);
   hfineR->GetYaxis()->SetTitleOffset(1.4);
@@ -780,12 +775,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   c0->Print(Form("%s.png",outfile.c_str()));
   c0->Print(Form("%s.pdf",outfile.c_str()));
   c0->Close();
-  
-  // Free memory allocated with 'memset'
-  //if (pmthitcount) free(pmthitcount);
-  //if (icosX) free(icosX);
-  //if (icosY) free(icosY);
-  //if (pmtface) free(pmtface);
   
   // Delete pointers created with 'new'
   if(hicos) delete hicos;
@@ -817,11 +806,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   if(pcircR1) delete pcircR1;
   if(pcircR2) delete pcircR2;
   if(c0) delete c0;
-  //if(pad0) delete pad0;
-  //if(pad1) delete pad1;
-  //if(pad2) delete pad2;
-  //if(pad3) delete pad3;
-  //if(pad4) delete pad4;
   if(title) delete title;
   if(t) for(int l=0;l<6;l++) delete t[l];
   if(v) for(int l=0;l<6;l++) delete v[l];
