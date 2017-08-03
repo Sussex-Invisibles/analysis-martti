@@ -309,6 +309,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   if (VERBOSE) printf(" -> best guess direction: %s\n",printVector(bestguess.Unit()).c_str());
   
   // Initial guess for reflected light (TODO - currently not used)
+/*
   int refface=-1;
   double reffaceheat=-1;
   for(int fc=0; fc<20; fc++) {
@@ -317,6 +318,17 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     if (faceheat[fc]>reffaceheat) { reffaceheat=faceheat[fc]; refface=fc+1; }
   }
   TVector3 bestguess2 = faceweight[refface-1];
+*/
+  int hotrefid=-1, hotrefcount=-1;
+  for(int id=0; id<NPMTS; id++) {
+    pmtpos = pmtinfo.GetPosition(id);
+    if (pmtpos.Mag()==0) continue; // not a valid PMT
+    if (pmtinfo.GetType(id) != 1) continue; // not a normal PMT
+    if (pmthitcount[id] > HOTLIMIT) continue; // hot PMT 
+    if (pmtpos.Angle(-bestguess) > pi/6) continue; // too far from reflected light guesstimate
+    if (pmthitcount[id] > hotrefcount) { hotrefcount=pmthitcount[id]; hotrefid=id; }
+  }
+  TVector3 bestguess2 = pmtinfo.GetPosition(hotrefid); // hottest PMT opposite direct light
   
   // Make graphs for icosahedral projection
   TGraph *icos[NCOL+2];
@@ -362,55 +374,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   bestguess2.SetMag(pmtrad);
   TVector3 guess_dir =  bestguess;
   TVector3 guess_ref = -bestguess;  // TODO - improve guesstimate for reflected light
-  /*
-  int x,y,z;
-  //int maxbin = hcoarse->GetMaximumBin();
-  //hcoarse->GetBinXYZ(maxbin,x,y,z);
-  //double xmax = hcoarse->GetXaxis()->GetBinCenter(x);
-  //double ymax = hcoarse->GetYaxis()->GetBinCenter(y);
-  double xmax=bestguess.Phi()/pi;
-  double ymax=-bestguess.Theta()/pi;
- 
-  // Get the maximum bin on the other side of the detector
-  TVector3 dirmaxbin(1,0,0);
-  dirmaxbin.SetPhi(xmax*pi);
-  dirmaxbin.SetTheta(-ymax*pi);
-  int maxbin1=-1, bigval=-1, binval;
-  double xval, yval;
-  // Loop over all bins in coarse histogram
-  for (int bin=0; bin<=(hcoarse->GetNbinsX()+2)*(hcoarse->GetNbinsY()+2); bin++) {
-    hcoarse->GetBinXYZ(bin,x,y,z);
-    // Ignore underflow/overflow bins
-    if(x==0||x==hcoarse->GetNbinsX()+1||y==0||y==hcoarse->GetNbinsY()+1) continue;
-    xval = hcoarse->GetXaxis()->GetBinCenter(x);
-    yval = hcoarse->GetYaxis()->GetBinCenter(y);
-    TVector3 dirbin(1,0,0);
-    dirbin.SetPhi(xval*pi);
-    dirbin.SetTheta(-yval*pi);
-    if (dirbin.Angle(dirmaxbin) <= pi*5/6.) continue; // must be in 60 deg cone on other side
-    if (-ymax<0.2 && -yval<0.8) continue; // correction for neck light
-    binval = hcoarse->GetBinContent(bin);
-    if (binval>bigval) { bigval=binval; maxbin1=bin; }
-  }
-  hcoarse->GetBinXYZ(maxbin1,x,y,z);
-  
-  //double xmax1 = hcoarse->GetXaxis()->GetBinCenter(x);
-  //double ymax1 = hcoarse->GetYaxis()->GetBinCenter(y);
-  double xmax1=xmax+1;
-  if (xmax1>1) xmax1-=2;
-  double ymax1=-1-ymax; 
-
-  // Get fake PMT position at these preliminary light spots
-  TVector3 guess_dir(1,0,0);
-  guess_dir.SetPhi(xmax*pi);
-  guess_dir.SetTheta(-ymax*pi);   // positive theta
-  guess_dir.SetMag(pmtrad);
-  
-  TVector3 guess_ref(1,0,0);
-  guess_ref.SetPhi(xmax1*pi);
-  guess_ref.SetTheta(-ymax1*pi);  // positive theta
-  guess_ref.SetMag(pmtrad);
-  */
 
   // Draw contours around estimated light spots in (phi,theta)
   TVector3 *dotsD[NDOTS], *dotsR[NDOTS];
