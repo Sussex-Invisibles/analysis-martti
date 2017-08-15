@@ -31,59 +31,68 @@
 #include "RAT/DS/Entry.hh"
 #include "RAT/DS/MC.hh"
 
-using namespace std;
-
 // Global constants
 const double pi = TMath::Pi();
+const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
+const int VERBOSE = 1;      // verbosity flag
+const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
-float angular(string, string, bool);
+float angular(string, string, bool, bool);
 
 // Run program
+using namespace std;
 int main(int argc, char** argv) {
+  
+  // Test flag (0 = process all runs, else run number)
+  const int TEST = (RUN_CLUSTER) ? 0 : 101834;
 
-  // Test on only one file
-  const int TEST = 0;
-  
-  // Monte-Carlo simulation
-  const int IS_MC = 1;
-  
-  // Loop over all fibres in list 
-  string fibre, fname;
-  if (TEST) {
-    fibre = "FT077A";
-    fname = "TELLIE_test/output/TELLIE_test_FT077A.root";
-    cout << "Average nhits = " << angular(fname, fibre, IS_MC) << endl;
-  } else {
-    ifstream in;
-    in.open("TELLIE_test/tellie_fibres.list");
-    float avgnhit;
-    int channel=0;
-    printf("%-3s %-6s %-4s\n","Ch.","Fibre","NHit");
-    printf("----------------\n");
-    while (true) {
-      in >> fibre;
-      if (!in.good()) break;
-      string fname = Form("TELLIE_test/output/TELLIE_test_%s.root", fibre.c_str());  
-      channel++;
-      avgnhit = angular(fname.c_str(), fibre, IS_MC);
-      printf("%3d %6s %4.1f\n",channel,fibre.c_str(),avgnhit);
-    }
+  // Loop over all fibres in list
+  string input = "../pca_runs/TELLIE_PCA.txt";
+  ifstream in(input.c_str());
+  if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
+  string line, fibre;
+  int node, channel, run, ipw, photons, pin, rms;
+  float nhit;
+  for (int hdr=0; hdr<2; hdr++) {
+    getline(in,line);      // header
   }
+  // Initialise RAT
+  string example = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED/Analysis_r0000102315_s000_p000.root" : "/home/m/mn/mn372/Desktop/Analysis_r0000102315_s000_p000.root";
+  RAT::DU::DSReader dsreader(example);
+  const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
+  const int NPMTS = pmtinfo.GetCount();
+  printf("Initialised DSReader & PMTInfo (%d PMTs).\n",NPMTS);
+  
+  int nfiles=0; 
+  while (true) {
+    in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
+    if (!in.good()) break;
+    if (TEST && TEST!=run) continue; // only want specified run
+    //string fname = Form("TELLIE_angular_%s.root", fibre.c_str());
+    //if (TEST) fname = "angular.root";
+    float avgnhit = angular(example.c_str(), fibre, IS_MC, TEST);
+    printf("%3d %6s %4.1f\n",channel,fibre.c_str(),avgnhit);
+    nfiles++;
+  }
+  printf("Ran over %d files.\n",nfiles);
+  if (nfiles==0) { cerr<<"*** ERROR *** No input files found."<<endl; return 1; }
   
   return 0;
 }
 
 // Define macro
-float angular(string fname, string fibre, bool isMC) {
+float angular(string fname, string fibre, bool isMC, bool TEST) {
 
   // Initialise RAT
   RAT::DU::DSReader dsreader(fname);
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   
+  // Initialise histogram
   TH2D *hist = new TH2D("hist",fibre.c_str(),50,0,0.5,40,1550,1750);
   hist->SetXTitle("Angle [#pi]");
   hist->SetYTitle("TAC [ ]");
+  
   // Loop over entries
   int count=0, hitpmts=0, badpmts=0, init=0;
   for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
@@ -109,13 +118,18 @@ float angular(string fname, string fibre, bool isMC) {
       int nhits = ev.GetNhits();			// normal/inward looking PMT hits
       count++;
       
-      // Get some MC variables, if available
-      TVector3 mcpos, mcang;
+      // Get fibre position and angle
+      TVector3 fibrepos, fibredir, lightpos;
       if (isMC) {
-        mcpos = mc.GetMCParticle(0).GetPosition();
-        mcang = mc.GetMCParticle(0).GetMomentum().Unit();
-        double rmc = mcpos.Mag()/1e3;       // radius [m]
-        double amc = mcpos.Angle(mcang);    // angle w.r.t. centre [rad]
+        fibrepos = mc.GetMCParticle(0).GetPosition();
+        fibredir = mc.GetMCParticle(0).GetMomentum().Unit();
+        //double rmc = mcpos.Mag()/1e3;       // radius [m]
+        //double amc = mcpos.Angle(mcang);    // angle w.r.t. centre [rad]
+      } else {
+        // TODO - this is hardcoded for a test file!
+        fibrepos.SetXYZ(3650.54,4359.93,-6173.26);
+        fibredir.SetXYZ(-0.401593,-0.552760,0.730191);
+        lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
       }
       
       // PMT information
@@ -124,9 +138,9 @@ float angular(string fname, string fibre, bool isMC) {
         int pmtID = pmts.GetPMT(iPMT).GetID();
         int pmttac = pmts.GetPMT(iPMT).GetTime();
         TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
-        TVector3 track = pmtpos-mcpos;
-        double theta = track.Angle(-mcpos);
-        hist->Fill(theta,pmttac);
+        TVector3 track = pmtpos-fibrepos;
+        double theta = track.Angle(lightpos-fibrepos);
+        hist->Fill(theta/pi,pmttac);
         hitpmts++;
       } // pmt loop
 	  
@@ -148,6 +162,7 @@ float angular(string fname, string fibre, bool isMC) {
   hist->GetXaxis()->SetTitleOffset(1.3);
   hist->GetYaxis()->SetTitleOffset(1.5);
   string imgname = Form("images/tellie_%s.png",fibre.c_str());
+  if (TEST) imgname = "angular.png";    // overwrite
   c0->Print(imgname.c_str());
   c0->Close();
   
