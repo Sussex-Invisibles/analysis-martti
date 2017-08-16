@@ -185,38 +185,98 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   TH1D *h2_0 = (TH1D*)gDirectory->Get("h2_0");  // Constant
   TH1D *h2_1 = (TH1D*)gDirectory->Get("h2_1");  // Mean
   TH1D *h2_2 = (TH1D*)gDirectory->Get("h2_2");  // StdDev
+  TH1D *h2_3 = (TH1D*)gDirectory->Get("h2_chi2");  // chi^2/ndof
   
   // Put mean and RMS into 1D histogram
+  int binscone=0;
+  float avgmean=0., avgdev=0.;
   for (int b=0; b<NBINS+2; b++) {
     h1->SetBinContent(b, h2_1->GetBinContent(b));
     h1->SetBinError(b, h2_2->GetBinContent(b));
     //if (VERBOSE) printf("#%2d %.4f %6.2f %6.2f\n",b,h1->GetBinCenter(b),h1->GetBinContent(b),h1->GetBinError(b));
+    if (h1->GetBinCenter(b)>0 && h1->GetBinCenter(b)<1/6.) {  // within 30 deg cone
+      avgmean += h2_1->GetBinContent(b);
+      avgdev += h2_2->GetBinContent(b);
+      binscone++;
+    }
   }
+  avgmean/=binscone;
+  avgdev/=binscone;
+  printf("Average mean (<pi/6):  %6.2f\n", avgmean);
+  printf("Average error (<pi/6): %6.2f\n", avgdev);
   
-  TCanvas *c0 = new TCanvas("","",1200,600);
-  c0->Divide(2,1);
+  // Plotting options
   gStyle->SetOptStat(1111);
-  gStyle->SetStatX(0.89);
-  gStyle->SetStatY(0.33);
-  gStyle->SetStatW(0.22);
-  gStyle->SetStatH(0.14);
+  gStyle->SetStatX(0.84);
+  gStyle->SetStatY(0.89);
+  gStyle->SetStatW(0.24);
+  gStyle->SetStatH(0.15);
+  gStyle->SetPadLeftMargin(0.1);
+  gStyle->SetPadRightMargin(0.1);
+  gStyle->SetPadTopMargin(0.1);
+  gStyle->SetPadBottomMargin(0.1);
+  gStyle->SetPadBorderSize(0);
   
-  c0->cd(1)->SetGrid();
-  h2->SetXTitle("Angle [#pi]");
-  h2->SetYTitle("Time [ns]");
+  // Define canvas and pads
+  TCanvas *c0 = new TCanvas("","",1200,900);
+  TPad *pad0 = new TPad("pad0","Hist",0.01,0.35,0.48,0.99);
+  TPad *pad1 = new TPad("pad1","Hist",0.52,0.35,1.00,0.99);
+  TPad *pad2 = new TPad("pad2","Hist",0.01,0.01,0.25,0.33);
+  TPad *pad3 = new TPad("pad3","Hist",0.26,0.01,0.50,0.33);
+  TPad *pad4 = new TPad("pad4","Hist",0.51,0.01,0.75,0.33);
+  TPad *pad5 = new TPad("pad5","Hist",0.76,0.01,1.00,0.33);
+  pad0->Draw();
+  pad1->Draw();
+  pad2->Draw();
+  pad3->Draw();
+  pad4->Draw();
+  pad5->Draw();
+  
+  // Time vs. angle (2D)
+  pad0->cd()->SetGrid();
+  pad0->SetRightMargin(0.15);   // for TH2D color scale
+  h2->SetTitle(Form("TELLIE fibre %s;Angle [#pi];Time [ns]",fibre.c_str()));
   h2->Draw("colz");
-  h2->GetXaxis()->SetTitleOffset(1.3);
+  h2->GetXaxis()->SetTitleOffset(1.2);
   h2->GetYaxis()->SetTitleOffset(1.5);
   
-  c0->cd(2)->SetGrid();
-  h1->SetXTitle("Angle [#pi]");
-  h1->SetYTitle("Time [ns]");
+  // Time vs. angle (fitted slices)
+  pad1->cd()->SetGrid();
+  h1->SetTitle("Gaussian fitted slices;Angle [#pi];Time [ns]");
   h1->SetLineWidth(2);
   h1->SetStats(0);
   h1->Draw("e");
   h1->GetYaxis()->SetRangeUser(240,290);
-  h1->GetXaxis()->SetTitleOffset(1.3);
+  h1->GetXaxis()->SetTitleOffset(1.2);
   h1->GetYaxis()->SetTitleOffset(1.5);
+  
+  // Constant
+  pad2->cd()->SetGrid();
+  h2_0->SetXTitle("Angle [#pi]");
+  h2_0->SetLineWidth(2);
+  h2_0->SetStats(0);
+  h2_0->Draw();
+  
+  // Mean
+  pad3->cd()->SetGrid();
+  h2_1->SetXTitle("Angle [#pi]");
+  h2_1->SetLineWidth(2);
+  h2_1->SetStats(0);
+  h2_1->Draw();
+  
+  // StdDev
+  pad4->cd()->SetGrid();
+  h2_2->SetXTitle("Angle [#pi]");
+  h2_2->SetLineWidth(2);
+  h2_2->SetStats(0);
+  h2_2->Draw();
+  
+  // Chisquare/NDOF
+  pad5->cd()->SetGrid();
+  h2_3->SetXTitle("Angle [#pi]");
+  h2_3->SetLineWidth(2);
+  h2_3->SetStats(0);
+  h2_3->Draw();
   
   // Save canvas and close
   string outfile = "angular";
