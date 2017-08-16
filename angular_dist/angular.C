@@ -31,21 +31,24 @@
 #include "RAT/DS/Entry.hh"
 #include "RAT/DS/MC.hh"
 
+// Helper functions
+#include "../fibre_validation/HelperFunc.C"
+#include "../fibre_validation/Xianguo.C"
+
 // Global constants
-const double pi = TMath::Pi();
 const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
-float angular(string, string, bool, bool);
+float angular(string, int, bool, bool);
 
-// Run program
+// Main program
 using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 101834;
+  const int TEST = (RUN_CLUSTER) ? 0 : 102315;
 
   // Loop over all fibres in list
   string input = "../pca_runs/TELLIE_PCA.txt";
@@ -59,10 +62,9 @@ int main(int argc, char** argv) {
   }
   // Initialise RAT
   string example = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED/Analysis_r0000102315_s000_p000.root" : "/home/m/mn/mn372/Desktop/Analysis_r0000102315_s000_p000.root";
-  RAT::DU::DSReader dsreader(example);
-  const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
-  const int NPMTS = pmtinfo.GetCount();
-  printf("Initialised DSReader & PMTInfo (%d PMTs).\n",NPMTS);
+  //RAT::DU::DSReader dsreader(example);
+  //const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
+  //const int NPMTS = pmtinfo.GetCount();
   
   int nfiles=0; 
   while (true) {
@@ -71,30 +73,76 @@ int main(int argc, char** argv) {
     if (TEST && TEST!=run) continue; // only want specified run
     //string fname = Form("TELLIE_angular_%s.root", fibre.c_str());
     //if (TEST) fname = "angular.root";
-    float avgnhit = angular(example.c_str(), fibre, IS_MC, TEST);
-    printf("%3d %6s %4.1f\n",channel,fibre.c_str(),avgnhit);
+    float avgnhit = angular(fibre, run, IS_MC, TEST);
+    printf("%3d %6s %4.1f = %4.1f\n",channel,fibre.c_str(),avgnhit,nhit);
     nfiles++;
   }
   printf("Ran over %d files.\n",nfiles);
-  if (nfiles==0) { cerr<<"*** ERROR *** No input files found."<<endl; return 1; }
-  
+  if (nfiles==0) { 
+    cerr<<"*** ERROR *** No input files found."<<endl;
+    return 1; 
+  }
   return 0;
 }
 
 // Define macro
-float angular(string fname, string fibre, bool isMC, bool TEST) {
+float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
+
+  // ********************************************************************
+  // Initialisation
+  // ********************************************************************
+  
+  // Check files for given run
+  if(!TEST) printf("*****\n");
+  printf("Checking files for run %d... ", run);
+  string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/m/mn/mn372/Desktop";
+  string fname = "";
+  ifstream f;
+  for (int pass=3;pass>=0;pass--) {
+    fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+    f.open(fname.c_str());
+    if (f.good()) break;
+  }
+  //string out = Form("./output/Angular_%s.out",fibre.c_str());
+  string img = Form("./images/Angular_%s.pdf",fibre.c_str());
+  //ifstream g(out.c_str());
+  ifstream h(img.c_str());
+  //int scanned_file = 0;
+  if (!TEST && h.good()) {  // file downloaded and processed
+    printf("already processed! Skipping fibre %s.\n",fibre.c_str());
+    return -999.;
+  //} else if(g.good()) {     // file extracted, but not processed
+  //  printf("not processed! Generating plots for fibre %s.\n",fibre.c_str());
+  //  scanned_file = 1;
+  } else if(!f.good()) {    // file not downloaded
+    printf("not downloaded! Skipping fibre %s.\n",fibre.c_str());
+    return -999.;
+  } else {                   // file downloaded, but not processed
+    printf("OK. Extracting data for fibre %s.\n",fibre.c_str());
+  }
 
   // Initialise RAT
   RAT::DU::DSReader dsreader(fname);
+  const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
+  const int NPMTS = pmtinfo.GetCount();
   
-  // Initialise histogram
-  TH2D *hist = new TH2D("hist",fibre.c_str(),50,0,0.5,40,1550,1750);
-  hist->SetXTitle("Angle [#pi]");
-  hist->SetYTitle("TAC [ ]");
+  // Get fibre info (from RATDB) 
+  RAT::DB *db = RAT::DB::Get();
+  //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
+  RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
+  TVector3 fibrepos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
+  TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
+  TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
+  if (VERBOSE) cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+  
+  // Initialise histograms
+  int NBINS = 50;
+  TH2D *h2 = new TH2D("h2",fibre.c_str(),NBINS,0,0.25,NBINS,240,290);
+  TH1D *h1 = new TH1D("h1",fibre.c_str(),NBINS,0,0.25);
   
   // Loop over entries
-  int count=0, hitpmts=0, badpmts=0, init=0;
+  int totalnhit=0, count=0;
   for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
     const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
     RAT::DS::MC mc;
@@ -107,68 +155,79 @@ float angular(string fname, string fibre, bool isMC, bool TEST) {
       // Trigger type
       int trig = ev.GetTrigType();
       if (!(trig & 0x8000)) continue;                   // EXT trigger only
-      
-      // Skip first entry in real data (TELLIE init command)
-      if (!isMC && !init) {
-        init=1;
-        continue;
-      }
-      
+        
       // Event observables
-      int nhits = ev.GetNhits();			// normal/inward looking PMT hits
+      int nhitscleaned = ev.GetNhitsCleaned();   // calibrated PMT hits with removed crosstalk
+      totalnhit += nhitscleaned;
       count++;
       
-      // Get fibre position and angle
-      TVector3 fibrepos, fibredir, lightpos;
-      if (isMC) {
-        fibrepos = mc.GetMCParticle(0).GetPosition();
-        fibredir = mc.GetMCParticle(0).GetMomentum().Unit();
-        //double rmc = mcpos.Mag()/1e3;       // radius [m]
-        //double amc = mcpos.Angle(mcang);    // angle w.r.t. centre [rad]
-      } else {
-        // TODO - this is hardcoded for a test file!
-        fibrepos.SetXYZ(3650.54,4359.93,-6173.26);
-        fibredir.SetXYZ(-0.401593,-0.552760,0.730191);
-        lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
-      }
-      
       // PMT information
-      const RAT::DS::UncalPMTs& pmts = ev.GetUncalPMTs();
-      for(int iPMT=0; iPMT<pmts.GetCount(); iPMT++) {
-        int pmtID = pmts.GetPMT(iPMT).GetID();
-        int pmttac = pmts.GetPMT(iPMT).GetTime();
+      const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
+      for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
+        RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
+        int pmtID = pmt.GetID();
+        if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
+        if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
+        if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
         TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
         TVector3 track = pmtpos-fibrepos;
-        double theta = track.Angle(lightpos-fibrepos);
-        hist->Fill(theta/pi,pmttac);
-        hitpmts++;
+        double theta = track.Angle(fibredir);               // angle w.r.t. fibre [rad]
+        double pmttime = pmt.GetTime();                     // hit time [ns]
+        // Fill histogram
+        h2->Fill(theta/pi, pmttime);
       } // pmt loop
 	  
     } // event loop
   } // entry loop
   
+  // Fit angular slices with a gaussian distribution in time
+  h2->FitSlicesY();
+  TH1D *h2_0 = (TH1D*)gDirectory->Get("h2_0");  // Constant
+  TH1D *h2_1 = (TH1D*)gDirectory->Get("h2_1");  // Mean
+  TH1D *h2_2 = (TH1D*)gDirectory->Get("h2_2");  // StdDev
+  
+  // Put mean and RMS into 1D histogram
+  for (int b=0; b<NBINS+2; b++) {
+    h1->SetBinContent(b, h2_1->GetBinContent(b));
+    h1->SetBinError(b, h2_2->GetBinContent(b));
+    //if (VERBOSE) printf("#%2d %.4f %6.2f %6.2f\n",b,h1->GetBinCenter(b),h1->GetBinContent(b),h1->GetBinError(b));
+  }
+  
+  TCanvas *c0 = new TCanvas("","",1200,600);
+  c0->Divide(2,1);
   gStyle->SetOptStat(1111);
   gStyle->SetStatX(0.89);
   gStyle->SetStatY(0.33);
   gStyle->SetStatW(0.22);
   gStyle->SetStatH(0.14);
-  gStyle->SetPadGridX(true);
-  gStyle->SetPadGridY(true);
-  gStyle->SetTitleXOffset(1.3);
-  gStyle->SetTitleYOffset(1.5);
   
-  TCanvas *c0 = new TCanvas("","",1200,900);
-  hist->Draw("colz");
-  hist->GetXaxis()->SetTitleOffset(1.3);
-  hist->GetYaxis()->SetTitleOffset(1.5);
-  string imgname = Form("images/tellie_%s.png",fibre.c_str());
-  if (TEST) imgname = "angular.png";    // overwrite
-  c0->Print(imgname.c_str());
+  c0->cd(1)->SetGrid();
+  h2->SetXTitle("Angle [#pi]");
+  h2->SetYTitle("Time [ns]");
+  h2->Draw("colz");
+  h2->GetXaxis()->SetTitleOffset(1.3);
+  h2->GetYaxis()->SetTitleOffset(1.5);
+  
+  c0->cd(2)->SetGrid();
+  h1->SetXTitle("Angle [#pi]");
+  h1->SetYTitle("Time [ns]");
+  h1->SetLineWidth(2);
+  h1->SetStats(0);
+  h1->Draw("e");
+  h1->GetYaxis()->SetRangeUser(240,290);
+  h1->GetXaxis()->SetTitleOffset(1.3);
+  h1->GetYaxis()->SetTitleOffset(1.5);
+  
+  // Save canvas and close
+  string outfile = "angular";
+  if (!TEST) outfile = Form("images/angular_%s",fibre.c_str());
+  c0->Print(Form("%s.png",outfile.c_str()));
+  c0->Print(Form("%s.pdf",outfile.c_str()));
   c0->Close();
   
   if (c0) delete c0;
-  if (hist) delete hist;
+  if (h2) delete h2;
    
-  return (float)hitpmts/count;
+  return (float)totalnhit/count;
 }
 
