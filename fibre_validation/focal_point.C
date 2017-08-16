@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
   // Loop over all fibres in list
   string input = "../pca_runs/TELLIE_PCA.txt";
   ifstream in(input.c_str());
-  if (!in) { cerr<<"Failed to open TELLIE_PCA.txt"<<endl; exit(1); }
+  if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;
   int node, channel, run, ipw, photons, pin, rms;
   float nhit;
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-// Returns the fitted light position for a given fibre/run
+// Calculates the fitted light and fibre positions for a given fibre/run
 void focal_point(string fibre, int channel, int run, int ipw, int photons, float nhit, bool isMC=false, bool TEST=false) {
 
   // ********************************************************************
@@ -103,7 +103,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   }
   string out = Form("./output/PCA_%s.out",fibre.c_str());
   string img = Form("./images/PCA_%s.pdf",fibre.c_str());
-  //ifstream f(fname.c_str());
   ifstream g(out.c_str());
   ifstream h(img.c_str());
   int scanned_file = 0;
@@ -744,9 +743,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   txtR->Draw();  
   
   // Save canvas and close
-  string outfile;
+  string outfile = "focal_point";
   if (!TEST) outfile = Form("images/PCA_%s",fibre.c_str());
-  else       outfile = "focal_point";
   c0->Print(Form("%s.png",outfile.c_str()));
   c0->Print(Form("%s.pdf",outfile.c_str()));
   c0->Close();
