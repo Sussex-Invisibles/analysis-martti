@@ -37,8 +37,13 @@
 
 // Global constants
 const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
-const int VERBOSE = 1;      // verbosity flag
+const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
+
+// Physical constants
+const double c_vacuum = 299.792458;        // mm/ns (detector units)
+const double n_water = 1.33772;            // at 500 nm -> http://www.philiplaven.com/p20.html
+const double c_water = c_vacuum/n_water;   // mm/ns
 
 // Initialise functions
 float angular(string, int, bool, bool);
@@ -74,7 +79,7 @@ int main(int argc, char** argv) {
     //string fname = Form("TELLIE_angular_%s.root", fibre.c_str());
     //if (TEST) fname = "angular.root";
     float avgnhit = angular(fibre, run, IS_MC, TEST);
-    printf("%3d %6s %4.1f = %4.1f\n",channel,fibre.c_str(),avgnhit,nhit);
+    printf("%3d %8s %8.1f nhit (extracted) %8.1f nhit (table)\n",channel,fibre.c_str(),avgnhit,nhit);
     nfiles++;
   }
   printf("Ran over %d files.\n",nfiles);
@@ -137,9 +142,10 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   if (VERBOSE) cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
   
   // Initialise histograms
-  int NBINS = 50;
-  TH2D *h2 = new TH2D("h2",fibre.c_str(),NBINS,0,0.25,NBINS,240,290);
-  TH1D *h1 = new TH1D("h1",fibre.c_str(),NBINS,0,0.25);
+  int NBINS = 30;
+  TH2D *h2 = new TH2D("h2",fibre.c_str(),NBINS,0,30,NBINS,180,210);
+  TH1D *h1 = new TH1D("h1",fibre.c_str(),NBINS,0,30);
+  TH1D *herr = new TH1D("herr",fibre.c_str(),NBINS,0,30);
   
   // Loop over entries
   int totalnhit=0, count=0;
@@ -173,8 +179,10 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         TVector3 track = pmtpos-fibrepos;
         double theta = track.Angle(fibredir);               // angle w.r.t. fibre [rad]
         double pmttime = pmt.GetTime();                     // hit time [ns]
+        double corr = track.Mag()/c_water;                  // light travel time [ns]
+        //printf("Distance %.3f mm, Time %.3f ns\n",track.Mag(),corr);
         // Fill histogram
-        h2->Fill(theta/pi, pmttime);
+        h2->Fill(theta*180./pi, pmttime-corr);
       } // pmt loop
 	  
     } // event loop
@@ -185,16 +193,24 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   TH1D *h2_0 = (TH1D*)gDirectory->Get("h2_0");  // Constant
   TH1D *h2_1 = (TH1D*)gDirectory->Get("h2_1");  // Mean
   TH1D *h2_2 = (TH1D*)gDirectory->Get("h2_2");  // StdDev
-  TH1D *h2_3 = (TH1D*)gDirectory->Get("h2_chi2");  // chi^2/ndof
-  
+  TH1D *h2_3 = (TH1D*)gDirectory->Get("h2_chi2");  // chi^2/ndof  
+  TH1D *h2_py = NULL;
+
   // Put mean and RMS into 1D histogram
   int binscone=0;
   float avgmean=0., avgdev=0.;
   for (int b=0; b<NBINS+2; b++) {
     h1->SetBinContent(b, h2_1->GetBinContent(b));
     h1->SetBinError(b, h2_2->GetBinContent(b));
+    h2->ProjectionY("_py",b,b);
+    h2_py = (TH1D*)gDirectory->Get("h2_py");
+    h2_0->SetBinContent(b, h2_py->GetSum());  // overwrite Gaussian constant with intensity
+    h2_1->SetBinContent(b, h2_py->GetMean()); // overwrite Gaussian mean with mean
+    h2_2->SetBinContent(b, h2_py->GetRMS());  // overwrite Gaussian sigma with RMS
+    herr->SetBinContent(b, h2_py->GetMeanError()); // not *quite* the same as error on Gaussian mean
+    //if (VERBOSE) printf("#%2d %10.6f %10.6f\n",b,h2_1->GetBinError(b),h2_py->GetMeanError());
     //if (VERBOSE) printf("#%2d %.4f %6.2f %6.2f\n",b,h1->GetBinCenter(b),h1->GetBinContent(b),h1->GetBinError(b));
-    if (h1->GetBinCenter(b)>0 && h1->GetBinCenter(b)<1/6.) {  // within 30 deg cone
+    if (h1->GetBinCenter(b)>0 && h1->GetBinCenter(b)<30) {  // within 30 deg cone
       avgmean += h2_1->GetBinContent(b);
       avgdev += h2_2->GetBinContent(b);
       binscone++;
@@ -202,21 +218,23 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   }
   avgmean/=binscone;
   avgdev/=binscone;
-  printf("Average mean (<pi/6):  %6.2f\n", avgmean);
-  printf("Average error (<pi/6): %6.2f\n", avgdev);
+  printf("Average mean (< 30 deg):  %6.2f\n", avgmean);
+  printf("Average error (< 30 deg): %6.2f\n", avgdev);
   
   // Plotting options
-  gStyle->SetOptStat(1111);
+  gStyle->SetOptStat(0);
+  /*
   gStyle->SetStatX(0.84);
   gStyle->SetStatY(0.89);
   gStyle->SetStatW(0.24);
   gStyle->SetStatH(0.15);
+  */
   gStyle->SetPadLeftMargin(0.1);
   gStyle->SetPadRightMargin(0.1);
   gStyle->SetPadTopMargin(0.1);
   gStyle->SetPadBottomMargin(0.1);
   gStyle->SetPadBorderSize(0);
-  
+   
   // Define canvas and pads
   TCanvas *c0 = new TCanvas("","",1200,900);
   TPad *pad0 = new TPad("pad0","Hist",0.01,0.35,0.48,0.99);
@@ -235,49 +253,60 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   // Time vs. angle (2D)
   pad0->cd()->SetGrid();
   pad0->SetRightMargin(0.15);   // for TH2D color scale
-  h2->SetTitle(Form("TELLIE fibre %s;Angle [#pi];Time [ns]",fibre.c_str()));
+  h2->SetTitle(Form("TELLIE fibre %s;Angle [deg];Time [ns]",fibre.c_str()));
   h2->Draw("colz");
   h2->GetXaxis()->SetTitleOffset(1.2);
   h2->GetYaxis()->SetTitleOffset(1.5);
   
-  // Time vs. angle (fitted slices)
   pad1->cd()->SetGrid();
-  h1->SetTitle("Gaussian fitted slices;Angle [#pi];Time [ns]");
+  pad1->SetLeftMargin(0.15);   // for axis label
+  herr->SetTitle(Form("Error on mean hit time;Angle [deg];#Delta t_{mean} [ns]",fibre.c_str()));
+  herr->SetLineWidth(2);
+  herr->Draw("colz");
+  herr->GetXaxis()->SetTitleOffset(1.2);
+  herr->GetYaxis()->SetTitleOffset(1.7);
+
+/*
+  // Time vs. angle (fitted slices)
+  pad2->cd()->SetGrid();
+  h1->SetTitle("Gaussian signal approximation;Angle [deg];Time [ns]");
   h1->SetLineWidth(2);
-  h1->SetStats(0);
   h1->Draw("e");
-  h1->GetYaxis()->SetRangeUser(240,290);
   h1->GetXaxis()->SetTitleOffset(1.2);
   h1->GetYaxis()->SetTitleOffset(1.5);
-  
+*/  
+
   // Constant
   pad2->cd()->SetGrid();
-  h2_0->SetXTitle("Angle [#pi]");
+  h2_0->SetTitle("Intensity;Angle [deg];Hit count");
   h2_0->SetLineWidth(2);
-  h2_0->SetStats(0);
   h2_0->Draw();
+  h2_0->GetXaxis()->SetTitleOffset(1.2);
+  h2_0->GetYaxis()->SetTitleOffset(1.5);
   
   // Mean
   pad3->cd()->SetGrid();
-  h2_1->SetXTitle("Angle [#pi]");
+  h2_1->SetTitle("Mean hit time;Angle [deg];Time [ns]");
   h2_1->SetLineWidth(2);
-  h2_1->SetStats(0);
   h2_1->Draw();
+  h2_1->GetXaxis()->SetTitleOffset(1.2);
+  h2_1->GetYaxis()->SetTitleOffset(1.5);
   
   // StdDev
   pad4->cd()->SetGrid();
-  h2_2->SetXTitle("Angle [#pi]");
+  h2_2->SetTitle("RMS hit time;Angle [deg];Time [ns]");
   h2_2->SetLineWidth(2);
-  h2_2->SetStats(0);
   h2_2->Draw();
-  
+  h2_2->GetXaxis()->SetTitleOffset(1.2);
+  h2_2->GetYaxis()->SetTitleOffset(1.4);
+ 
   // Chisquare/NDOF
   pad5->cd()->SetGrid();
-  h2_3->SetXTitle("Angle [#pi]");
+  h2_3->SetTitle("Gaussian fit #chi^{2}/ndof;Angle [deg];");
   h2_3->SetLineWidth(2);
-  h2_3->SetStats(0);
   h2_3->Draw();
-  
+  h2_3->GetXaxis()->SetTitleOffset(1.2);
+
   // Save canvas and close
   string outfile = "angular";
   if (!TEST) outfile = Form("images/angular_%s",fibre.c_str());
