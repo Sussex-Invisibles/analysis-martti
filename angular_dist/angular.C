@@ -40,11 +40,6 @@ const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
-// Physical constants
-const double c_vacuum = 299.792458;        // mm/ns (detector units)
-const double n_water = 1.33772;            // at 500 nm -> http://www.philiplaven.com/p20.html
-const double c_water = c_vacuum/n_water;   // mm/ns
-
 // Initialise functions
 float angular(string, int, bool, bool);
 
@@ -53,7 +48,7 @@ using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 102315;
+  const int TEST = (RUN_CLUSTER) ? 0 : 101410;
 
   // Loop over all fibres in list
   string input = "../pca_runs/TELLIE_PCA.txt";
@@ -66,7 +61,7 @@ int main(int argc, char** argv) {
     getline(in,line);      // header
   }
   // Initialise RAT
-  string example = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED/Analysis_r0000102315_s000_p000.root" : "/home/m/mn/mn372/Desktop/Analysis_r0000102315_s000_p000.root";
+  //string example = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED/Analysis_r0000102315_s000_p000.root" : "/home/m/mn/mn372/Desktop/Analysis_r0000102315_s000_p000.root";
   //RAT::DU::DSReader dsreader(example);
   //const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   //const int NPMTS = pmtinfo.GetCount();
@@ -76,10 +71,9 @@ int main(int argc, char** argv) {
     in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
-    //string fname = Form("TELLIE_angular_%s.root", fibre.c_str());
-    //if (TEST) fname = "angular.root";
     float avgnhit = angular(fibre, run, IS_MC, TEST);
-    if (avgnhit<0) { printf("Could not extract data for fibre %s!\n",fibre.c_str()); continue; }
+    if (avgnhit==-2.) { printf("Could not find data for fibre %s!\n",fibre.c_str()); continue; }
+    if (avgnhit==-1.) { printf("Already processed fibre %s!\n",fibre.c_str()); continue; }
     printf("%3d %8s %8.1f nhit (extracted) %8.1f nhit (table)\n",channel,fibre.c_str(),avgnhit,nhit);
     nfiles++;
   }
@@ -102,7 +96,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   if(!TEST) printf("*****\n");
   printf("Checking files for run %d... ", run);
   //string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/m/mn/mn372/Desktop";
-  string fpath = (RUN_CLUSTER) ? "/home/m/mn/mn372/Software/SNOP/work/data" : "/home/m/mn/mn372/Desktop";
+  //string fpath = (RUN_CLUSTER) ? "/home/m/mn/mn372/Software/SNOP/work/data" : "/home/nirkko/Software/SNOP/work/data";
+  string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
   string fname = "";
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
@@ -110,20 +105,20 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     f.open(fname.c_str());
     if (f.good()) break;
   }
-  //string out = Form("./output/angular_%s.out",fibre.c_str());
+  string out = Form("./output/angular_%s.out",fibre.c_str());
   string img = Form("./images/angular_%s.pdf",fibre.c_str());
-  //ifstream g(out.c_str());
+  ifstream g(out.c_str());
   ifstream h(img.c_str());
-  //int scanned_file = 0;
+  int scanned_file = 0;
   if (!TEST && h.good()) {  // file downloaded and processed
     printf("already processed! Skipping fibre %s.\n",fibre.c_str());
-    return -999.;
-  //} else if(g.good()) {     // file extracted, but not processed
-  //  printf("not processed! Generating plots for fibre %s.\n",fibre.c_str());
-  //  scanned_file = 1;
+    return -1.;
+  } else if(g.good()) {     // file extracted, but not processed
+    printf("not processed! Generating plots for fibre %s.\n",fibre.c_str());
+    scanned_file = 1;
   } else if(!f.good()) {    // file not downloaded
     printf("not downloaded! Skipping fibre %s.\n",fibre.c_str());
-    return -999.;
+    return -2.;
   } else {                   // file downloaded, but not processed
     printf("OK. Extracting data for fibre %s.\n",fibre.c_str());
   }
@@ -143,13 +138,47 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
   if (VERBOSE) cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
   
-  // Initialise histograms
-  int NBINS = 30;
-  TH2D *h2 = new TH2D("h2",fibre.c_str(),NBINS,0,30,NBINS,180,210);
-  TH1D *h1 = new TH1D("h1",fibre.c_str(),NBINS,0,30);
-  TH1D *herr = new TH1D("herr",fibre.c_str(),NBINS,0,30);
+  // First iteration: Get average hit time
+  int hitpmts=0;
+  TH1D *hcoarse = new TH1D("hcoarse",fibre.c_str(),500,0,500);
+  for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
+    const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
+    for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {        // mostly 1 event per entry
+      const RAT::DS::EV& ev = ds.GetEV(iEv);
+      int trig = ev.GetTrigType();
+      if (!(trig & 0x8000)) continue;                   // EXT trigger only
+      const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
+      for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
+        RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
+        int pmtID = pmt.GetID();
+        if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
+        if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
+        if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
+        TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
+        TVector3 track = pmtpos-fibrepos;
+        double theta = track.Angle(fibredir);               // angle w.r.t. fibre [rad]
+        double pmttime = pmt.GetTime();                     // hit time [ns]
+        double corr = track.Mag()/c_water;                  // light travel time [ns]
+        hcoarse->Fill(pmttime-corr);
+        //avghittime += pmttime-corr;
+        hitpmts++;
+      } // pmt loop
+    } // event loop
+  } // entry loop
   
-  // Loop over entries
+  int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
+  commontime += 5/2;              // intermediate step
+  commontime -= commontime % 5;   // rounded to the nearest multiple of 5
+  if (VERBOSE) printf("Most common hit time: %d ns\n",commontime);
+  
+  // Initialise histograms
+  const int NBINS = 30;
+  const int MAXANG = 30;
+  TH2D *h2 = new TH2D("h2",fibre.c_str(),NBINS,0,MAXANG,NBINS,commontime-15,commontime+15);
+  TH1D *h1 = new TH1D("h1",fibre.c_str(),NBINS,0,MAXANG);
+  TH1D *herr = new TH1D("herr",fibre.c_str(),NBINS,0,MAXANG);
+  
+  // Second iteration: Fill histograms
   int totalnhit=0, count=0;
   for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
     const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
@@ -184,7 +213,6 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         double corr = track.Mag()/c_water;                  // light travel time [ns]
         h2->Fill(theta*180./pi, pmttime-corr);              // angle [deg], time [ns]
       } // pmt loop
-	  
     } // event loop
   } // entry loop
   
@@ -218,17 +246,11 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   }
   avgmean/=binscone;
   avgdev/=binscone;
-  printf("Average mean (< 30 deg):  %6.2f\n", avgmean);
-  printf("Average error (< 30 deg): %6.2f\n", avgdev);
+  if (VERBOSE) printf("Average hit time mean (< 30 deg): %6.2f\n", avgmean);
+  if (VERBOSE) printf("Average hit time RMS (< 30 deg):  %6.2f\n", avgdev);
   
   // Plotting options
   gStyle->SetOptStat(0);
-  /*
-  gStyle->SetStatX(0.84);
-  gStyle->SetStatY(0.89);
-  gStyle->SetStatW(0.24);
-  gStyle->SetStatH(0.15);
-  */
   gStyle->SetPadLeftMargin(0.1);
   gStyle->SetPadRightMargin(0.1);
   gStyle->SetPadTopMargin(0.1);
@@ -260,11 +282,12 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   
   pad1->cd()->SetGrid();
   pad1->SetLeftMargin(0.15);   // for axis label
-  herr->SetTitle(Form("Error on mean hit time;Angle [deg];#Delta t_{mean} [ns]",fibre.c_str()));
+  herr->SetTitle("Error on mean hit time;Angle [deg];#Delta t_{mean} [ns]");
   herr->SetLineWidth(2);
   herr->Draw("colz");
   herr->GetXaxis()->SetTitleOffset(1.2);
   herr->GetYaxis()->SetTitleOffset(1.7);
+  herr->GetYaxis()->SetRangeUser(0,0.1);
 
 /*
   // Time vs. angle (fitted slices)
@@ -274,7 +297,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h1->Draw("e");
   h1->GetXaxis()->SetTitleOffset(1.2);
   h1->GetYaxis()->SetTitleOffset(1.5);
-*/  
+*/
 
   // Constant
   pad2->cd()->SetGrid();
@@ -283,6 +306,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_0->Draw();
   h2_0->GetXaxis()->SetTitleOffset(1.2);
   h2_0->GetYaxis()->SetTitleOffset(1.5);
+  h2_0->GetYaxis()->SetRangeUser(0,1.1*h2_0->GetMaximum());
   
   // Mean
   pad3->cd()->SetGrid();
@@ -291,6 +315,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_1->Draw();
   h2_1->GetXaxis()->SetTitleOffset(1.2);
   h2_1->GetYaxis()->SetTitleOffset(1.5);
+  h2_1->GetYaxis()->SetRangeUser(0,1.1*h2_1->GetMaximum());
   
   // StdDev
   pad4->cd()->SetGrid();
@@ -299,6 +324,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_2->Draw();
   h2_2->GetXaxis()->SetTitleOffset(1.2);
   h2_2->GetYaxis()->SetTitleOffset(1.4);
+  h2_2->GetYaxis()->SetRangeUser(0,1.1*h2_2->GetMaximum());
  
   // Chisquare/NDOF
   pad5->cd()->SetGrid();
@@ -306,6 +332,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_3->SetLineWidth(2);
   h2_3->Draw();
   h2_3->GetXaxis()->SetTitleOffset(1.2);
+  h2_3->GetYaxis()->SetRangeUser(0,1.1*h2_3->GetMaximum());
 
   // Save canvas and close
   string outfile = "angular";

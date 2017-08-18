@@ -15,6 +15,11 @@ const TVector3 e1(1,0,0);
 const TVector3 e2(0,1,0);
 const TVector3 e3(0,0,1);
 
+// Physical constants
+const double c_vacuum = 299.792458;        // mm/ns (detector units)
+const double n_water = 1.33772;            // at 500 nm -> http://www.philiplaven.com/p20.html
+const double c_water = c_vacuum/n_water;   // mm/ns
+
 // Initialise functions
 string printVector(const TVector3&);
 void GetRotationAngles(const TVector3&, double&, double&);
