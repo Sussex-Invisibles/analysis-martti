@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
     if (TEST && TEST!=run) continue; // only want specified run
     float avgnhit = angular(fibre, run, IS_MC, TEST);
     if (avgnhit==-2.) { printf("Could not find data for fibre %s!\n",fibre.c_str()); continue; }
-    if (avgnhit==-1.) { printf("Already processed fibre %s!\n",fibre.c_str()); continue; }
+    if (avgnhit==-1.) { printf("Nothing to do!\n"); continue; }
     printf("%3d %8s %8.1f nhit (extracted) %8.1f nhit (table)\n",channel,fibre.c_str(),avgnhit,nhit);
     nfiles++;
   }
@@ -345,6 +345,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   if (h1) delete h1;
   if (h2) delete h2;
   if (herr) delete herr;
+  if (hcoarse) delete hcoarse;
   
   return (float)totalnhit/count;
 }
