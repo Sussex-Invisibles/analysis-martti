@@ -93,7 +93,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   // Check files for given run
   if(!TEST) printf("*****\n");
   printf("Checking files for run %d... ", run);
-  string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
+  //string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
+  string fpath = (RUN_CLUSTER) ? "/home/m/mn/mn372/Software/SNOP/work/data" : "/home/nirkko/Desktop/fibre_validation";
   string fname = "";
   ifstream f;
   for (int pass=3;pass>=0;pass--) {

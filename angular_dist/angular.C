@@ -79,6 +79,7 @@ int main(int argc, char** argv) {
     //string fname = Form("TELLIE_angular_%s.root", fibre.c_str());
     //if (TEST) fname = "angular.root";
     float avgnhit = angular(fibre, run, IS_MC, TEST);
+    if (avgnhit<0) { printf("Could not extract data for fibre %s!\n",fibre.c_str()); continue; }
     printf("%3d %8s %8.1f nhit (extracted) %8.1f nhit (table)\n",channel,fibre.c_str(),avgnhit,nhit);
     nfiles++;
   }
@@ -100,7 +101,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   // Check files for given run
   if(!TEST) printf("*****\n");
   printf("Checking files for run %d... ", run);
-  string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/m/mn/mn372/Desktop";
+  //string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/m/mn/mn372/Desktop";
+  string fpath = (RUN_CLUSTER) ? "/home/m/mn/mn372/Software/SNOP/work/data" : "/home/m/mn/mn372/Desktop";
   string fname = "";
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
@@ -108,8 +110,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     f.open(fname.c_str());
     if (f.good()) break;
   }
-  //string out = Form("./output/Angular_%s.out",fibre.c_str());
-  string img = Form("./images/Angular_%s.pdf",fibre.c_str());
+  //string out = Form("./output/angular_%s.out",fibre.c_str());
+  string img = Form("./images/angular_%s.pdf",fibre.c_str());
   //ifstream g(out.c_str());
   ifstream h(img.c_str());
   //int scanned_file = 0;
@@ -180,9 +182,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         double theta = track.Angle(fibredir);               // angle w.r.t. fibre [rad]
         double pmttime = pmt.GetTime();                     // hit time [ns]
         double corr = track.Mag()/c_water;                  // light travel time [ns]
-        //printf("Distance %.3f mm, Time %.3f ns\n",track.Mag(),corr);
-        // Fill histogram
-        h2->Fill(theta*180./pi, pmttime-corr);
+        h2->Fill(theta*180./pi, pmttime-corr);              // angle [deg], time [ns]
       } // pmt loop
 	  
     } // event loop
