@@ -36,7 +36,7 @@
 #include "../fibre_validation/Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
@@ -315,8 +315,10 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   c0->Close();
   
   if (c0) delete c0;
+  if (h1) delete h1;
   if (h2) delete h2;
-   
+  if (herr) delete herr;
+  
   return (float)totalnhit/count;
 }
 
