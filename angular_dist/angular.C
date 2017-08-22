@@ -36,8 +36,8 @@
 #include "../fibre_validation/Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
-const int VERBOSE = 1;      // verbosity flag
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
+const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
     if (TEST && TEST!=run) continue; // only want specified run
     float avgnhit = angular(fibre, run, IS_MC, TEST);
     if (avgnhit==-2.) { printf("Could not find data for fibre %s!\n",fibre.c_str()); continue; }
-    if (avgnhit==-1.) { printf("Nothing to do!\n"); continue; }
+    if (avgnhit==-1.) { if (VERBOSE) printf("Nothing to do!\n"); continue; }
     printf("%3d %8s %8.1f nhit (extracted) %8.1f nhit (table)\n",channel,fibre.c_str(),avgnhit,nhit);
     nfiles++;
   }
@@ -93,7 +93,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   // ********************************************************************
   
   // Check files for given run
-  if(!TEST) printf("*****\n");
+  if(!TEST && VERBOSE) printf("*****\n");
   printf("Checking files for run %d... ", run);
   //string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/m/mn/mn372/Desktop";
   //string fpath = (RUN_CLUSTER) ? "/home/m/mn/mn372/Software/SNOP/work/data" : "/home/nirkko/Software/SNOP/work/data";
@@ -138,6 +138,28 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
   if (VERBOSE) cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
   
+  // Get fitted light position (from file)
+  string fitfile = "../fibre_validation/TELLIE_FITRESULTS.txt";
+  ifstream fit(fitfile.c_str());
+  if (!fit) { cerr<<"Failed to open "<<fitfile<<endl; exit(1); }
+  string line, fibrecheck;
+  TVector3 fitpos(0,0,0);
+  int runcheck;
+  float dirx, diry, dirz, refx, refy, refz;
+  for (int hdr=0; hdr<2; hdr++) {
+    getline(fit,line);      // header
+  }
+  while (true) {
+    fit >> runcheck >> fibrecheck >> dirx >> diry >> dirz >> refx >> refy >> refz;
+    if (!fit.good()) break;
+    if (runcheck != run) continue;
+    if (fibrecheck != fibre) { cerr<<"Fibre mismatch: "<<fibrecheck<<" != "<<fibre<<" Check files."<<endl; exit(1); }
+    fitpos.SetXYZ(dirx,diry,dirz);
+    if (fitpos.Mag()!=0) break;
+  }
+  TVector3 fitdir = (fitpos-fibrepos).Unit();
+  cout << "Loaded fit position: " << printVector(fitpos) << ", " << fitpos.Angle(lightpos)*180./pi << " deg deviation\n" << endl;
+  
   // Initialise histograms
   const int NBINS = 30;
   const int MAXANG = 30;
@@ -146,13 +168,13 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   
   // First iteration: Get average hit time and number of PMTs in each segment
   int hitpmts=0, allpmts[NPMTS];
-  memset( allpmts, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+  memset( allpmts, 0, NPMTS*sizeof(int) );                  // NPMTS only known at runtime
   for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
     const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
-    for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {        // mostly 1 event per entry
+    for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {            // mostly 1 event per entry
       const RAT::DS::EV& ev = ds.GetEV(iEv);
       int trig = ev.GetTrigType();
-      if (!(trig & 0x8000)) continue;                   // EXT trigger only
+      if (!(trig & 0x8000)) continue;                       // EXT trigger only
       const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
       for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
         RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
@@ -162,7 +184,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
         TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
         TVector3 track = pmtpos-fibrepos;
-        double theta = track.Angle(fibredir);               // angle w.r.t. fibre [rad]
+        double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
         double pmttime = pmt.GetTime();                     // hit time [ns]
         double corr = track.Mag()/c_water;                  // light travel time [ns]
         hcoarse->Fill(pmttime-corr);
@@ -196,7 +218,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       // Trigger type
       int trig = ev.GetTrigType();
       if (!(trig & 0x8000)) continue;                   // EXT trigger only
-        
+      
       // Event observables
       int nhitscleaned = ev.GetNhitsCleaned();   // calibrated PMT hits with removed crosstalk
       totalnhit += nhitscleaned;
@@ -212,7 +234,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
         TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
         TVector3 track = pmtpos-fibrepos;
-        double theta = track.Angle(fibredir);               // angle w.r.t. fibre [rad]
+        double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
         double pmttime = pmt.GetTime();                     // hit time [ns]
         double corr = track.Mag()/c_water;                  // light travel time [ns]
         h2->Fill(theta*180./pi, pmttime-corr);              // angle [deg], time [ns]
@@ -227,7 +249,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   TH1D *h2_2 = (TH1D*)gDirectory->Get("h2_2");  // StdDev
   TH1D *h2_3 = (TH1D*)gDirectory->Get("h2_chi2");  // chi^2/ndof  
   TH1D *h2_py = NULL;
-
+  
   // Put mean and RMS into 1D histogram
   int binscone=0;
   float avgmean=0., avgdev=0.;
@@ -237,8 +259,11 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     h2->ProjectionY("_py",b,b);
     h2_py = (TH1D*)gDirectory->Get("h2_py");
     h2_0->SetBinContent(b, h2_py->GetSum());  // overwrite Gaussian constant with intensity
+    h2_0->SetBinError(b, sqrt(h2_py->GetSum()));  // overwrite Gaussian constant error with sqrt(intensity)
     h2_1->SetBinContent(b, h2_py->GetMean()); // overwrite Gaussian mean with mean
+    h2_1->SetBinError(b, h2_py->GetMeanError()); // overwrite Gaussian mean error with mean error
     h2_2->SetBinContent(b, h2_py->GetRMS());  // overwrite Gaussian sigma with RMS
+    h2_2->SetBinError(b, h2_py->GetRMSError());  // overwrite Gaussian sigma error with RMS error
     herr->SetBinContent(b, h2_py->GetMeanError()); // not *quite* the same as error on Gaussian mean
     //if (VERBOSE) printf("#%2d %10.6f %10.6f\n",b,h2_1->GetBinError(b),h2_py->GetMeanError());
     //if (VERBOSE) printf("#%2d %.4f %6.2f %6.2f\n",b,h1->GetBinCenter(b),h1->GetBinContent(b),h1->GetBinError(b));
@@ -258,8 +283,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   for (int binx=0; binx<NBINS+2; binx++) {
     pmts = hpmtseg->GetBinContent(binx);
     tmp = h2_0->GetBinContent(binx);
-    if (pmts<=0) h2_0->SetBinContent(binx,0);
-    else h2_0->SetBinContent(binx,tmp/pmts);
+    if (pmts<=0) { h2_0->SetBinContent(binx,0); h2_0->SetBinError(binx,0); }
+    else { h2_0->SetBinContent(binx,tmp/pmts); h2_0->SetBinError(binx,sqrt(tmp)/pmts); }
     //if (VERBOSE) printf("Segment %2d contains %4d PMTs.\n",binx,(int)pmts);
     for (int biny=0; biny<NBINS+2; biny++) {
       tmp = h2->GetBinContent(binx,biny);
@@ -336,10 +361,10 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
  
   // Error on mean
   pad4->cd()->SetGrid();
-  pad1->SetLeftMargin(0.2);   // for axis label
+  pad4->SetLeftMargin(0.2);   // for axis label
   herr->SetTitle("Error on mean hit time;Angle [deg];#Delta t_{mean} [ns]");
   herr->SetLineWidth(2);
-  herr->Draw("colz");
+  herr->Draw();
   herr->GetXaxis()->SetTitleOffset(1.2);
   herr->GetYaxis()->SetTitleOffset(1.7);
   herr->GetYaxis()->SetRangeUser(0,0.1);
