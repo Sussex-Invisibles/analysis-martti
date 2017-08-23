@@ -358,7 +358,11 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_1->Draw();
   h2_1->GetXaxis()->SetTitleOffset(1.2);
   h2_1->GetYaxis()->SetTitleOffset(1.7);
-  h2_1->GetYaxis()->SetRangeUser(0.995*h2_1->GetMinimum(), 1.005*h2_1->GetMaximum());
+  //h2_1->GetYaxis()->SetRangeUser(0.995*h2_1->GetMinimum(), 1.005*h2_1->GetMaximum());
+  float meanval = 0; int nonzerobins = 0;
+  for (int b=1; b<=30; b++) { if (h2_1->GetBinContent(b)==0) continue; meanval += h2_1->GetBinContent(b); nonzerobins++; }
+  meanval /= nonzerobins;
+  h2_1->GetYaxis()->SetRangeUser(0.975*meanval, 1.025*meanval);
   
   // Sum
   pad2->cd()->SetGrid();
@@ -368,7 +372,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_0->Draw();
   h2_0->GetXaxis()->SetTitleOffset(1.2);
   h2_0->GetYaxis()->SetTitleOffset(1.7);
-  h2_0->GetYaxis()->SetRangeUser(0, 1.1*h2_0->GetMaximum());
+  h2_0->GetYaxis()->SetRangeUser(0, 1e4);
   hpmtseg->Scale(10);
   hpmtseg->SetLineWidth(2);
   hpmtseg->SetLineColor(2);
@@ -383,7 +387,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_2->Draw();
   h2_2->GetXaxis()->SetTitleOffset(1.2);
   h2_2->GetYaxis()->SetTitleOffset(1.4);
-  h2_2->GetYaxis()->SetRangeUser(0.95*h2_2->GetMinimum(), 1.05*h2_2->GetMaximum());
+  h2_2->GetYaxis()->SetRangeUser(3.8, 6.2);
  
   // Error on mean
   pad4->cd()->SetGrid();
@@ -393,15 +397,16 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   herr->Draw();
   herr->GetXaxis()->SetTitleOffset(1.2);
   herr->GetYaxis()->SetTitleOffset(1.7);
-  herr->GetYaxis()->SetRangeUser(0,0.1);
+  herr->GetYaxis()->SetRangeUser(0, 0.1);
 
   // Chisquare/NDOF
   pad5->cd()->SetGrid();
+  pad5->SetLogy();
   h2_3->SetTitle("Gaussian fit #chi^{2}/ndof;Angle [deg];");
   h2_3->SetLineWidth(2);
   h2_3->Draw();
   h2_3->GetXaxis()->SetTitleOffset(1.2);
-  h2_3->GetYaxis()->SetRangeUser(0, 1.1*h2_3->GetMaximum());
+  h2_3->GetYaxis()->SetRangeUser(0.5, 500);
 
   // Save canvas and close
   string imgfile = "angular";
