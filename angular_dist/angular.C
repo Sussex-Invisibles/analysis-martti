@@ -105,7 +105,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     f.open(fname.c_str());
     if (f.good()) break;
   }
-  string out = Form("./output/angular_%s.out",fibre.c_str());
+  string out = Form("./output/angular_%s.root",fibre.c_str());
   string img = Form("./images/angular_%s.pdf",fibre.c_str());
   ifstream g(out.c_str());
   ifstream h(img.c_str());
@@ -123,176 +123,202 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     printf("OK. Extracting data for fibre %s.\n",fibre.c_str());
   }
 
-  // Initialise RAT
-  RAT::DU::DSReader dsreader(fname);
-  const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
-  const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
-  const int NPMTS = pmtinfo.GetCount();
-  
-  // Get fibre info (from RATDB) 
-  RAT::DB *db = RAT::DB::Get();
-  //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
-  RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
-  TVector3 fibrepos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
-  TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
-  TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
-  if (VERBOSE) cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
-  
-  // Get fitted light position (from file)
-  string fitfile = "../fibre_validation/TELLIE_FITRESULTS.txt";
-  ifstream fit(fitfile.c_str());
-  if (!fit) { cerr<<"Failed to open "<<fitfile<<endl; exit(1); }
-  string line, fibrecheck;
-  TVector3 fitpos(0,0,0);
-  int runcheck;
-  float dirx, diry, dirz, refx, refy, refz;
-  for (int hdr=0; hdr<2; hdr++) {
-    getline(fit,line);      // header
-  }
-  while (true) {
-    fit >> runcheck >> fibrecheck >> dirx >> diry >> dirz >> refx >> refy >> refz;
-    if (!fit.good()) break;
-    if (runcheck != run) continue;
-    if (fibrecheck != fibre) { cerr<<"Fibre mismatch: "<<fibrecheck<<" != "<<fibre<<" Check files."<<endl; exit(1); }
-    fitpos.SetXYZ(dirx,diry,dirz);
-    if (fitpos.Mag()!=0) break;
-  }
-  TVector3 fitdir = (fitpos-fibrepos).Unit();
-  cout << "Loaded fit position: " << printVector(fitpos) << ", " << fitpos.Angle(lightpos)*180./pi << " deg deviation\n" << endl;
-  
-  // Initialise histograms
-  const int NBINS = 30;
-  const int MAXANG = 30;
-  TH1D *hcoarse = new TH1D("hcoarse",fibre.c_str(),500,0,500);
-  TH1D *hpmtseg = new TH1D("hpmtseg",fibre.c_str(),NBINS,0,MAXANG);
-  
-  // First iteration: Get average hit time and number of PMTs in each segment
-  int hitpmts=0, allpmts[NPMTS];
-  memset( allpmts, 0, NPMTS*sizeof(int) );                  // NPMTS only known at runtime
-  for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
-    const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
-    for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {            // mostly 1 event per entry
-      const RAT::DS::EV& ev = ds.GetEV(iEv);
-      int trig = ev.GetTrigType();
-      if (!(trig & 0x8000)) continue;                       // EXT trigger only
-      const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
-      for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
-        RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
-        int pmtID = pmt.GetID();
-        if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
-        if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
-        if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
-        TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
-        TVector3 track = pmtpos-fibrepos;
-        double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
-        double pmttime = pmt.GetTime();                     // hit time [ns]
-        double corr = track.Mag()/c_water;                  // light travel time [ns]
-        hcoarse->Fill(pmttime-corr);
-        if (allpmts[pmtID]==0) { hpmtseg->Fill(theta*180./pi); allpmts[pmtID]++; }
-        hitpmts++;
-      } // pmt loop
-    } // event loop
-  } // entry loop
-  
-  int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
-  commontime += 5/2;              // intermediate step
-  commontime -= commontime % 5;   // rounded to the nearest multiple of 5
-  if (VERBOSE) printf("Most common hit time: %d ns\n",commontime);
-  
-  // More histograms
-  TH1D *h1 = new TH1D("h1",fibre.c_str(),NBINS,0,MAXANG);
-  TH2D *h2 = new TH2D("h2",fibre.c_str(),NBINS,0,MAXANG,NBINS,commontime-15,commontime+15);
-  TH1D *herr = new TH1D("herr",fibre.c_str(),NBINS,0,MAXANG);
-  
-  // Second iteration: Fill histograms
-  int totalnhit=0, count=0;
-  for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
-    const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
-    RAT::DS::MC mc;
-    if (isMC) mc = ds.GetMC();  // don't initialise this for real data (crashes)
+  string outpath = Form("output/angular_%s.root",fibre.c_str());
+  TFile *outfile = NULL;
+  int totalnhit, count;
+  TH1D *h1=NULL, *herr=NULL, *hcoarse=NULL, *hpmtseg=NULL;
+  TH1D *h2_0=NULL, *h2_1=NULL, *h2_2=NULL, *h2_3=NULL, *h2_py=NULL;
+  TH2D *h2=NULL;
+  if (scanned_file) {
+    outfile = new TFile(outpath.c_str(),"READ");
+    h1 = (TH1D*)outfile->Get("h1"); // Time vs angle
+    h2 = (TH2D*)outfile->Get("h2"); // Time vs angle
+    herr = (TH1D*)outfile->Get("herr"); // Error on mean time
+    hpmtseg = (TH1D*)outfile->Get("hpmtseg"); // Number of PMTs in angular bin
+    h2_0 = (TH1D*)outfile->Get("h2_0");  // Intensity
+    h2_1 = (TH1D*)outfile->Get("h2_1");  // Mean
+    h2_2 = (TH1D*)outfile->Get("h2_2");  // RMS
+    h2_3 = (TH1D*)outfile->Get("h2_chi2");  // Gaussian GOF
+    totalnhit = -999; // TODO: h2_0->Sum();
+    count = 1; // TODO: h2_0->GetEntries();
+  } else {
+    outfile = new TFile(outpath.c_str(),"NEW");
+
+    // Initialise RAT
+    RAT::DU::DSReader dsreader(fname);
+    const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
+    const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
+    const int NPMTS = pmtinfo.GetCount();
     
-    // Loop over triggered events in each entry
-    for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {        // mostly 1 event per entry
-      const RAT::DS::EV& ev = ds.GetEV(iEv);
-      
-      // Trigger type
-      int trig = ev.GetTrigType();
-      if (!(trig & 0x8000)) continue;                   // EXT trigger only
-      
-      // Event observables
-      int nhitscleaned = ev.GetNhitsCleaned();   // calibrated PMT hits with removed crosstalk
-      totalnhit += nhitscleaned;
-      count++;
-      
-      // PMT information
-      const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
-      for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
-        RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
-        int pmtID = pmt.GetID();
-        if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
-        if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
-        if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
-        TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
-        TVector3 track = pmtpos-fibrepos;
-        double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
-        double pmttime = pmt.GetTime();                     // hit time [ns]
-        double corr = track.Mag()/c_water;                  // light travel time [ns]
-        h2->Fill(theta*180./pi, pmttime-corr);              // angle [deg], time [ns]
-      } // pmt loop
-    } // event loop
-  } // entry loop
-  
-  // Fit angular slices with a gaussian distribution in time
-  h2->FitSlicesY();
-  TH1D *h2_0 = (TH1D*)gDirectory->Get("h2_0");  // Constant
-  TH1D *h2_1 = (TH1D*)gDirectory->Get("h2_1");  // Mean
-  TH1D *h2_2 = (TH1D*)gDirectory->Get("h2_2");  // StdDev
-  TH1D *h2_3 = (TH1D*)gDirectory->Get("h2_chi2");  // chi^2/ndof  
-  TH1D *h2_py = NULL;
-  
-  // Put mean and RMS into 1D histogram
-  int binscone=0;
-  float avgmean=0., avgdev=0.;
-  for (int b=0; b<NBINS+2; b++) {
-    h1->SetBinContent(b, h2_1->GetBinContent(b));
-    h1->SetBinError(b, h2_2->GetBinContent(b));
-    h2->ProjectionY("_py",b,b);
-    h2_py = (TH1D*)gDirectory->Get("h2_py");
-    h2_0->SetBinContent(b, h2_py->GetSum());  // overwrite Gaussian constant with intensity
-    h2_0->SetBinError(b, sqrt(h2_py->GetSum()));  // overwrite Gaussian constant error with sqrt(intensity)
-    h2_1->SetBinContent(b, h2_py->GetMean()); // overwrite Gaussian mean with mean
-    h2_1->SetBinError(b, h2_py->GetMeanError()); // overwrite Gaussian mean error with mean error
-    h2_2->SetBinContent(b, h2_py->GetRMS());  // overwrite Gaussian sigma with RMS
-    h2_2->SetBinError(b, h2_py->GetRMSError());  // overwrite Gaussian sigma error with RMS error
-    herr->SetBinContent(b, h2_py->GetMeanError()); // not *quite* the same as error on Gaussian mean
-    //if (VERBOSE) printf("#%2d %10.6f %10.6f\n",b,h2_1->GetBinError(b),h2_py->GetMeanError());
-    //if (VERBOSE) printf("#%2d %.4f %6.2f %6.2f\n",b,h1->GetBinCenter(b),h1->GetBinContent(b),h1->GetBinError(b));
-    if (h1->GetBinCenter(b)>0 && h1->GetBinCenter(b)<30) {  // within 30 deg cone
-      avgmean += h2_1->GetBinContent(b);
-      avgdev += h2_2->GetBinContent(b);
-      binscone++;
+    // Get fibre info (from RATDB) 
+    RAT::DB *db = RAT::DB::Get();
+    //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
+    RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
+    TVector3 fibrepos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
+    TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
+    TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
+    if (VERBOSE) cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+    
+    // Get fitted light position (from file)
+    string fitfile = "../fibre_validation/TELLIE_FITRESULTS.txt";
+    ifstream fit(fitfile.c_str());
+    if (!fit) { cerr<<"Failed to open "<<fitfile<<endl; exit(1); }
+    string line, fibrecheck;
+    TVector3 fitpos(0,0,0);
+    int runcheck;
+    float dirx, diry, dirz, refx, refy, refz;
+    for (int hdr=0; hdr<2; hdr++) {
+      getline(fit,line);      // header
     }
-  }
-  avgmean/=binscone;
-  avgdev/=binscone;
-  if (VERBOSE) printf("Average hit time mean (< 30 deg): %6.2f\n", avgmean);
-  if (VERBOSE) printf("Average hit time RMS (< 30 deg):  %6.2f\n", avgdev);
-  
-  // Normalise angular slices to number of PMTs in slice
-  double tmp, pmts;
-  for (int binx=0; binx<NBINS+2; binx++) {
-    pmts = hpmtseg->GetBinContent(binx);
-    tmp = h2_0->GetBinContent(binx);
-    if (pmts<=0) { h2_0->SetBinContent(binx,0); h2_0->SetBinError(binx,0); }
-    else { h2_0->SetBinContent(binx,tmp/pmts); h2_0->SetBinError(binx,sqrt(tmp)/pmts); }
-    //if (VERBOSE) printf("Segment %2d contains %4d PMTs.\n",binx,(int)pmts);
-    for (int biny=0; biny<NBINS+2; biny++) {
-      tmp = h2->GetBinContent(binx,biny);
-      if (pmts<=0) h2->SetBinContent(binx,biny,0);
-      else h2->SetBinContent(binx,biny,tmp/pmts);
+    while (true) {
+      fit >> runcheck >> fibrecheck >> dirx >> diry >> dirz >> refx >> refy >> refz;
+      if (!fit.good()) break;
+      if (runcheck != run) continue;
+      if (fibrecheck != fibre) { cerr<<"Fibre mismatch: "<<fibrecheck<<" != "<<fibre<<" Check files."<<endl; exit(1); }
+      fitpos.SetXYZ(dirx,diry,dirz);
+      if (fitpos.Mag()!=0) break;
     }
+    TVector3 fitdir = (fitpos-fibrepos).Unit();
+    cout << "Loaded fit position: " << printVector(fitpos) << ", " << fitpos.Angle(lightpos)*180./pi << " deg deviation\n" << endl;
+    
+    // Initialise histograms
+    const int NBINS = 30;
+    const int MAXANG = 30;
+    hcoarse = new TH1D("hcoarse",fibre.c_str(),500,0,500);
+    hpmtseg = new TH1D("hpmtseg",fibre.c_str(),NBINS,0,MAXANG);
+    
+    // First iteration: Get average hit time and number of PMTs in each segment
+    int hitpmts=0, allpmts[NPMTS];
+    memset( allpmts, 0, NPMTS*sizeof(int) );                  // NPMTS only known at runtime
+    for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
+      const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
+      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {            // mostly 1 event per entry
+        const RAT::DS::EV& ev = ds.GetEV(iEv);
+        int trig = ev.GetTrigType();
+        if (!(trig & 0x8000)) continue;                       // EXT trigger only
+        const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
+        for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
+          RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
+          int pmtID = pmt.GetID();
+          if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
+          if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
+          if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
+          TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
+          TVector3 track = pmtpos-fibrepos;
+          double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
+          double pmttime = pmt.GetTime();                     // hit time [ns]
+          double corr = track.Mag()/c_water;                  // light travel time [ns]
+          hcoarse->Fill(pmttime-corr);
+          if (allpmts[pmtID]==0) { hpmtseg->Fill(theta*180./pi); allpmts[pmtID]++; }
+          hitpmts++;
+        } // pmt loop
+      } // event loop
+    } // entry loop
+    
+    int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
+    commontime += 5/2;              // intermediate step
+    commontime -= commontime % 5;   // rounded to the nearest multiple of 5
+    if (VERBOSE) printf("Most common hit time: %d ns\n",commontime);
+    
+    // More histograms
+    h1 = new TH1D("h1",fibre.c_str(),NBINS,0,MAXANG);
+    h2 = new TH2D("h2",fibre.c_str(),NBINS,0,MAXANG,NBINS,commontime-15,commontime+15);
+    herr = new TH1D("herr",fibre.c_str(),NBINS,0,MAXANG);
+    
+    // Second iteration: Fill histograms
+    totalnhit=0;
+    count=0;
+    for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
+      const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
+      RAT::DS::MC mc;
+      if (isMC) mc = ds.GetMC();  // don't initialise this for real data (crashes)
+      
+      // Loop over triggered events in each entry
+      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {        // mostly 1 event per entry
+        const RAT::DS::EV& ev = ds.GetEV(iEv);
+        
+        // Trigger type
+        int trig = ev.GetTrigType();
+        if (!(trig & 0x8000)) continue;                   // EXT trigger only
+        
+        // Event observables
+        int nhitscleaned = ev.GetNhitsCleaned();   // calibrated PMT hits with removed crosstalk
+        totalnhit += nhitscleaned;
+        count++;
+        
+        // PMT information
+        const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
+        for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
+          RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
+          int pmtID = pmt.GetID();
+          if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
+          if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
+          if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
+          TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
+          TVector3 track = pmtpos-fibrepos;
+          double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
+          double pmttime = pmt.GetTime();                     // hit time [ns]
+          double corr = track.Mag()/c_water;                  // light travel time [ns]
+          h2->Fill(theta*180./pi, pmttime-corr);              // angle [deg], time [ns]
+        } // pmt loop
+      } // event loop
+    } // entry loop
+    
+    // Fit angular slices with a gaussian distribution in time
+    h2->FitSlicesY();
+    h2_0 = (TH1D*)gDirectory->Get("h2_0");  // Constant
+    h2_1 = (TH1D*)gDirectory->Get("h2_1");  // Mean
+    h2_2 = (TH1D*)gDirectory->Get("h2_2");  // StdDev
+    h2_3 = (TH1D*)gDirectory->Get("h2_chi2");  // chi^2/ndof  
+    h2_py = NULL;
+    
+    // Put mean and RMS into 1D histogram
+    int binscone=0;
+    float avgmean=0., avgdev=0.;
+    for (int b=0; b<NBINS+2; b++) {
+      h1->SetBinContent(b, h2_1->GetBinContent(b));
+      h1->SetBinError(b, h2_2->GetBinContent(b));
+      h2->ProjectionY("_py",b,b);
+      h2_py = (TH1D*)gDirectory->Get("h2_py");
+      h2_0->SetBinContent(b, h2_py->GetSum());  // overwrite Gaussian constant with intensity
+      h2_0->SetBinError(b, sqrt(h2_py->GetSum()));  // overwrite Gaussian constant error with sqrt(intensity)
+      h2_1->SetBinContent(b, h2_py->GetMean()); // overwrite Gaussian mean with mean
+      h2_1->SetBinError(b, h2_py->GetMeanError()); // overwrite Gaussian mean error with mean error
+      h2_2->SetBinContent(b, h2_py->GetRMS());  // overwrite Gaussian sigma with RMS
+      h2_2->SetBinError(b, h2_py->GetRMSError());  // overwrite Gaussian sigma error with RMS error
+      herr->SetBinContent(b, h2_py->GetMeanError()); // not *quite* the same as error on Gaussian mean
+      //if (VERBOSE) printf("#%2d %10.6f %10.6f\n",b,h2_1->GetBinError(b),h2_py->GetMeanError());
+      //if (VERBOSE) printf("#%2d %.4f %6.2f %6.2f\n",b,h1->GetBinCenter(b),h1->GetBinContent(b),h1->GetBinError(b));
+      if (h1->GetBinCenter(b)>0 && h1->GetBinCenter(b)<30) {  // within 30 deg cone
+        avgmean += h2_1->GetBinContent(b);
+        avgdev += h2_2->GetBinContent(b);
+        binscone++;
+      }
+    }
+    avgmean/=binscone;
+    avgdev/=binscone;
+    if (VERBOSE) printf("Average hit time mean (< 30 deg): %6.2f\n", avgmean);
+    if (VERBOSE) printf("Average hit time RMS (< 30 deg):  %6.2f\n", avgdev);
+    
+    // Normalise angular slices to number of PMTs in slice
+    double tmp, pmts;
+    for (int binx=0; binx<NBINS+2; binx++) {
+      pmts = hpmtseg->GetBinContent(binx);
+      tmp = h2_0->GetBinContent(binx);
+      if (pmts<=0) { h2_0->SetBinContent(binx,0); h2_0->SetBinError(binx,0); }
+      else { h2_0->SetBinContent(binx,tmp/pmts); h2_0->SetBinError(binx,sqrt(tmp)/pmts); }
+      //if (VERBOSE) printf("Segment %2d contains %4d PMTs.\n",binx,(int)pmts);
+      for (int biny=0; biny<NBINS+2; biny++) {
+        tmp = h2->GetBinContent(binx,biny);
+        if (pmts<=0) h2->SetBinContent(binx,biny,0);
+        else h2->SetBinContent(binx,biny,tmp/pmts);
+      }
+    }
+ 
+    // Write all histograms to file and close
+    outfile->Write();
   }
-  
+ 
   // Plotting options
   gStyle->SetOptStat(0);
   gStyle->SetPadLeftMargin(0.1);
@@ -378,18 +404,20 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_3->GetYaxis()->SetRangeUser(0, 1.1*h2_3->GetMaximum());
 
   // Save canvas and close
-  string outfile = "angular";
-  if (!TEST) outfile = Form("images/angular_%s",fibre.c_str());
-  c0->Print(Form("%s.png",outfile.c_str()));
-  c0->Print(Form("%s.pdf",outfile.c_str()));
+  string imgfile = "angular";
+  if (!TEST) imgfile = Form("images/angular_%s",fibre.c_str());
+  c0->Print(Form("%s.png",imgfile.c_str()));
+  c0->Print(Form("%s.pdf",imgfile.c_str()));
   c0->Close();
-  
+  outfile->Close(); 
+ 
   if (c0) delete c0;
-  if (h1) delete h1;
-  if (h2) delete h2;
-  if (herr) delete herr;
-  if (hcoarse) delete hcoarse;
-  if (hpmtseg) delete hpmtseg;
+  //if (h1) delete h1;
+  //if (h2) delete h2;
+  //if (herr) delete herr;
+  //if (hcoarse) delete hcoarse;
+  //if (hpmtseg) delete hpmtseg;
+  if (outfile) delete outfile;
   
   return (float)totalnhit/count;
 }
