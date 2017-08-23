@@ -38,8 +38,8 @@
 //#include "Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
-const int VERBOSE = 1;      // verbosity flag
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
+const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 const int NCOL = 20;        // number of colors (max. 50)
 const int NDOTS = 360;      // number of points in circle
