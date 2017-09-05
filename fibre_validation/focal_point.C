@@ -47,7 +47,7 @@ const double DIR_CONE = 48; // opening angle to search for direct light (using a
 const double REF_CONE = 20; // opening angle to search for reflected light (using aperture: 9.874 deg)
 
 // Initialise functions
-void focal_point(string, int, int, int, int, float, bool, bool);
+void focal_point(string, int, int, int, int, float, TVector3*, TVector3*, bool, bool);
 
 // Main program
 using namespace std;
@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
   // Loop over all fibres in list
   string input = "../pca_runs/TELLIE_PCA.txt";
   ifstream in(input.c_str());
-  if (!in) { cerr<<"Failed to open TELLIE_PCA.txt"<<endl; exit(1); }
+  if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;
   int node, channel, run, ipw, photons, pin, rms;
   float nhit;
@@ -67,33 +67,45 @@ int main(int argc, char** argv) {
     getline(in,line);      // header
   }
   int nfiles=0;
+  TVector3 dirfit, reffit;
+  FILE *fitresult = fopen("TELLIE_FITRESULTS.txt","w");
+  fprintf(fitresult,"#Run Fibre Direct_light(xyz) Reflected_light(xyz)\n");
+  fprintf(fitresult,"#------------------------------------------------\n");
   while (true) {
     in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
     if (VERBOSE) printf("%6s %2d %6d %5d %6d %5d %5d %.2f\n", fibre.c_str(), channel, run, ipw, photons, pin, rms, nhit);
-    focal_point(fibre, channel, run, ipw, photons, nhit, (bool)IS_MC, (bool)TEST);
+    dirfit.SetXYZ(0,0,0);
+    reffit.SetXYZ(0,0,0);
+    focal_point(fibre, channel, run, ipw, photons, nhit, &dirfit, &reffit, (bool)IS_MC, (bool)TEST);
+    if (dirfit.Mag()==0) continue;
+    fprintf(fitresult, "%6d %6s %.3f %.3f %.3f %.3f %.3f %.3f\n", run, fibre.c_str(), dirfit.X(), dirfit.Y(), dirfit.Z(), reffit.X(), reffit.Y(), reffit.Z());
+    cout << "Direct light fit " << printVector(dirfit) << endl;
+    cout << "Reflected light fit " << printVector(reffit) << endl;
     nfiles++;
   }
+  fclose(fitresult);
   printf("Ran over %d files.\n",nfiles);
   if (nfiles==0) { 
-    cerr<<"*** ERROR *** No input files found."<<endl;
+    cerr<<"*** ERROR *** No input files found, or nothing to do!"<<endl;
     return 1; 
   }
   return 0;
 }
 
-// Returns the fitted light position for a given fibre/run
-void focal_point(string fibre, int channel, int run, int ipw, int photons, float nhit, bool isMC=false, bool TEST=false) {
+// Calculates the fitted light and fibre positions for a given fibre/run
+void focal_point(string fibre, int channel, int run, int ipw, int photons, float nhit, TVector3 *dirfit, TVector3 *reffit, bool isMC=false, bool TEST=false) {
 
   // ********************************************************************
   // Initialisation
   // ********************************************************************
   
   // Check files for given run
-  if(!TEST) printf("*****\n");
+  if(!TEST && VERBOSE) printf("*****\n");
   printf("Checking files for run %d... ", run);
-  string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
+  //string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
+  string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
   string fname = "";
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
@@ -103,7 +115,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   }
   string out = Form("./output/PCA_%s.out",fibre.c_str());
   string img = Form("./images/PCA_%s.pdf",fibre.c_str());
-  //ifstream f(fname.c_str());
   ifstream g(out.c_str());
   ifstream h(img.c_str());
   int scanned_file = 0;
@@ -126,7 +137,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   const int NPMTS = pmtinfo.GetCount();
 
-/*
   // Get fibre info (from RATDB) 
   RAT::DB *db = RAT::DB::Get();
   //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
@@ -135,8 +145,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
   TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
   cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
-*/
- 
+
+/*
   // Get fibre information (without using RATDB) 
   string fibre_table = "Fibre_Positions_DocDB1730.csv";
   ifstream tab(fibre_table.c_str());
@@ -155,6 +165,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   TVector3 fibredir(fu,fv,fw); // direction of fibre
   TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre 
   cout << "DocDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+*/
 
   // Initialise histograms
   TH2D *hicos = new TH2D("hicos","PMT positions",200,0,1,200,0,1); // icosahedral
@@ -445,7 +456,12 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   // Output values
   double DIRANG = lightpos.Angle(direct);      // angle between projected and direct light spot
   double REFANG = fibrepos.Angle(reflected);   // angle between fibre position and reflected light spot
- 
+  dirfit->SetXYZ(direct.X(), direct.Y(), direct.Z());
+  reffit->SetXYZ(reflected.X(), reflected.Y(), reflected.Z()); 
+
+  // ********************************************************************
+  // Create histograms and graphs for output
+  // ********************************************************************
   // Marker styles in ROOT 5.34:
   /* enum EMarkerStyle {kDot=1, kPlus, kStar, kCircle=4, kMultiply=5,
                         kFullDotSmall=6, kFullDotMedium=7, kFullDotLarge=8,
@@ -744,9 +760,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   txtR->Draw();  
   
   // Save canvas and close
-  string outfile;
+  string outfile = "focal_point";
   if (!TEST) outfile = Form("images/PCA_%s",fibre.c_str());
-  else       outfile = "focal_point";
   c0->Print(Form("%s.png",outfile.c_str()));
   c0->Print(Form("%s.pdf",outfile.c_str()));
   c0->Close();
