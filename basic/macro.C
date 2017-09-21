@@ -6,30 +6,18 @@
 
 // C++ stuff
 #include <fstream>
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
 
 // ROOT stuff
-#include "TROOT.h"
-#include "TSystem.h"
-#include "TFile.h"
-#include "TH1.h"
 #include "TH2.h"
 #include "TCanvas.h"
 #include "TMath.h"
-#include "TPad.h"
-#include "TPaveStats.h"
 #include "TStyle.h"
-#include "TLegend.h"
 
 // RAT stuff
 #include "RAT/DU/DSReader.hh"
 #include "RAT/DU/PMTInfo.hh"
 #include "RAT/DU/Utility.hh"
-#include "RAT/DS/Run.hh"
 #include "RAT/DS/Entry.hh"
-#include "RAT/DS/MC.hh"
 
 // Physical constants
 const double pi = TMath::Pi();
@@ -38,7 +26,6 @@ const double n_water = 1.33772;            // at 500 nm -> http://www.philiplave
 const double c_water = c_vacuum/n_water;   // mm/ns
 
 // Global parameters
-const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
