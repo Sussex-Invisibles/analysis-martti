@@ -69,6 +69,7 @@ int main(int argc, char** argv) {
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
     temp = get_histo(fibre, run, IS_MC, TEST);
+    if (!temp) continue;
     float meanval=0.;
     int nonzerobins=0;
     for (int bin=1; bin<=temp->GetNbinsX()+1; bin++) { // no underflow/overflow bins
