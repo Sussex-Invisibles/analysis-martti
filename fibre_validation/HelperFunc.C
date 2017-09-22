@@ -31,7 +31,7 @@ void FitLightSpot(TGraph2D*, double, double, double*);
 
 // Display vector as string
 string printVector(const TVector3& v) {
-  string out = Form("(%8.2lf | %8.2lf | %8.2lf )", v.X(),  v.Y(), v.Z());
+  string out = Form("( %.3f | %.3f | %.3f )", v.X(),  v.Y(), v.Z());
   return out.c_str();
 }
 

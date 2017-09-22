@@ -36,8 +36,8 @@
 #include "../fibre_validation/Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
-const int VERBOSE = 0;      // verbosity flag
+const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
+const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
@@ -60,11 +60,6 @@ int main(int argc, char** argv) {
   for (int hdr=0; hdr<2; hdr++) {
     getline(in,line);      // header
   }
-  // Initialise RAT
-  //string example = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED/Analysis_r0000102315_s000_p000.root" : "/home/m/mn/mn372/Desktop/Analysis_r0000102315_s000_p000.root";
-  //RAT::DU::DSReader dsreader(example);
-  //const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
-  //const int NPMTS = pmtinfo.GetCount();
   
   int nfiles=0; 
   while (true) {
@@ -95,8 +90,6 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   // Check files for given run
   if(!TEST && VERBOSE) printf("*****\n");
   printf("Checking files for run %d... ", run);
-  //string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/m/mn/mn372/Desktop";
-  //string fpath = (RUN_CLUSTER) ? "/home/m/mn/mn372/Software/SNOP/work/data" : "/home/nirkko/Software/SNOP/work/data";
   string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
   string fname = "";
   ifstream f;
@@ -150,20 +143,42 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     const int NPMTS = pmtinfo.GetCount();
     
-    // Get fibre info (from RATDB) 
+    // Get RATDB tables
     RAT::DB *db = RAT::DB::Get();
     //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
+    
+    // Fibre installation parameters
     RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
     TVector3 fibrepos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
     TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
     TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
-    if (VERBOSE) cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
-    
+
+    // TELLIE fibre/trigger delays & Mark's PCA offsets
+    ifstream del("TELLIE_delays.txt");
+    if (!del) { cerr<<"ERROR - could not open TELLIE_delays.txt!"<<endl; return -999.; }
+    int num, trig_delay;
+    float fibre_delay, pca_offset;
+    string line;
+    for (int hdr=0; hdr<2; hdr++) {
+      getline(del,line);      // header
+    }
+    while (true) {
+      del >> num >> fibre_delay >> trig_delay >> pca_offset;
+      if (!del.good()) break;
+      if (num == run) break;
+    }
+
+    // Check output
+    if (VERBOSE) {
+      cout<<"RATDB: fibre "<<fibre<< ", position "<<printVector(fibrepos)<<", direction: "<<printVector(fibredir)<<endl;
+      cout<<"TELLIE: trigger delay "<<trig_delay<<" ns, fibre delay "<<fibre_delay<<" ns, total offset "<<pca_offset<<" ns."<<endl;
+    }
+ 
     // Get fitted light position (from file)
     string fitfile = "../fibre_validation/TELLIE_FITRESULTS.txt";
     ifstream fit(fitfile.c_str());
     if (!fit) { cerr<<"Failed to open "<<fitfile<<endl; exit(1); }
-    string line, fibrecheck;
+    string fibrecheck;
     TVector3 fitpos(0,0,0);
     int runcheck;
     float dirx, diry, dirz, refx, refy, refz;
