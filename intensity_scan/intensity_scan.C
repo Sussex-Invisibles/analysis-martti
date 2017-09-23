@@ -236,7 +236,8 @@ void get_subrun_nhit(int run, int *srevts, int *srhits, int *triggers, bool isMC
         miss++;
       }
       if (!(trig & 0x8000)) {        // EXTA trigger bit not set
-        fprintf(outfile,"Run %d, subrun %d, GTID %d has trigger mask %d\n",run,subrunid,gtid,trig);
+        if (trig != 64 && trig != 1024)
+          fprintf(outfile,"Run %d, subrun %d, GTID %d has trigger mask %d\n",run,subrunid,gtid,trig);
         continue;
       }
       exta++; 
