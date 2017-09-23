@@ -103,16 +103,16 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   ifstream g(out.c_str());
   ifstream h(img.c_str());
   int scanned_file = 0;
-  if (!TEST && h.good()) {  // file downloaded and processed
+  if (!TEST && h.good()) {        // file downloaded and processed
     printf("already processed! Skipping fibre %s.\n",fibre.c_str());
     return -1.;
-  } else if(g.good()) {     // file extracted, but not processed
+  } else if(!TEST && g.good()) {  // file extracted, but not processed
     printf("not processed! Generating plots for fibre %s.\n",fibre.c_str());
     scanned_file = 1;
-  } else if(!f.good()) {    // file not downloaded
+  } else if(!f.good()) {          // file not downloaded
     printf("not downloaded! Skipping fibre %s.\n",fibre.c_str());
     return -2.;
-  } else {                   // file downloaded, but not processed
+  } else {                        // file downloaded, but not processed
     printf("OK. Extracting data for fibre %s.\n",fibre.c_str());
   }
 
@@ -135,7 +135,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     totalnhit = -999; // TODO: h2_0->Sum();
     count = 1; // TODO: h2_0->GetEntries();
   } else {
-    outfile = new TFile(outpath.c_str(),"NEW");
+    outfile = new TFile(outpath.c_str(),"RECREATE");
 
     // Initialise RAT
     RAT::DU::DSReader dsreader(fname);
@@ -170,7 +170,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
 
     // Check output
     if (VERBOSE) {
-      cout<<"RATDB: fibre "<<fibre<< ", position "<<printVector(fibrepos)<<", direction: "<<printVector(fibredir)<<endl;
+      cout<<"RATDB: fibre "<<fibre<< ", position "<<printVector(fibrepos)<<" mm, direction: "<<printVector(fibredir)<<endl;
       cout<<"TELLIE: trigger delay "<<trig_delay<<" ns, fibre delay "<<fibre_delay<<" ns, total offset "<<pca_offset<<" ns."<<endl;
     }
  
@@ -194,12 +194,12 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       if (fitpos.Mag()!=0) break;
     }
     TVector3 fitdir = (fitpos-fibrepos).Unit();
-    cout << "Loaded fit position: " << printVector(fitpos) << ", " << fitpos.Angle(lightpos)*180./pi << " deg deviation\n" << endl;
+    cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightpos)*180./pi << " deg deviation\n" << endl;
     
     // Initialise histograms
     const int NBINS = 30;
     const int MAXANG = 30;
-    hcoarse = new TH1D("hcoarse",fibre.c_str(),500,0,500);
+    hcoarse = new TH1D("hcoarse",fibre.c_str(),2000,0,2000);
     hpmtseg = new TH1D("hpmtseg",fibre.c_str(),NBINS,0,MAXANG);
     
     // First iteration: Get average hit time and number of PMTs in each segment
@@ -223,7 +223,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
           double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
           double pmttime = pmt.GetTime();                     // hit time [ns]
           double corr = track.Mag()/c_water;                  // light travel time [ns]
-          hcoarse->Fill(pmttime-corr);
+          double offset = pmttime-corr+fibre_delay+trig_delay;
+          hcoarse->Fill(offset-pca_offset); // total offset minus PCA offset
           if (allpmts[pmtID]==0) { hpmtseg->Fill(theta*180./pi); allpmts[pmtID]++; }
           hitpmts++;
         } // pmt loop
@@ -249,12 +250,12 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       if (isMC) mc = ds.GetMC();  // don't initialise this for real data (crashes)
       
       // Loop over triggered events in each entry
-      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {        // mostly 1 event per entry
+      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {              // mostly 1 event per entry
         const RAT::DS::EV& ev = ds.GetEV(iEv);
         
         // Trigger type
         int trig = ev.GetTrigType();
-        if (!(trig & 0x8000)) continue;                   // EXT trigger only
+        if (!(trig & 0x8000)) continue;                         // EXT trigger only
         
         // Event observables
         int nhitscleaned = ev.GetNhitsCleaned();   // calibrated PMT hits with removed crosstalk
@@ -266,15 +267,16 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
           RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
           int pmtID = pmt.GetID();
-          if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
-          if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
-          if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
+          if (!chs.IsTubeOnline(pmtID)) continue;               // test CHS
+          if (pmt.GetCrossTalkFlag()) continue;                 // remove crosstalk
+          if (pmt.GetStatus().GetULong64_t(0) != 0) continue;   // test PCA
           TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
           TVector3 track = pmtpos-fibrepos;
-          double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
-          double pmttime = pmt.GetTime();                     // hit time [ns]
-          double corr = track.Mag()/c_water;                  // light travel time [ns]
-          h2->Fill(theta*180./pi, pmttime-corr);              // angle [deg], time [ns]
+          double theta = track.Angle(fitdir);                   // angle w.r.t. fibre [rad]
+          double pmttime = pmt.GetTime();                       // hit time [ns]
+          double corr = track.Mag()/c_water;                    // light travel time [ns]
+          double offset = pmttime-corr+fibre_delay+trig_delay;  // total offset
+          h2->Fill(theta*180./pi, offset-pca_offset);           // angle [deg], time [ns]
         } // pmt loop
       } // event loop
     } // entry loop
@@ -329,9 +331,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         else h2->SetBinContent(binx,biny,tmp/pmts);
       }
     }
- 
-    // Write all histograms to file and close
-    outfile->Write();
+    
   }
  
   // Plotting options
@@ -377,7 +377,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   float meanval = 0; int nonzerobins = 0;
   for (int b=1; b<=30; b++) { if (h2_1->GetBinContent(b)==0) continue; meanval += h2_1->GetBinContent(b); nonzerobins++; }
   meanval /= nonzerobins;
-  h2_1->GetYaxis()->SetRangeUser(0.975*meanval, 1.025*meanval);
+  h2_1->GetYaxis()->SetRangeUser(0.8*meanval, 1.2*meanval);
   
   // Sum
   pad2->cd()->SetGrid();
@@ -429,6 +429,9 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   c0->Print(Form("%s.png",imgfile.c_str()));
   c0->Print(Form("%s.pdf",imgfile.c_str()));
   c0->Close();
+ 
+    // Write all histograms to file and close
+    outfile->Write();
   outfile->Close(); 
  
   if (c0) delete c0;
