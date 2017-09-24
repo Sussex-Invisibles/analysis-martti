@@ -332,6 +332,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       }
     }
     
+    // Write all histograms to file
+    outfile->Write();
   }
  
   // Plotting options
@@ -373,11 +375,17 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_1->Draw();
   h2_1->GetXaxis()->SetTitleOffset(1.2);
   h2_1->GetYaxis()->SetTitleOffset(1.7);
-  //h2_1->GetYaxis()->SetRangeUser(0.995*h2_1->GetMinimum(), 1.005*h2_1->GetMaximum());
-  float meanval = 0; int nonzerobins = 0;
-  for (int b=1; b<=30; b++) { if (h2_1->GetBinContent(b)==0) continue; meanval += h2_1->GetBinContent(b); nonzerobins++; }
-  meanval /= nonzerobins;
-  h2_1->GetYaxis()->SetRangeUser(0.8*meanval, 1.2*meanval);
+  float minval = h2_1->GetMaximum();
+  float maxval = h2_1->GetMinimum();
+  float val;
+  for (int b=1; b<=30; b++) { 
+    val = h2_1->GetBinContent(b);
+    if (val==0.) continue;
+    if (minval>val) minval=val;
+    if (maxval<val) maxval=val;
+  }
+  h2_1->GetYaxis()->SetRangeUser(0.75*minval, 1.25*maxval);
+  //h2_1->GetYaxis()->SetRangeUser(0,10);
   
   // Sum
   pad2->cd()->SetGrid();
@@ -430,17 +438,15 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   c0->Print(Form("%s.pdf",imgfile.c_str()));
   c0->Close();
  
-    // Write all histograms to file and close
-    outfile->Write();
+  // Close files and free memory
   outfile->Close(); 
- 
+  if (outfile) delete outfile; 
   if (c0) delete c0;
   //if (h1) delete h1;
   //if (h2) delete h2;
   //if (herr) delete herr;
   //if (hcoarse) delete hcoarse;
   //if (hpmtseg) delete hpmtseg;
-  if (outfile) delete outfile;
   
   return (float)totalnhit/count;
 }
