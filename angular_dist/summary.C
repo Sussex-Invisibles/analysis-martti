@@ -103,7 +103,7 @@ int main(int argc, char** argv) {
   // Draw histograms
   TCanvas *c0 = new TCanvas("","",1200,900);
   c0->SetGrid();
-  c0->DrawFrame(0,-5,30,5,"TELLIE angular systematic;Angle w.r.t. fit position [deg];Mean time w.r.t. average for that fibre [ns]");
+  c0->DrawFrame(0,-5,30,35,"TELLIE angular systematic;Angle w.r.t. fit position [deg];Mean time for each fibre [ns]");
   for (int fib=0; fib<95; fib++) {
     if (!hist[fib]) continue;
     hist[fib]->SetLineWidth(1);
