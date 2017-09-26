@@ -220,7 +220,12 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   
   // Fit 2D Gaussian surface to selected points
   TF2 *fit = new TF2("gaus2d","[0]*TMath::Gaus(x,[1],[3])*TMath::Gaus(y,[2],[3])",-10,10,-10,10);
-  fit->SetParameters(maxval,0.,0.,radius*tan(cone/2));
+  double aperture_radius = radius*tan(cone/2 / 180.*pi);  // half input angle ~> 12 deg aperture
+  fit->SetParameters(0.8*maxval,0.,0.,aperture_radius);
+  fit->SetParLimits(0,0.2*maxval,maxval);
+  fit->SetParLimits(1,-aperture_radius,aperture_radius);
+  fit->SetParLimits(2,-aperture_radius,aperture_radius);
+  fit->SetParLimits(3,0.5*aperture_radius,1.5*aperture_radius);
   graf->Fit("gaus2d");
   
   // Raw fit parameters
@@ -258,15 +263,15 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   params[2] = sy;     // mu_y
   params[3] = sigma;  // sigma
   
-  /*
+  
   // Plot fit results (for testing purposes only)
   gStyle->SetOptStat(0);
   TCanvas *c = new TCanvas("","",800,800);
   c->SetGrid();
   TH3F *hempty = new TH3F("hempty","",10,-10,10,10,-10,10,10,0,maxval+1);
   hempty->Draw("");             // empty histogram for plot range
-  //c->SetTheta(90-0.001);      // view from above
-  //c->SetPhi(0+0.001);         // no x-y rotation
+  c->SetTheta(90-0.001);      // view from above
+  c->SetPhi(0+0.001);         // no x-y rotation
   graf->SetMarkerStyle(8);
   graf->Draw("pcol,same");
   fit->Draw("surf,same");
@@ -275,7 +280,7 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   c->Close();
   if (hempty) delete hempty;
   if (c) delete c;
-  */
+  
   
   if (graf) delete graf;
   if (fit) delete fit;

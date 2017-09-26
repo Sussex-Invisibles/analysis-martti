@@ -54,7 +54,7 @@ using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 101410; //101410, 102315
+  const int TEST = (RUN_CLUSTER) ? 0 : 102157;
 
   // Loop over all fibres in list
   string input = "../pca_runs/TELLIE_PCA.txt";
