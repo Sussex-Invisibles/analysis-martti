@@ -5,6 +5,7 @@
 #include <TGaxis.h>
 #include <TGraph2D.h>
 #include <TH1F.h>
+#include <TH3F.h>
 #include "TF2.h"
 #include "TPad.h"
 using namespace std;
@@ -184,29 +185,100 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 
 }
 
-void FitLightSpot(TGraph2D* graph, double radius, double angle, double* params) {
+void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
+  // Get input graph entries
   int npts = graph->GetN();
-  double *xpts = graph->GetX();
-  double *ypts = graph->GetY();
-  double *zpts = graph->GetZ();
-  TGraph2D *graf = new TGraph2D();//graph->Clone();
-  int pts=0;
+  double *xpts = graph->GetX();   // X projection
+  double *ypts = graph->GetY();   // Y projection
+  double *zpts = graph->GetZ();   // Intensity
+  
+  // First loop: Find maximum value in desired range
+  double maxval=-1;
   for (int n=0; n<npts; n++) {
     double rpt = sqrt(xpts[n]*xpts[n] + ypts[n]*ypts[n]);
-    if (asin(rpt/radius) > angle/180*pi) continue;
-    graf->SetPoint(pts,xpts[n],ypts[n],zpts[n]);
+    if (rpt>radius) continue;
+    double ang = asin(rpt/radius);
+    if (ang/pi*180. > cone) continue;
+    double scale = 1./cos(ang);
+    if (maxval<zpts[n]) maxval=zpts[n];
   }
-  TF2 *fit = new TF2("gaus2d","[0]*TMath::Gaus(x,[1],[2])*TMath::Gaus(y,[3],[4])",-10,10,-10,10);
-  fit->SetParameters(*max_element(zpts,zpts+npts),0.,2.,0.,2.);
+  
+  // Second loop: Fill values above 20% of maximum values into output graph
+  TGraph2D *graf = new TGraph2D();
+  int pts=0;
+  for (int n=0; n<npts; n++) {
+    if(zpts[n] < maxval/5.) continue;
+    double rpt = sqrt(xpts[n]*xpts[n] + ypts[n]*ypts[n]);
+    if (rpt>radius) continue;
+    double ang = asin(rpt/radius);
+    if (ang/pi*180. > cone) continue;
+    double scale = 1./cos(ang);
+    graf->SetPoint(pts,scale*xpts[n],scale*ypts[n],zpts[n]);
+    if (maxval<zpts[n]) maxval=zpts[n];
+    pts++;
+  }
+  
+  // Fit 2D Gaussian surface to selected points
+  TF2 *fit = new TF2("gaus2d","[0]*TMath::Gaus(x,[1],[3])*TMath::Gaus(y,[2],[3])",-10,10,-10,10);
+  fit->SetParameters(maxval,0.,0.,radius*tan(cone/2));
   graf->Fit("gaus2d");
-  for (int par=0; par<5; par++) params[par]=fit->GetParameter(par);
-/*
-  params[0] = fit->GetParameter(0); // Amplitude
-  params[1] = fit->GetParameter(1); // x mean
-  params[2] = fit->GetParameter(3); // y mean
-  params[3] = fit->GetParameter(2)+fit->GetParameter(4))/2.; // 1 sigma deviation (x-y-averaged)
-  params[4] = fit->GetParameter(4); // y deviation
-*/
+  
+  // Raw fit parameters
+  double amp = fit->GetParameter(0);
+  double mux = fit->GetParameter(1);
+  double muy = fit->GetParameter(2);
+  double sig = fit->GetParameter(3);
+  
+  // Scale mean value back to sphere
+  double rad = sqrt(mux*mux+muy*muy);
+  double sx = mux*cos(atan(rad/radius));
+  double sy = muy*cos(atan(rad/radius));
+  
+  // Scale (mean +- sigma) values back to sphere
+  double xp = (mux+sig);
+  double rxp = sqrt(xp*xp+muy*muy);
+  double sxp = xp*cos(atan(rxp/radius));
+  double xm = (mux-sig);
+  double rxm = sqrt(xm*xm+muy*muy);
+  double sxm = xm*cos(atan(rxm/radius));
+  double yp = (muy+sig);
+  double ryp = sqrt(yp*yp+mux*mux);
+  double syp = yp*cos(atan(ryp/radius));
+  double ym = (muy-sig);
+  double rym = sqrt(ym*ym+mux*mux);
+  double sym = ym*cos(atan(rym/radius));
+  
+  // Average over all scaled sigmas
+  double sigma = (fabs(sxp-sx)+fabs(sxm-sx)+fabs(syp-sy)+fabs(sym-sy))/4.;
+  printf("Scaled to sphere:\np1 = %.3lf\np2 = %.3lf\np3 = %.3lf\n",sx,sy,sigma);
+  
+  // Set fit results
+  params[0] = amp;    // amplitude
+  params[1] = sx;     // mu_x
+  params[2] = sy;     // mu_y
+  params[3] = sigma;  // sigma
+  
+  /*
+  // Plot fit results (for testing purposes only)
+  gStyle->SetOptStat(0);
+  TCanvas *c = new TCanvas("","",800,800);
+  c->SetGrid();
+  TH3F *hempty = new TH3F("hempty","",10,-10,10,10,-10,10,10,0,maxval+1);
+  hempty->Draw("");             // empty histogram for plot range
+  //c->SetTheta(90-0.001);      // view from above
+  //c->SetPhi(0+0.001);         // no x-y rotation
+  graf->SetMarkerStyle(8);
+  graf->Draw("pcol,same");
+  fit->Draw("surf,same");
+  string name = Form("fit_%d.png",(int)cone);
+  c->Print(name.c_str());
+  c->Close();
+  if (hempty) delete hempty;
+  if (c) delete c;
+  */
+  
+  if (graf) delete graf;
+  if (fit) delete fit;
 }
 
 void DrawCircle(const TVector3& center, double angle, TVector3** dots, int NDOTS) {

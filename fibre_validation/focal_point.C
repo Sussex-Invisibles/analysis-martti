@@ -54,7 +54,7 @@ using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 101834;
+  const int TEST = (RUN_CLUSTER) ? 0 : 101410; //101410, 102315
 
   // Loop over all fibres in list
   string input = "../pca_runs/TELLIE_PCA.txt";
@@ -320,7 +320,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   if (VERBOSE) printf(" -> best guess direction: %s\n",printVector(bestguess.Unit()).c_str());
   
   // Initial guess for reflected light (TODO - currently not used)
-/*
+/* // Guess for reflected light based on hottest face
   int refface=-1;
   double reffaceheat=-1;
   for(int fc=0; fc<20; fc++) {
@@ -330,6 +330,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   }
   TVector3 bestguess2 = faceweight[refface-1];
 */
+/* // Guess for reflected light based on hottest PMT
   int hotrefid=-1, hotrefcount=-1;
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
@@ -340,6 +341,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     if (pmthitcount[id] > hotrefcount) { hotrefcount=pmthitcount[id]; hotrefid=id; }
   }
   TVector3 bestguess2 = pmtinfo.GetPosition(hotrefid); // hottest PMT opposite direct light
+*/
   
   // Make graphs for icosahedral projection
   TGraph *icos[NCOL+2];
@@ -382,36 +384,10 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
 
   // Get the maximum bin as guesstimate for light spot
   bestguess.SetMag(pmtrad);
-  bestguess2.SetMag(pmtrad);
+  //bestguess2.SetMag(pmtrad);
   TVector3 guess_dir =  bestguess;
-  TVector3 guess_ref = -bestguess;  // TODO - improve guesstimate for reflected light
-
-  // Draw contours around estimated light spots in (phi,theta)
-  TVector3 *dotsD[NDOTS], *dotsR[NDOTS];
-  DrawCircle(guess_dir, DIR_CONE, dotsD, NDOTS);
-  DrawCircle(guess_ref, REF_CONE, dotsR, NDOTS);
-  double pcontDx[NDOTS], pcontDy[NDOTS];
-  double pcontRx[NDOTS], pcontRy[NDOTS];
-  //double picosRx[NDOTS], picosRy[NDOTS];
-  for (int d=0; d<NDOTS; d++) {
-    int dummy;
-    icospos = func::IcosProject(*dotsD[d],dummy);
-    pcontDx[d]=icospos.X();
-    pcontDy[d]=icospos.Y();
-    icospos = func::IcosProject(*dotsR[d],dummy);
-    pcontRx[d]=icospos.X();
-    pcontRy[d]=icospos.Y();
-    /*
-    pcontDx[d]= dotsD[d]->Phi()/pi;
-    pcontDy[d]=-dotsD[d]->Theta()/pi;
-    pcontRx[d]= dotsR[d]->Phi()/pi;
-    pcontRy[d]=-dotsR[d]->Theta()/pi;
-    */
-  }
-  TGraph *pcontD = new TGraph(NDOTS,pcontDx,pcontDy);
-  TGraph *pcontR = new TGraph(NDOTS,pcontRx,pcontRy);
-  pcontD->SetMarkerStyle(6);
-  pcontR->SetMarkerStyle(6);
+  TVector3 guess_ref = -bestguess;  // TODO - improve guesstimate for reflected light?
+  
   
   // ********************************************************************
   // Second iteration: take weighted average around estimated light spots
@@ -424,12 +400,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   
   if(nearmax==0) cout << "*** WARNING *** No good PMTs in direct light cone!" << endl;
   if(farmax==0) cout << "*** WARNING *** No good PMTs in reflected light cone!" << endl;
-  /*
-  // Output (TODO: Optimise criteria?)
-  printf("HOTLIMIT=%d, MAXPMT=%d\n",HOTLIMIT,*max_element(pmthitcount,pmthitcount+NPMTS));  
-  printf("NEARMAX=%d, FARMAX=%d\n",nearmax,farmax);  
-  printf("empty1=%d, empty2=%d\n",empty1,empty2);
-  */
+  
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
     if (pmtpos.Mag()==0) continue;                  // not a valid PMT position
@@ -453,15 +424,82 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   direct.SetMag(pmtrad);
   reflected.SetMag(pmtrad);
   
-  // Output values
-  double DIRANG = lightpos.Angle(direct);      // angle between projected and direct light spot
-  double REFANG = fibrepos.Angle(reflected);   // angle between fibre position and reflected light spot
+  // Fill graphs with new view, centered on weighted light spot
+  TGraph *gDir[NCOL+2], *gRef[NCOL+2];  // array of graphs (for 2D view)
+  TGraph2D *gDir2D = new TGraph2D();    // 2D graph (for 3D view and fit)
+  TGraph2D *gRef2D = new TGraph2D();
+  FillHemisphere(direct, pmthitcount, NPMTS, gDir, gDir2D, NCOL, nearmax, pmtinfo);
+  FillHemisphere(reflected, pmthitcount, NPMTS, gRef, gRef2D, NCOL, farmax, pmtinfo);
+  
+  // Get rotation angles for rotating view over weighted light spots
+  double rot_Z1, rot_X1, rot_Z2, rot_X2;
+  GetRotationAngles(direct, rot_Z1, rot_X1);
+  GetRotationAngles(reflected, rot_Z2, rot_X2);
+  
+  
+  // ********************************************************************
+  // Third iteration: perform 2D Gaussian fit around weighted light spots
+  // ********************************************************************
+  // Fit 2D graphs with Gaussian surface
+  const int NPARS = 4;
+  double parDir[NPARS], parRef[NPARS];
+  FitLightSpot(gDir2D,pmtrad/1e3,DIR_CONE,parDir); // units: dist [m], ang [deg]
+  FitLightSpot(gRef2D,pmtrad/1e3,REF_CONE,parRef);
+  cout << "FIT RESULTS:" << endl;
+  cout << "- Direct light";
+  for (int p=0; p<NPARS; p++) printf(" %.3lf", parDir[p]);
+  cout << endl;
+  cout << "- Reflected light";
+  for (int p=0; p<NPARS; p++) printf(" %.3lf", parRef[p]);
+  cout << endl;
+  // Translate to point on PSUP sphere
+  TVector3 fitDir(1e3*parDir[1],1e3*parDir[2],sqrt(pmtrad*pmtrad-1e6*parDir[1]*parDir[1]-1e6*parDir[2]*parDir[2]));
+  TVector3 fitRef(1e3*parRef[1],1e3*parRef[2],sqrt(pmtrad*pmtrad-1e6*parRef[1]*parRef[1]-1e6*parRef[2]*parRef[2]));
+  // Standard deviation (Gaussian sigma) translated to angle [deg]
+  double sigmaAngDir = asin(1e3*parDir[3]/pmtrad)*180./pi;
+  double sigmaAngRef = asin(1e3*parRef[3]/pmtrad)*180./pi;
+  
+  // Output values (new)
+  dirfit->SetXYZ(fitDir.X(), fitDir.Y(), fitDir.Z());
+  dirfit->RotateY(rot_Z1);
+  dirfit->RotateZ(rot_X1);
+  reffit->SetXYZ(fitRef.X(), fitRef.Y(), fitRef.Z());
+  reffit->RotateY(rot_Z2);
+  reffit->RotateZ(rot_X2);
+  double DIRANG = lightpos.Angle(*dirfit);   // angle between expected and fitted light spot
+  double REFANG = fibrepos.Angle(*reffit);   // angle between fibre position and fitted light spot
+  /*
+  // Output values (old)
+  double DIRANG = lightpos.Angle(direct);    // angle between expected and weighted light spot
+  double REFANG = fibrepos.Angle(reflected); // angle between fibre position and weighted light spot
   dirfit->SetXYZ(direct.X(), direct.Y(), direct.Z());
-  reffit->SetXYZ(reflected.X(), reflected.Y(), reflected.Z()); 
-
+  reffit->SetXYZ(reflected.X(), reflected.Y(), reflected.Z());
+  */
+  
+  
   // ********************************************************************
   // Create histograms and graphs for output
   // ********************************************************************
+  // Get contours around fitted light spots in (phi,theta)
+  TVector3 *dotsD[NDOTS], *dotsR[NDOTS];
+  DrawCircle(*dirfit, sigmaAngDir, dotsD, NDOTS);
+  DrawCircle(*reffit, sigmaAngRef, dotsR, NDOTS);
+  double pcontDx[NDOTS], pcontDy[NDOTS];
+  double pcontRx[NDOTS], pcontRy[NDOTS];
+  for (int d=0; d<NDOTS; d++) {
+    int dummy;
+    icospos = func::IcosProject(*dotsD[d],dummy);
+    pcontDx[d]=icospos.X();
+    pcontDy[d]=icospos.Y();
+    icospos = func::IcosProject(*dotsR[d],dummy);
+    pcontRx[d]=icospos.X();
+    pcontRy[d]=icospos.Y();
+  }
+  TGraph *pcontD = new TGraph(NDOTS,pcontDx,pcontDy);
+  TGraph *pcontR = new TGraph(NDOTS,pcontRx,pcontRy);
+  pcontD->SetMarkerStyle(6);
+  pcontR->SetMarkerStyle(6);
+
   // Marker styles in ROOT 5.34:
   /* enum EMarkerStyle {kDot=1, kPlus, kStar, kCircle=4, kMultiply=5,
                         kFullDotSmall=6, kFullDotMedium=7, kFullDotLarge=8,
@@ -470,78 +508,92 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
                         kOpenTriangleUp=26, kOpenDiamond=27, kOpenCross=28,
                         kFullStar=29, kOpenStar=30, kOpenTriangleDown=32,
                         kFullDiamond=33, kFullCross=34}; */
+  int guessMarker = 1;
+  int weightMarker = 2;
+  int fitMarker = 34;
+  int trueMarker = 24;
   
-  // Create markers for relevant points
-  int nope1;
-  icospos = func::IcosProject(guess_dir,nope1);
-  double guessX = icospos.X();
-  double guessY = icospos.Y();
-  TGraph *pguessD = new TGraph(1,&guessX,&guessY);   // initial guess (direct light)
-  pguessD->SetMarkerStyle(2);
-  pguessD->SetMarkerColor(1);
-  pguessD->SetMarkerSize(2);
+  // Create markers for relevant points (icosahedral view)
+  int nope;
+  double ptX, ptY;
+  icospos = func::IcosProject(guess_dir,nope);
+  ptX = icospos.X();
+  ptY = icospos.Y();
+  TGraph *pGssDir = new TGraph(1,&ptX,&ptY);        // direct light (guess)
+  pGssDir->SetMarkerStyle(guessMarker);
+  pGssDir->SetMarkerColor(1);
+  pGssDir->SetMarkerSize(2);
   
-  int nope2;
-  icospos = func::IcosProject(guess_ref,nope2);
-  double guessX1 = icospos.X();
-  double guessY1 = icospos.Y();
-  TGraph *pguessR = new TGraph(1,&guessX1,&guessY1); // initial guess (reflected light)
-  pguessR->SetMarkerStyle(2);
-  pguessR->SetMarkerColor(1);
-  pguessR->SetMarkerSize(1.5);
+  icospos = func::IcosProject(guess_ref,nope);
+  ptX = icospos.X();
+  ptY = icospos.Y();
+  TGraph *pGssRef = new TGraph(1,&ptX,&ptY);        // reflected light (guess)
+  pGssRef->SetMarkerStyle(guessMarker);
+  pGssRef->SetMarkerColor(1);
+  pGssRef->SetMarkerSize(1.5);
   
-  double phi0=fibrepos.Phi()/pi;
-  double the0=-fibrepos.Theta()/pi;
-  TGraph *pFibPos = new TGraph(1,&phi0,&the0);       // fibre position
-  pFibPos->SetMarkerStyle(24);
-  pFibPos->SetMarkerColor(1);
-  pFibPos->SetMarkerSize(1.5);
+  icospos = func::IcosProject(*dirfit,nope);
+  ptX = icospos.X();
+  ptY = icospos.Y();
+  TGraph *pFitDir = new TGraph(1,&ptX,&ptY);          // direct light (fitted)
+  pFitDir->SetMarkerStyle(fitMarker);
+  pFitDir->SetMarkerColor(1);
+  pFitDir->SetMarkerSize(2);
   
-  double phi1=lightpos.Phi()/pi;
-  double the1=-lightpos.Theta()/pi;
-  TGraph *pFibDir = new TGraph(1,&phi1,&the1);       // projection from fibre
-  pFibDir->SetMarkerStyle(24);
+  icospos = func::IcosProject(*reffit,nope);
+  ptX = icospos.X();
+  ptY = icospos.Y();
+  TGraph *pFitRef = new TGraph(1,&ptX,&ptY);          // reflected light (fitted)
+  pFitRef->SetMarkerStyle(fitMarker);
+  pFitRef->SetMarkerColor(1);
+  pFitRef->SetMarkerSize(1.5);
+  
+  // Create markers for relevant points (rotated view)
+  lightpos.RotateZ(-rot_X1);
+  lightpos.RotateY(-rot_Z1);
+  ptX = lightpos.X()/1e3;
+  ptY = lightpos.Y()/1e3;
+  TGraph *pFibDir = new TGraph(1,&ptX,&ptY);      // expected light position
+  pFibDir->SetMarkerStyle(trueMarker);
   pFibDir->SetMarkerColor(1);
   pFibDir->SetMarkerSize(2);
   
-  double phi2 = direct.Phi()/pi;
-  double the2 = -direct.Theta()/pi;
-  TGraph *pDir = new TGraph(1,&phi2,&the2);          // direct light fit
-  pDir->SetMarkerStyle(34);
-  pDir->SetMarkerColor(1);
-  pDir->SetMarkerSize(2);
-
-  double phi3 = reflected.Phi()/pi;
-  double the3 = -reflected.Theta()/pi;
-  TGraph *pRef = new TGraph(1,&phi3,&the3);          // reflected light fit
-  pRef->SetMarkerStyle(34);
-  pRef->SetMarkerColor(1);
-  pRef->SetMarkerSize(1.5);
-  
-  // Rotate points to obtain view over direct/reflected light spot
-  double rot_Z1, rot_X1, rot_Z2, rot_X2;
-  GetRotationAngles(direct, rot_Z1, rot_X1);
-  GetRotationAngles(reflected, rot_Z2, rot_X2);
-  
-  lightpos.RotateZ(-rot_X1);
-  lightpos.RotateY(-rot_Z1);
-  double spotx1=lightpos.X()/1e3;
-  double spoty1=lightpos.Y()/1e3;
-  
   fibrepos.RotateZ(-rot_X2);
   fibrepos.RotateY(-rot_Z2);
-  double spotx2=fibrepos.X()/1e3;
-  double spoty2=fibrepos.Y()/1e3;
+  ptX = fibrepos.X()/1e3;
+  ptY = fibrepos.Y()/1e3;
+  TGraph *pFibPos = new TGraph(1,&ptX,&ptY);      // expected fibre position
+  pFibPos->SetMarkerStyle(trueMarker);
+  pFibPos->SetMarkerColor(1);
+  pFibPos->SetMarkerSize(1.5);
   
   guess_dir.RotateZ(-rot_X1);
   guess_dir.RotateY(-rot_Z1);
-  double spotx3=guess_dir.X()/1e3;
-  double spoty3=guess_dir.Y()/1e3;
+  double guessD_rotX = guess_dir.X()/1e3;
+  double guessD_rotY = guess_dir.Y()/1e3;
   
   guess_ref.RotateZ(-rot_X2);
   guess_ref.RotateY(-rot_Z2);
-  double spotx4=guess_ref.X()/1e3;
-  double spoty4=guess_ref.Y()/1e3;
+  double guessR_rotX = guess_ref.X()/1e3;
+  double guessR_rotY = guess_ref.Y()/1e3;
+  
+  // View is centered over weighted light spot
+  const int nil = 0;
+  TGraph *pWgtDir = new TGraph(1,&nil,&nil);         // direct light (weighted)
+  pWgtDir->SetMarkerStyle(weightMarker);
+  pWgtDir->SetMarkerColor(1);
+  pWgtDir->SetMarkerSize(2);
+  
+  TGraph *pWgtRef = new TGraph(1,&nil,&nil);         // reflected light (weighted)
+  pWgtRef->SetMarkerStyle(weightMarker);
+  pWgtRef->SetMarkerColor(1);
+  pWgtRef->SetMarkerSize(1.5);
+  
+  // No rotation required, fit was performed in rotated view
+  double fitD_rotX = fitDir.X()/1e3;
+  double fitD_rotY = fitDir.Y()/1e3;
+  double fitR_rotX = fitRef.X()/1e3;
+  double fitR_rotY = fitRef.Y()/1e3;
 
   double pcircDx[2][NDOTS], pcircDy[2][NDOTS], pcircRx[2][NDOTS], pcircRy[2][NDOTS];
   int nfrontD=0, nbackD=0, nfrontR=0, nbackR=0;
@@ -549,7 +601,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     // Rotate circle around direct spot
     dotsD[d]->RotateZ(-rot_X1);
     dotsD[d]->RotateY(-rot_Z1);
-    //cout << printVector(*dotsD[d]) << endl;
     if(dotsD[d]->Z() > 0) {
       pcircDx[0][nfrontD]=dotsD[d]->X()/1e3;
       pcircDy[0][nfrontD]=dotsD[d]->Y()/1e3;
@@ -562,7 +613,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     // Rotate circle around reflected spot
     dotsR[d]->RotateZ(-rot_X2);
     dotsR[d]->RotateY(-rot_Z2);
-    //cout << printVector(*dotsR[d]) << endl;
     if(dotsR[d]->Z() > 0) {
       pcircRx[0][nfrontR]=dotsR[d]->X()/1e3;
       pcircRy[0][nfrontR]=dotsR[d]->Y()/1e3;
@@ -573,7 +623,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
       nbackR++;
     }
   }
-  //printf("Number of points in circles: %d, %d\n",nfrontD+nbackD,nfrontR+nbackR);
   TGraph *pcircD1=NULL, *pcircD2=NULL, *pcircR1=NULL, *pcircR2=NULL;
   if(nfrontD>0) { pcircD1 = new TGraph(nfrontD,pcircDx[0],pcircDy[0]);
                   pcircD1->SetMarkerStyle(6); }
@@ -584,21 +633,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   if(nbackR>0)  { pcircR2 = new TGraph(nbackR,pcircRx[1],pcircRy[1]);
                   pcircR2->SetMarkerStyle(1); }
   
-  // Fill histogram with new view
-  TGraph *gDir[NCOL+2], *gRef[NCOL+2];
-  float hlimD = 10;//3*DIR_CONE/180;
-  //TH2F *hDir = new TH2F("hDir","Direct fit;X'/R*#theta (m #pi);Y'/R*#theta (m #pi)",100,-hlimD,hlimD,100,-hlimD,hlimD);
-  TGraph2D *gDir2 = new TGraph2D();
-  //TH2F *hRef = new TH2F("hRef","Histogram",100,-2,2,100,-2,2);
-  TGraph2D *gRef2 = new TGraph2D();
-  FillHemisphere(direct, pmthitcount, NPMTS, gDir, gDir2, NCOL, nearmax, pmtinfo);
-  FillHemisphere(reflected, pmthitcount, NPMTS, gRef, gRef2, NCOL, farmax, pmtinfo);
-
-  //double parDir[5], parRef[5];
-  //FitLightSpot(gDir2,pmtrad,DIR_CONE,parDir);
-  //FitLightSpot(gRef2,pmtrad,2*REF_CONE,parRef);
   
-
   // ********************************************************************
   // Plotting section
   // ********************************************************************
@@ -615,6 +650,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   pad3->Draw();
   pad4->Draw();
   
+  // ----------
   // Run summary
   pad0->cd();
   TLatex *title, *t[6], *v[6];
@@ -669,6 +705,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   txtR->SetTextFont(82);
   txtR->SetTextSize(0.04);
   
+  // ----------
   // PMT hit count histogram
   pad1->cd()->SetGrid();
   pad1->SetLogx();
@@ -695,24 +732,14 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   }
   hhitshi->GetXaxis()->SetRangeUser(hotlimedge,2e5);
   hhitshi->Draw("same");
-
+  
+  // Draw line indicating "hot PMT" limit
   TLine *lhot = new TLine(HOTLIMIT,0,HOTLIMIT,5e3);
   lhot->SetLineWidth(2);
   lhot->SetLineColor(2);
   lhot->Draw("same");
-  /*
-  hcoarse->SetTitle("Coarsely binned angular view;Longitude #Phi [#pi];Latitude #minus#theta [#pi]");
-  hcoarse->GetXaxis()->SetTitleOffset(1.3);
-  hcoarse->GetYaxis()->SetTitleOffset(1.4);
-  hcoarse->Draw("colz");
-  pguessD->Draw("P same");
-  pguessR->Draw("P same");
-  pFibPos->Draw("P same");
-  pFibDir->Draw("P same");
-  pDir->Draw("P same");
-  pRef->Draw("P same");
-  */
   
+  // ----------
   // Icosahedral projection of detector display
   pad2->cd()->SetGrid();
   hicos->SetTitle("Detector display (PMT hit sum)");
@@ -723,11 +750,14 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     icos[s]->Draw("P same");
   }
   //phot->Draw("P same");
-  pguessD->Draw("P same");
-  pguessR->Draw("P same");
+  pGssDir->Draw("P same");
+  pGssRef->Draw("P same");
+  pFitDir->Draw("P same");
+  pFitRef->Draw("P same");
   pcontD->Draw("P same");
   pcontR->Draw("P same");
   
+  // ----------
   // View from direct light spot (fitted)
   pad3->cd()->SetGrid();
   hfineD->SetTitle("Direct light (PMT hit sum);X' [m];Y' [m]");
@@ -736,14 +766,15 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   hfineD->Draw("scat");
   hfineD->SetStats(0);
   for(int s=0;s<NCOL+2;s++) { if(!gDir[s]) continue; if(gDir[s]->GetN()==0) continue; gDir[s]->Draw("P same"); }
-  int nil=0;
-  pFibDir->DrawGraph(1,&spotx1,&spoty1,"P same");
-  pguessD->DrawGraph(1,&spotx3,&spoty3,"P same");
-  pDir->DrawGraph(1,&nil,&nil,"P same");
+  pFibDir->Draw("P same");
+  pGssDir->DrawGraph(1,&guessD_rotX,&guessD_rotY,"P same");
+  pWgtDir->Draw("P same");
+  pFitDir->DrawGraph(1,&fitD_rotX,&fitD_rotY,"P same");
   if(pcircD1) pcircD1->Draw("P same");
   if(pcircD2) pcircD2->Draw("P same");
   txtD->Draw();  
   
+  // ----------
   // View from reflected light spot (fitted)
   pad4->cd()->SetGrid();
   hfineR->SetTitle("Reflected light (PMT hit sum);X'' [m];Y'' [m]");
@@ -752,13 +783,15 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   hfineR->Draw("scat");
   hfineR->SetStats(0);
   for(int s=0;s<NCOL+2;s++) { if(!gRef[s]) continue; if(gRef[s]->GetN()==0) continue; gRef[s]->Draw("P same"); }
-  pFibPos->DrawGraph(1,&spotx2,&spoty2,"P same");
-  pguessR->DrawGraph(1,&spotx4,&spoty4,"P same");
-  pRef->DrawGraph(1,&nil,&nil,"P same");
+  pFibPos->Draw("P same");
+  pGssRef->DrawGraph(1,&guessR_rotX,&guessR_rotY,"P same");
+  pWgtRef->Draw("P same");
+  pFitRef->DrawGraph(1,&fitR_rotX,&fitR_rotY,"P same");
   if(pcircR1) pcircR1->Draw("P same");
   if(pcircR2) pcircR2->Draw("P same");
   txtR->Draw();  
   
+  // ----------
   // Save canvas and close
   string outfile = "focal_point";
   if (!TEST) outfile = Form("images/PCA_%s",fibre.c_str());
@@ -772,25 +805,19 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   if(hfineD) delete hfineD;
   if(hfineR) delete hfineR;
   if(hhits) delete hhits;
-  //if(hDir) delete hDir;
-  //if(hRef) delete hRef;
-  //if(gDir2) delete gDir2;
-  //if(gRef2) delete gRef2;
-  //if(fDir2) delete fDir2;
-  //if(fRef2) delete fRef2;
-  //if(fitDir) delete fitDir;
-  //if(fitRef) delete fitRef;
+  //if(gDir2D) delete gDir2D;
+  //if(gRef2D) delete gRef2D;
   if (icos) { for(int s=0; s<NCOL+2; s++) delete icos[s]; }
   if (gDir) { for(int s=0; s<NCOL+2; s++) delete gDir[s]; }
   if (gRef) { for(int s=0; s<NCOL+2; s++) delete gRef[s]; }
   if(pcontD) delete pcontD;
   if(pcontR) delete pcontR;
-  if(pguessD) delete pguessD;
-  if(pguessR) delete pguessR;
+  if(pGssDir) delete pGssDir;
+  if(pGssRef) delete pGssRef;
   if(pFibPos) delete pFibPos;
   if(pFibDir) delete pFibDir;
-  if(pDir) delete pDir;
-  if(pRef) delete pRef;
+  if(pWgtDir) delete pWgtDir;
+  if(pWgtRef) delete pWgtRef;
   if(pcircD1) delete pcircD1;
   if(pcircD2) delete pcircD2;
   if(pcircR1) delete pcircR1;
