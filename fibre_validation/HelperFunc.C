@@ -223,8 +223,8 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   double aperture_radius = radius*tan(cone/2 / 180.*pi);  // half input angle ~> 12 deg aperture
   fit->SetParameters(0.8*maxval,0.,0.,aperture_radius);
   fit->SetParLimits(0,0.2*maxval,maxval);
-  fit->SetParLimits(1,-aperture_radius,aperture_radius);
-  fit->SetParLimits(2,-aperture_radius,aperture_radius);
+  fit->SetParLimits(1,-aperture_radius/2,aperture_radius/2);
+  fit->SetParLimits(2,-aperture_radius/2,aperture_radius/2);
   fit->SetParLimits(3,0.5*aperture_radius,1.5*aperture_radius);
   graf->Fit("gaus2d");
   
@@ -263,7 +263,7 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   params[2] = sy;     // mu_y
   params[3] = sigma;  // sigma
   
-  
+  /*
   // Plot fit results (for testing purposes only)
   gStyle->SetOptStat(0);
   TCanvas *c = new TCanvas("","",800,800);
@@ -280,7 +280,7 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   c->Close();
   if (hempty) delete hempty;
   if (c) delete c;
-  
+  */
   
   if (graf) delete graf;
   if (fit) delete fit;
