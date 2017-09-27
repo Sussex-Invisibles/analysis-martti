@@ -270,8 +270,8 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   c->SetGrid();
   TH3F *hempty = new TH3F("hempty","",10,-10,10,10,-10,10,10,0,maxval+1);
   hempty->Draw("");             // empty histogram for plot range
-  c->SetTheta(90-0.001);      // view from above
-  c->SetPhi(0+0.001);         // no x-y rotation
+  //c->SetTheta(90-0.001);      // view from above
+  //c->SetPhi(0+0.001);         // no x-y rotation
   graf->SetMarkerStyle(8);
   graf->Draw("pcol,same");
   fit->Draw("surf,same");
