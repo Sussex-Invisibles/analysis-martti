@@ -717,11 +717,11 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   hhits->Draw();
   
   // Draw off and hot PMT bins in their respective colour
-  TH1I *hhitslo = (TH1I*)hhits->Clone();
+  TH1I *hhitslo = (TH1I*)hhits->Clone("hhitslo");
   hhitslo->SetFillColor(16);
   hhitslo->GetXaxis()->SetRangeUser(0.4,0.8);
   hhitslo->Draw("same");
-  TH1I *hhitshi = (TH1I*)hhits->Clone();
+  TH1I *hhitshi = (TH1I*)hhits->Clone("hhitshi");
   hhitshi->SetFillColor(1);
   double hotlimedge;
   for (int b=0; b<hhitshi->GetNbinsX(); b++) {
@@ -805,6 +805,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   if(hfineD) delete hfineD;
   if(hfineR) delete hfineR;
   if(hhits) delete hhits;
+  if(hhitslo) delete hhitslo;
+  if(hhitshi) delete hhitshi;
   //if(gDir2D) delete gDir2D;
   //if(gRef2D) delete gRef2D;
   if (icos) { for(int s=0; s<NCOL+2; s++) delete icos[s]; }
