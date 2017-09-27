@@ -1,6 +1,7 @@
 /rat/physics_list/OmitMuonicProcesses true
 /rat/physics_list/OmitHadronicProcesses true
 /rat/db/load geo/snoplus_water.geo
+/rat/db/set DETECTOR geo_file "geo/snoplus_water.geo"
 /rat/db/set DAQ_RUN_LEVEL trigger_mask 32768
 /rat/db/set DAQ_RUN_LEVEL trigger_enable 35967
 /rat/db/set ELLIE intensity 1000
