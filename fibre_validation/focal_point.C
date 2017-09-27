@@ -55,6 +55,17 @@ int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
   const int TEST = (RUN_CLUSTER) ? 0 : 102157;
+  
+  // Run over Monte Carlo file
+  if (IS_MC) {
+    string fibre = "FT040A";	// FT040A, FT079A
+    TVector3 dirfit, reffit;
+    focal_point(fibre, -999, -999, -999, -999, -999., &dirfit, &reffit, (bool)IS_MC, false);
+    cout << "Results for fibre " << fibre << ":" << endl;
+    cout << "- Direct light fit (x,y,z) [mm] = " << printVector(dirfit) << endl;
+    cout << "- Reflected light fit (x,y,z) [mm] = " << printVector(reffit) << endl;
+    return 0;
+  }
 
   // Loop over all fibres in list
   string input = "../pca_runs/TELLIE_PCA.txt";
@@ -89,7 +100,7 @@ int main(int argc, char** argv) {
   printf("Ran over %d files.\n",nfiles);
   if (nfiles==0) { 
     cerr<<"*** ERROR *** No input files found, or nothing to do!"<<endl;
-    return 1; 
+    return 1;
   }
   return 0;
 }
@@ -106,25 +117,36 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   printf("Checking files for run %d... ", run);
   //string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
   string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
-  string fname = "";
+  string fname, out, img;
+  string mcopt = "";
   ifstream f;
-  for (int pass=3;pass>=0;pass--) {
-    fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+  if (isMC) {
+    mcopt = "centre"; // centre, Z+10cm (shifted AV position)
+    fpath = Form("%s/Software/SNOP/work/analysis/tellie_jobs/markstringer",getenv("HOME"));
+    fname = Form("%s/MC_%s_AV_%s_processed.root",fpath.c_str(),fibre.c_str(),mcopt.c_str());
     f.open(fname.c_str());
-    if (f.good()) break;
+    run = 0; // TODO: figure out how to get this from file
+    out = Form("./mc/MC_%s_%s.out",fibre.c_str(),mcopt.c_str());
+    img = Form("./mc/MC_%s.pdf",fibre.c_str());
+  } else {
+    for (int pass=3;pass>=0;pass--) {
+      fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+      f.open(fname.c_str());
+      if (f.good()) break;
+    }
+    out = Form("./output/PCA_%s.out",fibre.c_str());
+    img = Form("./images/PCA_%s.pdf",fibre.c_str());
   }
-  string out = Form("./output/PCA_%s.out",fibre.c_str());
-  string img = Form("./images/PCA_%s.pdf",fibre.c_str());
   ifstream g(out.c_str());
   ifstream h(img.c_str());
   int scanned_file = 0;
   if (!TEST && h.good()) {  // file downloaded and processed
     printf("already processed! Skipping fibre %s.\n",fibre.c_str());
     return;
-  } else if(g.good()) {     // file extracted, but not processed
+  } else if (g.good()) {     // file extracted, but not processed
     printf("not processed! Generating plots for fibre %s.\n",fibre.c_str());
     scanned_file = 1;
-  } else if(!f.good()) {    // file not downloaded
+  } else if (!f.good()) {    // file not downloaded
     printf("not downloaded! Skipping fibre %s.\n",fibre.c_str());
     return;
   } else {                   // file downloaded, but not processed
@@ -187,7 +209,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     string dummy;
     g >> dummy >> checkrun;
     if(!g.good()) printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),checkrun);
-    if(checkrun != run) { printf("*** ERROR *** Bad run number %d\n",checkrun); return; }
+    if(checkrun != run && !isMC) { printf("*** ERROR *** Bad run number %d\n",checkrun); return; }
     g >> dummy >> count;
     if(!g.good()) { printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),count); return; }
     g >> dummy >> totalnhit;
@@ -319,30 +341,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   else { cerr<<"Something went wrong! No hot faces found."<<endl; return; }
   if (VERBOSE) printf(" -> best guess direction: %s\n",printVector(bestguess.Unit()).c_str());
   
-  // Initial guess for reflected light (TODO - currently not used)
-/* // Guess for reflected light based on hottest face
-  int refface=-1;
-  double reffaceheat=-1;
-  for(int fc=0; fc<20; fc++) {
-    if(faceheat[fc]>=maxfaceheat/5.) continue; // hot faces used for direct light
-    if(faceweight[fc].Angle(bestguess) < 120 * pi/180.) continue; // too close to direct light spot
-    if (faceheat[fc]>reffaceheat) { reffaceheat=faceheat[fc]; refface=fc+1; }
-  }
-  TVector3 bestguess2 = faceweight[refface-1];
-*/
-/* // Guess for reflected light based on hottest PMT
-  int hotrefid=-1, hotrefcount=-1;
-  for(int id=0; id<NPMTS; id++) {
-    pmtpos = pmtinfo.GetPosition(id);
-    if (pmtpos.Mag()==0) continue; // not a valid PMT
-    if (pmtinfo.GetType(id) != 1) continue; // not a normal PMT
-    if (pmthitcount[id] > HOTLIMIT) continue; // hot PMT 
-    if (pmtpos.Angle(-bestguess) > pi/6) continue; // too far from reflected light guesstimate
-    if (pmthitcount[id] > hotrefcount) { hotrefcount=pmthitcount[id]; hotrefid=id; }
-  }
-  TVector3 bestguess2 = pmtinfo.GetPosition(hotrefid); // hottest PMT opposite direct light
-*/
-  
   // Make graphs for icosahedral projection
   TGraph *icos[NCOL+2];
   for (int s=0; s<NCOL+2; s++) {
@@ -384,7 +382,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
 
   // Get the maximum bin as guesstimate for light spot
   bestguess.SetMag(pmtrad);
-  //bestguess2.SetMag(pmtrad);
   TVector3 guess_dir =  bestguess;
   TVector3 guess_ref = -bestguess;  // TODO - improve guesstimate for reflected light?
   
@@ -671,13 +668,15 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
                   };
   
   // Highlight unsatisfactory values in bold
-  if (count < 0.99*2e5) vals[2] = Form("#bf{%s}",vals[2]);     // lost more than 1% of triggers
+  int nexpected = (isMC ? 1e5 : 2e5);
+  if (count < 0.99*nexpected) vals[2] = Form("#bf{%s}",vals[2]);     // lost more than 1% of triggers
   if (avgnhit<25 || avgnhit>45) vals[3] = Form("#bf{%s}",vals[3]);   // nhit far outside optimal range (30-40)
   if (DIRANG/pi*180 >= 10.) vals[4] = Form("#bf{%s}",vals[4]); // bad direct light fit
   if (REFANG/pi*180 >= 10.) vals[5] = Form("#bf{%s}",vals[5]); // bad reflected light fit
   
   // Place text in pad
-  title = new TLatex(0.05,0.9,"SNO+ TELLIE PCA data");
+  if (isMC) title = new TLatex(0.05,0.9,"SNO+ TELLIE MC simulation");
+  else      title = new TLatex(0.05,0.9,"SNO+ TELLIE PCA data");
   title->SetTextAlign(12);
   title->SetTextFont(62);
   title->SetTextSize(0.12);
@@ -795,6 +794,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   // Save canvas and close
   string outfile = "focal_point";
   if (!TEST) outfile = Form("images/PCA_%s",fibre.c_str());
+  if (isMC) outfile = Form("mc/MC_%s_%s",fibre.c_str(),mcopt.c_str());
   c0->Print(Form("%s.png",outfile.c_str()));
   c0->Print(Form("%s.pdf",outfile.c_str()));
   c0->Close();
