@@ -266,8 +266,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     for(int id=0; id<NPMTS; id++) {
       pmtpos = pmtinfo.GetPosition(id);
       int in_spot = 0;
-      if (pmtpos.Angle(lightpos) < DIR_CONE/180*pi) in_spot = 1;
-      else if (pmtpos.Angle(fibrepos) < REF_CONE/180*pi) in_spot = 2;
+      if (pmtpos.Angle(lightpos) < DIR_CONE/180.*pi) in_spot = 1;
+      else if (pmtpos.Angle(fibrepos) < REF_CONE/180.*pi) in_spot = 2;
       fprintf(outFile, "%d %d %d\n", id, pmthitcount[id], in_spot);
     }
     fclose(outFile);
