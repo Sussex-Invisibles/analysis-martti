@@ -4,6 +4,7 @@
 #include <TVector3.h>
 #include <TGaxis.h>
 #include <TGraph2D.h>
+#include <TGraphErrors.h>
 #include <TH1F.h>
 #include <TH3F.h>
 #include "TF2.h"
@@ -28,6 +29,7 @@ void GetHotLimit(int*, int&);
 void GetMaxColVal(const TVector3&, int*, int, int&, int&, const RAT::DU::PMTInfo&);
 void FillHemisphere(const TVector3&, int*, int, TGraph**, TGraph2D*, int, int, const RAT::DU::PMTInfo&);
 void DrawCircle(const TVector3&, double, TVector3**, int);
+int FitPromptPeaks(TH2D*, int, int*, float*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 
 // Display vector as string
@@ -183,6 +185,67 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
     dots[s]->SetMarkerColor(col);
   }
 
+}
+
+int FitPromptPeaks(TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
+
+  TGraphErrors *gpmts = new TGraphErrors();
+  int npts=0;
+
+  for (int iPMT=0; iPMT<NPMTS; iPMT++) {
+    if (pmthits[iPMT]<2000) continue;  // only consider PMTs with >1% occupancy
+    //if (pmtangs[iPMT] > 24) continue; // outside ROI
+    TH1D *temp = htime->ProjectionY("temp",iPMT,iPMT+1,"");
+
+    // Define prompt peak range (>20% of max. intensity)
+    int lobin = temp->GetMaximumBin();
+    int hibin = temp->GetMaximumBin();
+    while(temp->GetBinContent(lobin) > 0.2*temp->GetMaximum()) lobin--;
+    while(temp->GetBinContent(hibin) > 0.2*temp->GetMaximum()) hibin++;
+    
+    // Fit 1D Gaussian to each slice to get prompt hit time
+    TF1 *fitPMT = new TF1("fitPMT", "gaus", temp->GetBinLowEdge(lobin), temp->GetBinLowEdge(hibin+1));
+    fitPMT->SetParameters(temp->GetMaximum(), temp->GetBinCenter(htime->GetMaximumBin()), temp->GetRMS());
+    temp->Fit("fitPMT","R,q");
+    
+    /*
+    // Investigate individual PMTs
+    if (fitPMT->GetParameter(1) > 200) {
+      TCanvas *c = new TCanvas("c","",800,600);
+      c->SetGrid();
+      temp->Draw("");
+      temp->Fit("fitPMT","R,q");
+      c->Print("angular_singlepmt.png");
+      c->Print("angular_singlepmt.pdf");
+      c->Close();
+      delete c;
+      return 1;
+    }
+    */
+    
+    // Fill fitted hit times vs. angle into graph
+    gpmts->SetPoint(npts, pmtangs[iPMT], fitPMT->GetParameter(1));
+    gpmts->SetPointError(npts, 0, fitPMT->GetParError(1));
+    npts++;
+    delete fitPMT;
+    delete temp;
+  }
+  
+  TCanvas *c = new TCanvas("c","",800,600);
+  c->SetGrid();
+  gpmts->SetTitle("Angular systematic; Angle [deg]; Hit time [ns]");
+  gpmts->SetMarkerColor(4);
+  gpmts->SetMarkerStyle(7);
+  gpmts->Draw("AP");
+  gpmts->Fit("pol1");
+  c->Print("angular_allpmts.png");
+  c->Print("angular_allpmts.pdf");
+  c->Close();
+  delete c;
+  // TODO - do something useful with the fit results!
+  
+  return 0;
+  
 }
 
 void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {

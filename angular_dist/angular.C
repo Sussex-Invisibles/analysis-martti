@@ -36,8 +36,8 @@
 #include "../fibre_validation/Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
-const int VERBOSE = 0;      // verbosity flag
+const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
+const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
@@ -167,13 +167,13 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       if (!del.good()) break;
       if (num == run) break;
     }
-
+    
     // Check output
     if (VERBOSE) {
       cout<<"RATDB: fibre "<<fibre<< ", position "<<printVector(fibrepos)<<" mm, direction: "<<printVector(fibredir)<<endl;
       cout<<"TELLIE: trigger delay "<<trig_delay<<" ns, fibre delay "<<fibre_delay<<" ns, total offset "<<pca_offset<<" ns."<<endl;
     }
- 
+    
     // Get fitted light position (from file)
     string fitfile = "../fibre_validation/TELLIE_FITRESULTS.txt";
     ifstream fit(fitfile.c_str());
@@ -199,10 +199,50 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     // Initialise histograms
     const int NBINS = 30;
     const int MAXANG = 30;
-    hcoarse = new TH1D("hcoarse",fibre.c_str(),2000,0,2000);
+    hcoarse = new TH1D("hcoarse",fibre.c_str(),300,-100,200);
     hpmtseg = new TH1D("hpmtseg",fibre.c_str(),NBINS,0,MAXANG);
     
     // First iteration: Get average hit time and number of PMTs in each segment
+    int hitpmts=0, allpmts[NPMTS];
+    float angpmts[NPMTS];
+    memset( allpmts, 0, NPMTS*sizeof(int) );                  // NPMTS only known at runtime
+    memset( angpmts, 0, NPMTS*sizeof(float) );                // NPMTS only known at runtime
+    TH2D *htime = new TH2D("htime","",NPMTS+1,0,NPMTS+1,600,0,600);    
+    for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
+      const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
+      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {            // mostly 1 event per entry
+        const RAT::DS::EV& ev = ds.GetEV(iEv);
+        int trig = ev.GetTrigType();
+        if (!(trig & 0x8000)) continue;                       // EXT trigger only
+        const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
+        for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
+          RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
+          int pmtID = pmt.GetID();
+          if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
+          if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
+          if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
+          TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
+          TVector3 track = pmtpos-fibrepos;
+          double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
+          double pmttime = pmt.GetTime();                     // hit time [ns]
+          double corr = track.Mag()/c_water;                  // light travel time [ns]
+          double offset = pmttime-corr+fibre_delay+trig_delay;
+          hcoarse->Fill(offset-pca_offset);   // total offset minus PCA offset
+          htime->Fill(pmtID, pmttime-corr);   // corrected hit time vs PMT ID
+          if (allpmts[pmtID]==0) {            // fill angles only once per PMT
+            hpmtseg->Fill(theta*180./pi);
+            angpmts[pmtID] = theta*180./pi;
+          }
+          allpmts[pmtID]++;
+          hitpmts++;
+        } // pmt loop
+      } // event loop
+    } // entry loop
+    
+    if (FitPromptPeaks(htime, NPMTS, allpmts, angpmts)) return -999;
+  
+    /*
+    // First iteration (old): Get average hit time and number of PMTs in each segment
     int hitpmts=0, allpmts[NPMTS];
     memset( allpmts, 0, NPMTS*sizeof(int) );                  // NPMTS only known at runtime
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
@@ -230,7 +270,9 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         } // pmt loop
       } // event loop
     } // entry loop
+    */
     
+    // Central hit time (based on maximum bin)
     int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
     commontime += 5/2;              // intermediate step
     commontime -= commontime % 5;   // rounded to the nearest multiple of 5
@@ -445,7 +487,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   //if (h1) delete h1;
   //if (h2) delete h2;
   //if (herr) delete herr;
-  //if (hcoarse) delete hcoarse;
+  //if (hcoarse) delete hcoarse;  // causes segfault?!
   //if (hpmtseg) delete hpmtseg;
   
   return (float)totalnhit/count;
