@@ -17,6 +17,9 @@
 #include <TVector3.h>
 using namespace std;
 
+// Run time parameters
+const int MORE_OUTPUT = 1;
+
 // Global constants
 const double pi = TMath::Pi();
 const TVector3 e1(1,0,0);
@@ -195,8 +198,13 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 
 int FitPromptPeaks(TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
 
+  int npts = 0;
   TGraphErrors *gpmts = new TGraphErrors();
-  int npts=0;
+  double x[NPMTS], y[NPMTS], ex[NPMTS], ey[NPMTS];
+  memset( x,  0, NPMTS*sizeof(double) );
+  memset( y,  0, NPMTS*sizeof(double) );
+  memset( ex, 0, NPMTS*sizeof(double) );
+  memset( ey, 0, NPMTS*sizeof(double) );
 
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
     if (pmthits[iPMT]<2000) continue;  // only consider PMTs with >1% occupancy
@@ -230,27 +238,47 @@ int FitPromptPeaks(TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
     */
     
     // Fill fitted hit times vs. angle into graph
-    gpmts->SetPoint(npts, pmtangs[iPMT], fitPMT->GetParameter(1));
-    gpmts->SetPointError(npts, 0, fitPMT->GetParError(1));
+    x[iPMT]  = pmtangs[iPMT];
+    y[iPMT]  = fitPMT->GetParameter(1);
+    ex[iPMT] = 0.;
+    ey[iPMT] = fitPMT->GetParError(1);
+    gpmts->SetPoint(npts,x[iPMT],y[iPMT]);
+    gpmts->SetPointError(npts,ex[iPMT],ey[iPMT]);
     npts++;
+    
     delete fitPMT;
     delete temp;
   }
+    
+  // Investigate PMTs with unusual offsets w.r.t. mean hit time
+  double meanhittime = gpmts->GetMean(2);
+  for (int iPMT=0; iPMT<NPMTS; iPMT++) {
+    if (x[iPMT]==0 && y[iPMT]==0) continue;
+    // Check for unusual offsets (seen e.g. for FT019A, PMTs 4393-4416)
+    if (fabs(y[iPMT]-meanhittime) > 2.5)
+      cout << "PMT #" << iPMT << " is offset by " << y[iPMT]-meanhittime << " ns" << endl;
+  }
   
-  TCanvas *c = new TCanvas("c","",800,600);
-  c->SetGrid();
-  gpmts->SetTitle("Angular systematic; Angle [deg]; Hit time [ns]");
-  gpmts->SetMarkerColor(4);
-  gpmts->SetMarkerStyle(7);
-  gpmts->Draw("AP");
-  TF1 *fitSyst = new TF1("fitSyst", "pol1", 3, 13); // optional, linear fit range quite hand-wavey
-  fitSyst->SetParameters(gpmts->GetMean(2), 0);
-  gpmts->Fit("fitSyst", "R,q");
+  // Fit line through all PMT hit times
+  TF1 *fitSyst = new TF1("fitSyst", "pol1", 3, 13); // fit range somewhat arbitrary
+  fitSyst->SetParameters(meanhittime, 0); // assume flat line at mean as prior
+  gpmts->Fit("fitSyst", "R,q"); // force range, quiet mode
   cout << "Parametrised systematic: y = " << fitSyst->GetParameter(0) << " + " << fitSyst->GetParameter(1) << "*x" << endl;
-  c->Print("angular_allpmts.png");
-  c->Print("angular_allpmts.pdf");
-  c->Close();
-  delete c;
+  
+  if (MORE_OUTPUT) {
+      TCanvas *c = new TCanvas("c","",800,600);
+      c->SetGrid();
+      gpmts->SetTitle("Angular systematic; Angle [deg]; Hit time [ns]");
+      gpmts->SetMarkerColor(4);
+      gpmts->SetMarkerStyle(7);
+      gpmts->Draw("AP");
+      gpmts->Fit("fitSyst", "R,q");
+      c->Print("angular_allpmts.png");
+      c->Print("angular_allpmts.pdf");
+      c->Close();
+      delete c;
+  }
+  
   // TODO - do something useful with the fit results!
   
   return 0;

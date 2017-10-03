@@ -29,7 +29,7 @@
 #include "../fibre_validation/HelperFunc.C"
 #include "../fibre_validation/Xianguo.C"
 
-// Global constants
+// Run time parameters
 const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
