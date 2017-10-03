@@ -1,3 +1,8 @@
+// ---------------------------------------------------------
+// Content: Helpful functions for handling ROOT histograms
+// Author:  Dr. Xianguo Lu, University of Oxford, 2015
+// Changes: Dr. Martti Nirkko, 2015-2017 (minor adaptations)
+// ---------------------------------------------------------
 #include <TAxis.h>
 #include <TCanvas.h>
 #include <TComplex.h>

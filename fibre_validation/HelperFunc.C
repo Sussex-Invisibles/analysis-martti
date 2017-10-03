@@ -1,14 +1,20 @@
-#include <TROOT.h>
-#include <TMath.h>
-#include <TVector2.h>
-#include <TVector3.h>
+// ---------------------------------------------------------
+// Content: Helper functions uses for analysing TELLIE data
+// Author:  Martti Nirkko, University of Sussex (2017)
+// ---------------------------------------------------------
+#include <TCanvas.h>
+#include <TF2.h>
 #include <TGaxis.h>
 #include <TGraph2D.h>
 #include <TGraphErrors.h>
 #include <TH1F.h>
+#include <TH2F.h>
 #include <TH3F.h>
-#include "TF2.h"
-#include "TPad.h"
+#include <TMath.h>
+#include <TPad.h>
+#include <TROOT.h>
+#include <TVector2.h>
+#include <TVector3.h>
 using namespace std;
 
 // Global constants
@@ -237,7 +243,10 @@ int FitPromptPeaks(TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
   gpmts->SetMarkerColor(4);
   gpmts->SetMarkerStyle(7);
   gpmts->Draw("AP");
-  gpmts->Fit("pol1");
+  TF1 *fitSyst = new TF1("fitSyst", "pol1", 3, 13); // optional, linear fit range quite hand-wavey
+  fitSyst->SetParameters(gpmts->GetMean(2), 0);
+  gpmts->Fit("fitSyst", "R,q");
+  cout << "Parametrised systematic: y = " << fitSyst->GetParameter(0) << " + " << fitSyst->GetParameter(1) << "*x" << endl;
   c->Print("angular_allpmts.png");
   c->Print("angular_allpmts.pdf");
   c->Close();

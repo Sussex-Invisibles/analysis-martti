@@ -1,6 +1,6 @@
 // ---------------------------------------------------------
 // Goal:            Plot angular response of TELLIE fibres
-// Author:          Martti Nirkko, 26/04/2017
+// Author:          Martti Nirkko, 03/10/2017
 // Compile & run:   clear && g++ -o angular.exe angular.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./angular.exe
 // ---------------------------------------------------------
 
@@ -11,25 +11,19 @@
 #include <stdlib.h>
 
 // ROOT stuff
-#include "TROOT.h"
-#include "TSystem.h"
-#include "TFile.h"
-#include "TH1.h"
-#include "TH2.h"
-#include "TCanvas.h"
-#include "TMath.h"
-#include "TPad.h"
-#include "TPaveStats.h"
-#include "TStyle.h"
-#include "TLegend.h"
+#include <TFile.h>
+#include <TLegend.h>
+#include <TPaveStats.h>
+#include <TStyle.h>
+#include <TSystem.h>
 
 // RAT stuff
-#include "RAT/DU/DSReader.hh"
-#include "RAT/DU/PMTInfo.hh"
-#include "RAT/DU/Utility.hh"
-#include "RAT/DS/Run.hh"
-#include "RAT/DS/Entry.hh"
-#include "RAT/DS/MC.hh"
+#include <RAT/DS/Entry.hh>
+#include <RAT/DS/MC.hh>
+#include <RAT/DS/Run.hh>
+#include <RAT/DU/DSReader.hh>
+#include <RAT/DU/PMTInfo.hh>
+#include <RAT/DU/Utility.hh>
 
 // Helper functions
 #include "../fibre_validation/HelperFunc.C"
@@ -44,7 +38,6 @@ const int IS_MC = 0;        // Monte-Carlo flag
 float angular(string, int, bool, bool);
 
 // Main program
-using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
