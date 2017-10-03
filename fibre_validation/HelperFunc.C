@@ -208,7 +208,7 @@ int FitPromptPeaks(TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
 
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
     if (pmthits[iPMT]<2000) continue;  // only consider PMTs with >1% occupancy
-    //if (pmtangs[iPMT] > 24) continue; // outside ROI
+    if (pmtangs[iPMT]>24) continue;    // only consider PMTs within nominal aperture (12 deg)
     TH1D *temp = htime->ProjectionY("temp",iPMT,iPMT+1,"");
 
     // Define prompt peak range (>20% of max. intensity)
@@ -252,15 +252,17 @@ int FitPromptPeaks(TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
     
   // Investigate PMTs with unusual offsets w.r.t. mean hit time
   double meanhittime = gpmts->GetMean(2);
+  double rmshittime = gpmts->GetRMS(2);
+  cout << "Mean = " << meanhittime << " ns, RMS = " << rmshittime << " ns. Unusually high offsets (>3*RMS):" << endl;
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
     if (x[iPMT]==0 && y[iPMT]==0) continue;
     // Check for unusual offsets (seen e.g. for FT019A, PMTs 4393-4416)
-    if (fabs(y[iPMT]-meanhittime) > 2.5)
-      cout << "PMT #" << iPMT << " is offset by " << y[iPMT]-meanhittime << " ns" << endl;
+    if (fabs(y[iPMT]-meanhittime)/fabs(rmshittime) > 3.) // more than 3x RMS deviation
+      cout << " - PMT #" << iPMT << " deviates from mean by " << Form("%5.1f",y[iPMT]-meanhittime) << " ns" << endl;
   }
   
   // Fit line through all PMT hit times
-  TF1 *fitSyst = new TF1("fitSyst", "pol1", 3, 13); // fit range somewhat arbitrary
+  TF1 *fitSyst = new TF1("fitSyst", "pol1", 0, 24);
   fitSyst->SetParameters(meanhittime, 0); // assume flat line at mean as prior
   gpmts->Fit("fitSyst", "R,q"); // force range, quiet mode
   cout << "Parametrised systematic: y = " << fitSyst->GetParameter(0) << " + " << fitSyst->GetParameter(1) << "*x" << endl;
@@ -326,7 +328,7 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   fit->SetParLimits(1,-aperture_radius/2,aperture_radius/2);
   fit->SetParLimits(2,-aperture_radius/2,aperture_radius/2);
   fit->SetParLimits(3,0.5*aperture_radius,1.5*aperture_radius);
-  graf->Fit("gaus2d");
+  graf->Fit("gaus2d","q"); // quiet mode
   
   // Raw fit parameters
   double amp = fit->GetParameter(0);
