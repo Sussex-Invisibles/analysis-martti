@@ -5,6 +5,7 @@
 *.root
 */.compiled
 */.executed
+angular_dist/logs
 angular_dist/output
 fibre_validation/output
 tellie_jobs/logs

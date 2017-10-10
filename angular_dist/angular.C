@@ -1,6 +1,6 @@
 // ---------------------------------------------------------
 // Goal:            Plot angular response of TELLIE fibres
-// Author:          Martti Nirkko, 03/10/2017
+// Author:          Martti Nirkko, University of Sussex (Oct 2017)
 // Compile & run:   clear && g++ -o angular.exe angular.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./angular.exe
 // ---------------------------------------------------------
 
@@ -232,38 +232,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       } // event loop
     } // entry loop
     
+    // Fit 1D Gaussian over PMT hit times (prompt peak)
     if (FitPromptPeaks(run, htime, NPMTS, allpmts, angpmts)) return -999;
-  
-    /*
-    // First iteration (old): Get average hit time and number of PMTs in each segment
-    int hitpmts=0, allpmts[NPMTS];
-    memset( allpmts, 0, NPMTS*sizeof(int) );                  // NPMTS only known at runtime
-    for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
-      const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
-      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {            // mostly 1 event per entry
-        const RAT::DS::EV& ev = ds.GetEV(iEv);
-        int trig = ev.GetTrigType();
-        if (!(trig & 0x8000)) continue;                       // EXT trigger only
-        const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
-        for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
-          RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
-          int pmtID = pmt.GetID();
-          if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
-          if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
-          if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
-          TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
-          TVector3 track = pmtpos-fibrepos;
-          double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
-          double pmttime = pmt.GetTime();                     // hit time [ns]
-          double corr = track.Mag()/c_water;                  // light travel time [ns]
-          double offset = pmttime-corr+fibre_delay+trig_delay;
-          hcoarse->Fill(offset-pca_offset); // total offset minus PCA offset
-          if (allpmts[pmtID]==0) { hpmtseg->Fill(theta*180./pi); allpmts[pmtID]++; }
-          hitpmts++;
-        } // pmt loop
-      } // event loop
-    } // entry loop
-    */
     
     // Central hit time (based on maximum bin)
     int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());

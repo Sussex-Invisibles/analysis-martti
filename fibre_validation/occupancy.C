@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
   }
   
   // Initialise RAT
-  string example = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED/Analysis_r0000102315_s000_p000.root" : "/home/nirkko/Desktop/fibre_validation/Analysis_r0000101834_s000_p000.root";
+  string example = Form("%s/Software/SNOP/work/data/Analysis_r0000101834_s000_p000.root",getenv("HOME"));
   RAT::DU::DSReader dsreader(example);
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   const int NPMTS = pmtinfo.GetCount();
