@@ -30,7 +30,7 @@
 #include "../fibre_validation/Xianguo.C"
 
 // Run time parameters
-const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
@@ -232,7 +232,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       } // event loop
     } // entry loop
     
-    if (FitPromptPeaks(htime, NPMTS, allpmts, angpmts)) return -999;
+    if (FitPromptPeaks(run, htime, NPMTS, allpmts, angpmts)) return -999;
   
     /*
     // First iteration (old): Get average hit time and number of PMTs in each segment

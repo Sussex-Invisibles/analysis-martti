@@ -38,7 +38,7 @@ void GetHotLimit(int*, int&);
 void GetMaxColVal(const TVector3&, int*, int, int&, int&, const RAT::DU::PMTInfo&);
 void FillHemisphere(const TVector3&, int*, int, TGraph**, TGraph2D*, int, int, const RAT::DU::PMTInfo&);
 void DrawCircle(const TVector3&, double, TVector3**, int);
-int FitPromptPeaks(TH2D*, int, int*, float*);
+int FitPromptPeaks(int, TH2D*, int, int*, float*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 
 // Display vector as string
@@ -196,7 +196,7 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 
 }
 
-int FitPromptPeaks(TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
+int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
 
   int npts = 0;
   TGraphErrors *gpmts = new TGraphErrors();
@@ -251,15 +251,21 @@ int FitPromptPeaks(TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
   }
     
   // Investigate PMTs with unusual offsets w.r.t. mean hit time
+  string outfile = Form("logs/unusual_timing_%d.log", run);
+  FILE *out = fopen(outfile.c_str(),"w");
   double meanhittime = gpmts->GetMean(2);
   double rmshittime = gpmts->GetRMS(2);
-  cout << "Mean = " << meanhittime << " ns, RMS = " << rmshittime << " ns. Unusually high offsets (>3*RMS):" << endl;
+  fprintf(out,"# Mean %.1lf ns, RMS %.1lf ns. PMTs with unusually high offsets (>3*RMS):\n",run,meanhittime,rmshittime);
+  fprintf(out,"# PmtId Offset[ns]\n");
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
     if (x[iPMT]==0 && y[iPMT]==0) continue;
     // Check for unusual offsets (seen e.g. for FT019A, PMTs 4393-4416)
-    if (fabs(y[iPMT]-meanhittime)/fabs(rmshittime) > 3.) // more than 3x RMS deviation
-      cout << " - PMT #" << iPMT << " deviates from mean by " << Form("%5.1f",y[iPMT]-meanhittime) << " ns" << endl;
+    if (fabs(y[iPMT]-meanhittime)/fabs(rmshittime) > 3.) { // more than 3x RMS deviation
+      fprintf(out,"%4d %5.1lf\n",iPMT,y[iPMT]-meanhittime);
+    }
   }
+  fclose(out);
+  //delete out;
   
   // Fit line through all PMT hit times
   TF1 *fitSyst = new TF1("fitSyst", "pol1", 0, 24);
