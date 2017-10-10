@@ -14,6 +14,7 @@
 #include <TCanvas.h>
 #include <TH1.h>
 #include <TH2D.h>
+#include <TMath.h>
 #include <TROOT.h>
 #include <TStyle.h>
 #include <TVector3.h>
@@ -30,6 +31,9 @@ using namespace std;
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag
+
+// Global constants
+const double pi = TMath::Pi();
 
 // Initialise functions
 int check_offsets(string, int, TH2D**, const RAT::DU::PMTInfo&, bool, bool);
@@ -48,12 +52,12 @@ int main(int argc, char** argv) {
   int NBINS     = 80;
   int MAXOFFSET = 20; // ns
   int MAXHEIGHT = 10; // m
-  const int NHIST = 3;
+  const int NHIST = 4;
   TH2D *histos[NHIST];
   histos[0] = new TH2D("pmtids","",NBINS,0,NPMTS+1,NBINS,-MAXOFFSET,MAXOFFSET);
   histos[1] = new TH2D("crates","",20,0,20,NBINS+1,-MAXOFFSET,MAXOFFSET);
   histos[2] = new TH2D("height","",NBINS,-MAXHEIGHT,MAXHEIGHT,NBINS,-MAXOFFSET,MAXOFFSET);
-  //histos[3] = NULL;
+  histos[3] = new TH2D("angle","",NBINS,-1,1,NBINS,-MAXOFFSET,MAXOFFSET);
 
   // Loop over all fibres in list
   string input = "../pca_runs/TELLIE_PCA.txt";
@@ -87,6 +91,7 @@ int main(int argc, char** argv) {
   histos[0]->SetTitle(Form("Unusually high PMT timing offsets (%d PCA runs);PMT ID;Offset [ns]",nfiles));
   histos[1]->SetTitle("Unusual offsets VS crates;Crate;Offset [ns]");
   histos[2]->SetTitle("Unusual offsets VS position;Z [m];Offset [ns]");
+  histos[3]->SetTitle("Unusual offsets VS angle;#phi [#pi];Offset [ns]");
   
   // Plot output
   gStyle->SetOptStat(0);
@@ -133,6 +138,7 @@ int check_offsets(string fibre, int run, TH2D **output, const RAT::DU::PMTInfo& 
     output[0]->Fill(pmtid, offset);
     output[1]->Fill(crate, offset);
     output[2]->Fill(pmtpos.Z()/1e3, offset);
+    output[3]->Fill(pmtpos.Phi()/pi, offset);
     count++;
   }
   return count;
