@@ -38,7 +38,7 @@ void GetHotLimit(int*, int&);
 void GetMaxColVal(const TVector3&, int*, int, int&, int&, const RAT::DU::PMTInfo&);
 void FillHemisphere(const TVector3&, int*, int, TGraph**, TGraph2D*, int, int, const RAT::DU::PMTInfo&);
 void DrawCircle(const TVector3&, double, TVector3**, int);
-int FitPromptPeaks(int, TH2D*, int, int*, float*);
+int FitPromptPeaks(int, TH2D*, int, int*, float*, float*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 
 // Display vector as string
@@ -196,7 +196,7 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 
 }
 
-int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs) {
+int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs, float *output) {
 
   int npts = 0;
   TGraphErrors *gpmts = new TGraphErrors();
@@ -248,7 +248,8 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
     
     delete fitPMT;
     delete temp;
-  }
+    
+  } // PMT loop
     
   // Investigate PMTs with unusual offsets w.r.t. mean hit time
   string outfile = Form("logs/unusual_timing_%d.log", run);
@@ -265,7 +266,6 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
     }
   }
   fclose(out);
-  //delete out;
   
   // Fit line through all PMT hit times
   TF1 *fitSyst = new TF1("fitSyst", "pol1", 0, 24);
@@ -276,7 +276,8 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
   if (MORE_OUTPUT) {
       TCanvas *c = new TCanvas("c","",800,600);
       c->SetGrid();
-      gpmts->SetTitle("Angular systematic; Angle [deg]; Hit time [ns]");
+      string tstr = Form("Angular systematic (run %d); Angle [deg]; Hit time [ns]",run);
+      gpmts->SetTitle(tstr.c_str());
       gpmts->SetMarkerColor(4);
       gpmts->SetMarkerStyle(7);
       gpmts->Draw("AP");
@@ -287,8 +288,11 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
       delete c;
   }
   
-  // TODO - do something useful with the fit results!
-  
+  // Output fit results
+  output[0] = fitSyst->GetParameter(0);
+  output[1] = fitSyst->GetParameter(1);
+  output[2] = fitSyst->GetParError(0);
+  output[3] = fitSyst->GetParError(1);
   return 0;
   
 }

@@ -31,6 +31,7 @@
 
 // Run time parameters
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
+const int USE_RATDB = 1;    // whether to use RATDB to get fibre positions (1=yes)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
@@ -136,15 +137,37 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     const int NPMTS = pmtinfo.GetCount();
     
-    // Get RATDB tables
-    RAT::DB *db = RAT::DB::Get();
-    //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
-    
-    // Fibre installation parameters
-    RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
-    TVector3 fibrepos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
-    TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
-    TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
+    TVector3 fibrepos(0,0,0);
+    TVector3 fibredir(0,0,0);
+    TVector3 lightpos(0,0,0);
+    if (USE_RATDB) {
+      // Get fibre info (from RATDB) 
+      RAT::DB *db = RAT::DB::Get();
+      //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
+      RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
+      fibrepos.SetXYZ(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position of fibre [mm]
+      fibredir.SetXYZ(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction of fibre
+      lightpos = fibrepos + 2*fibrepos.Mag()*fibredir;                       // projected light spot centre
+      if (VERBOSE)  cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+    } else {
+      // Get fibre information (without using RATDB) 
+      string fibre_table = "Fibre_Positions_DocDB1730.csv";
+      ifstream tab(fibre_table.c_str());
+      if (!tab) { cerr<<"Failed to open "<<fibre_table<<endl; exit(1); }
+      string line, ff, fn;
+      double fx,fy,fz,fu,fv,fw;
+      getline(tab,line);      // header
+      while (tab.good()) {
+        tab >> ff >> fx >> fy >> fz >> fu >> fv >> fw >> fn;
+        if (!tab.good()) break;
+        if (ff==fibre) break;
+      }
+      if(ff!=fibre) { cerr << "Failed to find information for fibre " << fibre << endl; exit(1); }
+      fibrepos.SetXYZ(10*fx,10*fy,10*fz);                // position of fibre [mm]
+      fibredir.SetXYZ(fu,fv,fw);                         // direction of fibre
+      lightpos = fibrepos + 2*fibrepos.Mag()*fibredir;   // projected light spot centre 
+      if (VERBOSE) cout << "DocDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+    }
 
     // TELLIE fibre/trigger delays & Mark's PCA offsets
     ifstream del("TELLIE_delays.txt");
@@ -160,12 +183,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       if (!del.good()) break;
       if (num == run) break;
     }
-    
-    // Check output
-    if (VERBOSE) {
-      cout<<"RATDB: fibre "<<fibre<< ", position "<<printVector(fibrepos)<<" mm, direction: "<<printVector(fibredir)<<endl;
-      cout<<"TELLIE: trigger delay "<<trig_delay<<" ns, fibre delay "<<fibre_delay<<" ns, total offset "<<pca_offset<<" ns."<<endl;
-    }
+    if (VERBOSE) cout<<"TELLIE: trigger delay "<<trig_delay<<" ns, fibre delay "<<fibre_delay<<" ns, total offset "<<pca_offset<<" ns."<<endl;
     
     // Get fitted light position (from file)
     string fitfile = "../fibre_validation/TELLIE_FITRESULTS.txt";
@@ -233,7 +251,10 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     } // entry loop
     
     // Fit 1D Gaussian over PMT hit times (prompt peak)
-    if (FitPromptPeaks(run, htime, NPMTS, allpmts, angpmts)) return -999;
+    float fitgaus[4] = {0}; // fit results
+    if (FitPromptPeaks(run, htime, NPMTS, allpmts, angpmts, fitgaus)) return -999;
+    printf("\nRESULTS FOR FIT TIME: Constant ( %f +/- %f ) ns, Slope ( %f +/- %f ) ns/deg\n\n", fitgaus[0], fitgaus[2], fitgaus[1], fitgaus[3]);
+    // TODO - Replace times below with these fit results!
     
     // Central hit time (based on maximum bin)
     int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
