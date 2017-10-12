@@ -39,6 +39,7 @@
 
 // Global constants
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
+const int USE_RATDB = 1;    // whether to use RATDB to get fibre positions (1=yes)
 const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 const int NCOL = 20;        // number of colors (max. 50)
@@ -159,35 +160,35 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   const int NPMTS = pmtinfo.GetCount();
 
-  // Get fibre info (from RATDB) 
-  RAT::DB *db = RAT::DB::Get();
-  //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
-  RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
-  TVector3 fibrepos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
-  TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
-  TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
-  cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
-
-/*
-  // Get fibre information (without using RATDB) 
-  string fibre_table = "Fibre_Positions_DocDB1730.csv";
-  ifstream tab(fibre_table.c_str());
-  if (!tab) { cerr<<"Failed to open "<<fibre_table<<endl; exit(1); }
-  string line, ff, fn;
-  double fx,fy,fz,fu,fv,fw;
-  getline(tab,line);      // header
-  while (tab.good()) {
-    tab >> ff >> fx >> fy >> fz >> fu >> fv >> fw >> fn;
-    if (!tab.good()) break;
-    if (ff==fibre) break;
+  if (USE_RATDB) {
+    // Get fibre info (from RATDB) 
+    RAT::DB *db = RAT::DB::Get();
+    //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
+    RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
+    TVector3 fibrepos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
+    TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
+    TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
+    cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+  } else {
+    // Get fibre information (without using RATDB) 
+    string fibre_table = "Fibre_Positions_DocDB1730.csv";
+    ifstream tab(fibre_table.c_str());
+    if (!tab) { cerr<<"Failed to open "<<fibre_table<<endl; exit(1); }
+    string line, ff, fn;
+    double fx,fy,fz,fu,fv,fw;
+    getline(tab,line);      // header
+    while (tab.good()) {
+      tab >> ff >> fx >> fy >> fz >> fu >> fv >> fw >> fn;
+      if (!tab.good()) break;
+      if (ff==fibre) break;
+    }
+    if(ff!=fibre) { cerr << "Failed to find information for fibre " << fibre << endl; exit(1); }
+    //cout << Form("%s %f %f %f %f %f %f %s\n",ff.c_str(),fx,fy,fz,fu,fv,fw,fn.c_str()) << endl;
+    TVector3 fibrepos(10*fx,10*fy,10*fz); // position of fibre [mm]
+    TVector3 fibredir(fu,fv,fw); // direction of fibre
+    TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre 
+    cout << "DocDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
   }
-  if(ff!=fibre) { cerr << "Failed to find information for fibre " << fibre << endl; exit(1); }
-  //cout << Form("%s %f %f %f %f %f %f %s\n",ff.c_str(),fx,fy,fz,fu,fv,fw,fn.c_str()) << endl;
-  TVector3 fibrepos(10*fx,10*fy,10*fz); // position of fibre [mm]
-  TVector3 fibredir(fu,fv,fw); // direction of fibre
-  TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre 
-  cout << "DocDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
-*/
 
   // Initialise histograms
   TH2D *hicos = new TH2D("hicos","PMT positions",200,0,1,200,0,1); // icosahedral
