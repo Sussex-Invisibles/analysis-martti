@@ -254,6 +254,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     float fitgaus[4] = {0}; // fit results
     if (FitPromptPeaks(run, htime, NPMTS, allpmts, angpmts, fitgaus)) return -999;
     printf("\nRESULTS FOR FIT TIME: Constant ( %f +/- %f ) ns, Slope ( %f +/- %f ) ns/deg\n\n", fitgaus[0], fitgaus[2], fitgaus[1], fitgaus[3]);
+    float tx=fitgaus[0], ty=fitgaus[1], tex=fitgaus[2], tey=fitgaus[3];
+    TGraphErrors *gfitgaus = new TGraphErrors(1,&tx,&ty,&tex,&tey);
     // TODO - Replace times below with these fit results!
     
     // Central hit time (based on maximum bin)
