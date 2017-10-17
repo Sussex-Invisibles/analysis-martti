@@ -60,9 +60,9 @@ int main(int argc, char** argv) {
   for (int hdr=0; hdr<2; hdr++) {
     getline(in,line);      // header
   }
-  
   TH1D* temp = NULL;
   TH1D* hist[95] = {NULL};
+  //TGraphErrors* graph = new TGraphErrors();
   int nfiles=0;
   while (true) {
     in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
@@ -70,20 +70,10 @@ int main(int argc, char** argv) {
     if (TEST && TEST!=run) continue; // only want specified run
     temp = get_histo(fibre, run, IS_MC, TEST);
     if (!temp) continue;
-    /* No longer need comparison to mean value
-    float meanval=0.;
-    int nonzerobins=0;
-    for (int bin=1; bin<=temp->GetNbinsX()+1; bin++) { // no underflow/overflow bins
-      if (temp->GetBinContent(bin)==0) continue;
-      meanval += temp->GetBinContent(bin);
-      nonzerobins++;
-    }
-    meanval /= nonzerobins;
-    for (int bin=0; bin<temp->GetNbinsX()+2; bin++) {
-      temp->SetBinContent(bin, temp->GetBinContent(bin)-meanval);
-    }
-    */
     hist[nfiles] = temp;
+    // TODO - get fit results for PMT hit times
+    //graph->SetPoint(nfiles,tx,ty);
+    //graph->SetPointError(nfiles,tex,tey);
     nfiles++;
   }
   printf("Ran over %d files.\n",nfiles);

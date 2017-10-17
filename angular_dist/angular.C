@@ -113,13 +113,17 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   string outpath = Form("output/angular_%s.root",fibre.c_str());
   TFile *outfile = NULL;
   int totalnhit, count;
+  TH1D *hmeantime=NULL;
   TH1D *h1=NULL, *herr=NULL, *hcoarse=NULL, *hpmtseg=NULL;
   TH1D *h2_0=NULL, *h2_1=NULL, *h2_2=NULL, *h2_3=NULL, *h2_py=NULL;
   TH2D *h2=NULL;
+  TGraphErrors *pmtfits=NULL;
   if (scanned_file) {
     outfile = new TFile(outpath.c_str(),"READ");
     h1 = (TH1D*)outfile->Get("h1"); // Time vs angle
     h2 = (TH2D*)outfile->Get("h2"); // Time vs angle
+    pmtfits = (TGraphErrors*)outfile->Get("pmtfits"); // Fitted prompt peaks
+    hmeantime = (TH1D*)outfile->Get("hmeantime"); // Binned PMT times
     herr = (TH1D*)outfile->Get("herr"); // Error on mean time
     hpmtseg = (TH1D*)outfile->Get("hpmtseg"); // Number of PMTs in angular bin
     h2_0 = (TH1D*)outfile->Get("h2_0");  // Intensity
@@ -205,7 +209,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       if (fitpos.Mag()!=0) break;
     }
     TVector3 fitdir = (fitpos-fibrepos).Unit();
-    cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightpos)*180./pi << " deg deviation\n" << endl;
+    cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightpos)*180./pi << " deg deviation" << endl;
     
     // Initialise histograms
     const int NBINS = 30;
@@ -218,8 +222,11 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     float angpmts[NPMTS];
     memset( allpmts, 0, NPMTS*sizeof(int) );                  // NPMTS only known at runtime
     memset( angpmts, 0, NPMTS*sizeof(float) );                // NPMTS only known at runtime
-    TH2D *htime = new TH2D("htime","",NPMTS+1,0,NPMTS+1,600,0,600);    
+    TH2D *htime = new TH2D("htime","",NPMTS+1,0,NPMTS+1,600,0,600);
+    cout << "Looping over entries" << flush;
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
+      // Print progress
+      if (iEntry>0 && iEntry % (int)round(dsreader.GetEntryCount()/20.) == 0) cout << "." << flush;
       const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
       for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {            // mostly 1 event per entry
         const RAT::DS::EV& ev = ds.GetEV(iEv);
@@ -231,7 +238,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
           int pmtID = pmt.GetID();
           if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
           if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
-          if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA
+          if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA / ECA
           TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
           TVector3 track = pmtpos-fibrepos;
           double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
@@ -249,17 +256,55 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         } // pmt loop
       } // event loop
     } // entry loop
+    cout << " done." << endl;
     
     // Fit 1D Gaussian over PMT hit times (prompt peak)
     float fitgaus[4] = {0}; // fit results
-    if (FitPromptPeaks(run, htime, NPMTS, allpmts, angpmts, fitgaus)) return -999;
-    printf("\nRESULTS FOR FIT TIME: Constant ( %f +/- %f ) ns, Slope ( %f +/- %f ) ns/deg\n\n", fitgaus[0], fitgaus[2], fitgaus[1], fitgaus[3]);
-    float tx=fitgaus[0], ty=fitgaus[1], tex=fitgaus[2], tey=fitgaus[3];
-    TGraphErrors *gfitgaus = new TGraphErrors(1,&tx,&ty,&tex,&tey);
+    pmtfits = FitPromptPeaks(run, htime, NPMTS, allpmts, angpmts, fitgaus);
+    if (!pmtfits) { cout << "Error fitting PMT prompt peaks!" << endl; return -999; }
+    printf("RESULTS FOR FIT TIME: Constant ( %f +/- %f ) ns, Slope ( %f +/- %f ) ns/deg\n", 
+            fitgaus[0], fitgaus[1], fitgaus[2], fitgaus[3]);
+    //float tx=fitgaus[0], tex=fitgaus[1], ty=fitgaus[2], tey=fitgaus[3];
+    //TGraphErrors *gfitgaus = new TGraphErrors(1,&tx,&ty,&tex,&tey);
+    //return 0;
+    
+    // -----
+    
+    hmeantime = new TH1D("hmeantime","",24,0,24);
+    double *tx = pmtfits->GetX();
+    double *ty = pmtfits->GetY();
+    double *tex = pmtfits->GetEX();     // should be zero
+    double *tey = pmtfits->GetEY();
+    int tb, tn[24] = {0};
+    double tavg[24] = {0};
+    double terr[24] = {0};
+    // Loop over all PMTs in the graph and bin the data
+    for (int i=0; i<pmtfits->GetN(); i++) {
+      tb = (int)tx[i];                        // bin index (1 degree bins)
+      tn[tb]++;                               // number of PMTs in each bin
+      tavg[tb] += ty[i];                      // sum of hit times
+      terr[tb] += tey[i]*tey[i];              // sum of errors squared
+    }
+    // Loop over each bin to get the average and propagated error
+    for (int j=0; j<24; j++) {
+      if (tn[j]==0) continue;                 // no PMTs in this bin
+      tavg[j] /= tn[j];                       // average hit time for this bin
+      terr[j] = sqrt(terr[j]/=tn[j]);         // propagated error
+      printf("Bin %2d, Hit time %8.3lf ns, error %8.3lf ns.\n",j,tavg[j],terr[j]);
+      hmeantime->SetBinContent(j+1,tavg[j]);
+      hmeantime->SetBinError(j+1,terr[j]);
+    }
+    
+    
+    // -----
+    
+    
+    
     // TODO - Replace times below with these fit results!
     
-    // Central hit time (based on maximum bin)
-    int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
+    // Central hit time for 2D plot
+    //int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
+    int commontime = round(fitgaus[0] + fibre_delay + trig_delay - pca_offset);
     commontime += 5/2;              // intermediate step
     commontime -= commontime % 5;   // rounded to the nearest multiple of 5
     if (VERBOSE) printf("Most common hit time: %d ns\n",commontime);
@@ -332,8 +377,6 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       h2_2->SetBinContent(b, h2_py->GetRMS());  // overwrite Gaussian sigma with RMS
       h2_2->SetBinError(b, h2_py->GetRMSError());  // overwrite Gaussian sigma error with RMS error
       herr->SetBinContent(b, h2_py->GetMeanError()); // not *quite* the same as error on Gaussian mean
-      //if (VERBOSE) printf("#%2d %10.6f %10.6f\n",b,h2_1->GetBinError(b),h2_py->GetMeanError());
-      //if (VERBOSE) printf("#%2d %.4f %6.2f %6.2f\n",b,h1->GetBinCenter(b),h1->GetBinContent(b),h1->GetBinError(b));
       if (h1->GetBinCenter(b)>0 && h1->GetBinCenter(b)<30) {  // within 30 deg cone
         avgmean += h2_1->GetBinContent(b);
         avgdev += h2_2->GetBinContent(b);
@@ -360,7 +403,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       }
     }
     
-    // Write all histograms to file
+    // Write all objects to file
+    pmtfits->Write("pmtfits");
     outfile->Write();
   }
  
@@ -398,6 +442,14 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   // Mean
   pad1->cd()->SetGrid();
   pad1->SetLeftMargin(0.12);
+  pmtfits->SetTitle("Fitted PMT hit times (prompt peaks);Angle [deg];Time [ns]");
+  //pad1->DrawFrame(0,-5,24,5);
+  pmtfits->SetMarkerColor(4);
+  pmtfits->SetMarkerStyle(6);
+  pmtfits->Draw("AP same");
+  pmtfits->GetXaxis()->SetTitleOffset(1.2);
+  pmtfits->GetYaxis()->SetTitleOffset(1.5);
+  /*
   h2_1->SetTitle("Mean hit time;Angle [deg];Time [ns]");
   h2_1->SetLineWidth(2);
   h2_1->Draw();
@@ -413,7 +465,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     if (maxval<val) maxval=val;
   }
   h2_1->GetYaxis()->SetRangeUser(0.75*minval, 1.25*maxval);
-  //h2_1->GetYaxis()->SetRangeUser(0,10);
+  */
   
   // Sum
   pad2->cd()->SetGrid();
@@ -433,16 +485,50 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   
   // RMS
   pad3->cd()->SetGrid();
+  pad3->DrawFrame(0,190,24,195,"Binned PMT data;Angle [deg];Time [ns]");
+  hmeantime->SetLineWidth(2);
+  hmeantime->Draw("same");
+  hmeantime->GetXaxis()->SetTitleOffset(1.2);
+  hmeantime->GetYaxis()->SetTitleOffset(1.7);
+  float minval = hmeantime->GetMaximum();
+  float maxval = hmeantime->GetMinimum();
+  float val;
+  for (int b=1; b<=30; b++) { 
+    val = hmeantime->GetBinContent(b);
+    if (val==0.) continue;
+    if (minval>val) minval=val;
+    if (maxval<val) maxval=val;
+  }
+  hmeantime->GetYaxis()->SetRangeUser(0.75*minval, 1.25*maxval);
+  /*
   h2_2->SetTitle("RMS hit time;Angle [deg];Time [ns]");
   h2_2->SetLineWidth(2);
   h2_2->Draw();
   h2_2->GetXaxis()->SetTitleOffset(1.2);
   h2_2->GetYaxis()->SetTitleOffset(1.4);
   h2_2->GetYaxis()->SetRangeUser(3.8, 6.2);
- 
-  // Error on mean
+  */
+  
   pad4->cd()->SetGrid();
   pad4->SetLeftMargin(0.2);   // for axis label
+  h2_1->SetTitle("Mean hit time;Angle [deg];Time [ns]");
+  h2_1->SetLineWidth(2);
+  h2_1->Draw();
+  h2_1->GetXaxis()->SetTitleOffset(1.2);
+  h2_1->GetYaxis()->SetTitleOffset(1.7);
+  float minval1 = h2_1->GetMaximum();
+  float maxval1 = h2_1->GetMinimum();
+  for (int b=1; b<=30; b++) { 
+    val = h2_1->GetBinContent(b);
+    if (val==0.) continue;
+    if (minval1>val) minval1=val;
+    if (maxval1<val) maxval1=val;
+  }
+  h2_1->GetYaxis()->SetRangeUser(0.75*minval1, 1.25*maxval1);
+  
+  // Error on mean
+  pad5->cd()->SetGrid();
+  pad5->SetLeftMargin(0.2);   // for axis label
   herr->SetTitle("Error on mean hit time;Angle [deg];#Delta t_{mean} [ns]");
   herr->SetLineWidth(2);
   herr->Draw();
@@ -451,6 +537,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   herr->GetYaxis()->SetRangeUser(0, 0.1);
 
   // Chisquare/NDOF
+  /*
   pad5->cd()->SetGrid();
   pad5->SetLogy();
   h2_3->SetTitle("Gaussian fit #chi^{2}/ndof;Angle [deg];");
@@ -458,7 +545,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_3->Draw();
   h2_3->GetXaxis()->SetTitleOffset(1.2);
   h2_3->GetYaxis()->SetRangeUser(0.5, 500);
-
+  */
+  
   // Save canvas and close
   string imgfile = "angular";
   if (!TEST) imgfile = Form("images/angular_%s",fibre.c_str());

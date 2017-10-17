@@ -38,7 +38,7 @@ void GetHotLimit(int*, int&);
 void GetMaxColVal(const TVector3&, int*, int, int&, int&, const RAT::DU::PMTInfo&);
 void FillHemisphere(const TVector3&, int*, int, TGraph**, TGraph2D*, int, int, const RAT::DU::PMTInfo&);
 void DrawCircle(const TVector3&, double, TVector3**, int);
-int FitPromptPeaks(int, TH2D*, int, int*, float*, float*);
+TGraphErrors* FitPromptPeaks(int, TH2D*, int, int*, float*, float*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 
 // -----------------------------------------------------------------------------
@@ -178,7 +178,7 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 }
 
 // -----------------------------------------------------------------------------
-int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs, float *output) {
+TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs, float *output) {
 
   int npts = 0;
   TGraphErrors *gpmts = new TGraphErrors();
@@ -187,8 +187,15 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
   memset( y,  0, NPMTS*sizeof(double) );
   memset( ex, 0, NPMTS*sizeof(double) );
   memset( ey, 0, NPMTS*sizeof(double) );
-
+  
+  TCanvas *c0 = NULL;
+  cout << "Fitting PMT prompt peaks" << flush;
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
+  
+    // Print progress
+    if (iPMT>0 && iPMT % (int)round(NPMTS/20.) == 0) cout << "." << flush;
+    
+    // Reject PMTs outside ROI
     if (pmthits[iPMT]<2000) continue;  // only consider PMTs with >1% occupancy
     if (pmtangs[iPMT]>24) continue;    // only consider PMTs within nominal aperture (12 deg)
     TH1D *temp = htime->ProjectionY("temp",iPMT,iPMT+1,"");
@@ -200,9 +207,11 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
     while(temp->GetBinContent(hibin) > 0.2*temp->GetMaximum()) hibin++;
     
     // Fit 1D Gaussian to each slice to get prompt hit time
+    c0 = new TCanvas("c0","",800,600);  // suppress default Canvas creation
     TF1 *fitPMT = new TF1("fitPMT", "gaus", temp->GetBinLowEdge(lobin), temp->GetBinLowEdge(hibin+1));
     fitPMT->SetParameters(temp->GetMaximum(), temp->GetBinCenter(htime->GetMaximumBin()), temp->GetRMS());
     temp->Fit("fitPMT","R,q");
+    c0->Close();
     
     // Investigate individual PMTs
     if (MORE_OUTPUT) {
@@ -231,6 +240,8 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
     delete temp;
     
   } // PMT loop
+  cout << " done." << endl;
+  if (c0) delete c0;
     
   // Investigate PMTs with unusual offsets w.r.t. mean hit time
   string outfile = Form("logs/unusual_timing_%d.log", run);
@@ -249,10 +260,13 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
   fclose(out);
   
   // Fit line through all PMT hit times
+  TCanvas *c = new TCanvas("c","",800,600);
   TF1 *fitSyst = new TF1("fitSyst", "pol1", 0, 24);
   fitSyst->SetParameters(meanhittime, 0); // assume flat line at mean as prior
   gpmts->Fit("fitSyst", "R,q"); // force range, quiet mode
-  cout << "Parametrised systematic: y = " << fitSyst->GetParameter(0) << " + " << fitSyst->GetParameter(1) << "*x" << endl;
+  cout << "Parametrised angular systematic: Hit time [ns] = " << fitSyst->GetParameter(0) << " + " << fitSyst->GetParameter(1) << " * angle [deg]" << endl;
+  c->Close();
+  if (c) delete c;
   
   if (MORE_OUTPUT) {
       TCanvas *c = new TCanvas("c","",800,600);
@@ -271,10 +285,10 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
   
   // Output fit results
   output[0] = fitSyst->GetParameter(0);
-  output[1] = fitSyst->GetParameter(1);
-  output[2] = fitSyst->GetParError(0);
+  output[1] = fitSyst->GetParError(0);
+  output[2] = fitSyst->GetParameter(1);
   output[3] = fitSyst->GetParError(1);
-  return 0;
+  return gpmts;
   
 }
 
