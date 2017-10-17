@@ -32,6 +32,7 @@ const double n_water = 1.33772;           // at 500 nm -> http://www.philiplaven
 const double c_water = c_vacuum/n_water;  // mm/ns
 
 // Initialise functions
+void printProgress(int, int);
 string printVector(const TVector3&);
 void GetRotationAngles(const TVector3&, double&, double&);
 void GetHotLimit(int*, int&);
@@ -40,6 +41,22 @@ void FillHemisphere(const TVector3&, int*, int, TGraph**, TGraph2D*, int, int, c
 void DrawCircle(const TVector3&, double, TVector3**, int);
 TGraphErrors* FitPromptPeaks(int, TH2D*, int, int*, float*, float*);
 void FitLightSpot(TGraph2D*, double, double, double*);
+
+// -----------------------------------------------------------------------------
+// Display progress within a loop
+void printProgress(int it, int n) {
+  float prog = (float)it/n;
+  int barWidth = 100;
+  cout << "[";
+  int pos = barWidth * prog;
+  for (int i=0; i<barWidth; ++i) {
+    if (i < pos)                cout << "=";
+    else if (pos+1 == barWidth) cout << "=";
+    else if (i == pos)          cout << ">";
+    else                        cout << " ";
+  }
+  cout << "] " << int(100.*prog) << "%\r" << flush;
+}
 
 // -----------------------------------------------------------------------------
 // Display vector as string
@@ -189,11 +206,9 @@ TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, floa
   memset( ey, 0, NPMTS*sizeof(double) );
   
   TCanvas *c0 = NULL;
-  cout << "Fitting PMT prompt peaks" << flush;
+  cout << "Fitting PMT prompt peaks..." << endl;
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
-  
-    // Print progress
-    if (iPMT>0 && iPMT % (int)round(NPMTS/20.) == 0) cout << "." << flush;
+    if (iPMT % (int)round(NPMTS/100.) == 0) printProgress(iPMT, NPMTS);
     
     // Reject PMTs outside ROI
     if (pmthits[iPMT]<2000) continue;  // only consider PMTs with >1% occupancy
@@ -240,7 +255,7 @@ TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, floa
     delete temp;
     
   } // PMT loop
-  cout << " done." << endl;
+  cout << endl;
   if (c0) delete c0;
     
   // Investigate PMTs with unusual offsets w.r.t. mean hit time

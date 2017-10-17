@@ -223,10 +223,12 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     memset( allpmts, 0, NPMTS*sizeof(int) );                  // NPMTS only known at runtime
     memset( angpmts, 0, NPMTS*sizeof(float) );                // NPMTS only known at runtime
     TH2D *htime = new TH2D("htime","",NPMTS+1,0,NPMTS+1,600,0,600);
-    cout << "Looping over entries" << flush;
+    cout << "Looping over entries..." << endl;
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
       // Print progress
-      if (iEntry>0 && iEntry % (int)round(dsreader.GetEntryCount()/20.) == 0) cout << "." << flush;
+      if (iEntry % (int)round(dsreader.GetEntryCount()/100.) == 0) {
+        printProgress(iEntry, dsreader.GetEntryCount());
+      }
       const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
       for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {            // mostly 1 event per entry
         const RAT::DS::EV& ev = ds.GetEV(iEv);
@@ -256,7 +258,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         } // pmt loop
       } // event loop
     } // entry loop
-    cout << " done." << endl;
+    cout << endl;
     
     // Fit 1D Gaussian over PMT hit times (prompt peak)
     float fitgaus[4] = {0}; // fit results
@@ -290,17 +292,17 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       if (tn[j]==0) continue;                 // no PMTs in this bin
       tavg[j] /= tn[j];                       // average hit time for this bin
       terr[j] = sqrt(terr[j]/=tn[j]);         // propagated error
-      printf("Bin %2d, Hit time %8.3lf ns, error %8.3lf ns.\n",j,tavg[j],terr[j]);
+      //printf("Bin %2d, Hit time %8.3lf ns, error %8.3lf ns.\n",j,tavg[j],terr[j]);
       hmeantime->SetBinContent(j+1,tavg[j]);
       hmeantime->SetBinError(j+1,terr[j]);
     }
     
+    // TODO - Replace times below with these fit results!
     
     // -----
     
+    // TODO - Update plots!
     
-    
-    // TODO - Replace times below with these fit results!
     
     // Central hit time for 2D plot
     //int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
