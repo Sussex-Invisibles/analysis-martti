@@ -18,7 +18,7 @@
 using namespace std;
 
 // Run time parameters
-const int MORE_OUTPUT = 1;
+const int MORE_OUTPUT = 0;                // additional plots for testing
 
 // Global constants
 const double pi = TMath::Pi();
@@ -27,9 +27,9 @@ const TVector3 e2(0,1,0);
 const TVector3 e3(0,0,1);
 
 // Physical constants
-const double c_vacuum = 299.792458;        // mm/ns (detector units)
-const double n_water = 1.33772;            // at 500 nm -> http://www.philiplaven.com/p20.html
-const double c_water = c_vacuum/n_water;   // mm/ns
+const double c_vacuum = 299.792458;       // mm/ns (detector units)
+const double n_water = 1.33772;           // at 500 nm -> http://www.philiplaven.com/p20.html
+const double c_water = c_vacuum/n_water;  // mm/ns
 
 // Initialise functions
 string printVector(const TVector3&);
@@ -41,6 +41,7 @@ void DrawCircle(const TVector3&, double, TVector3**, int);
 int FitPromptPeaks(int, TH2D*, int, int*, float*, float*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 
+// -----------------------------------------------------------------------------
 // Display vector as string
 string printVector(const TVector3& v) {
   string out;
@@ -49,8 +50,10 @@ string printVector(const TVector3& v) {
   return out.c_str();
 }
 
+// -----------------------------------------------------------------------------
 // Rotate from given direction (z') to xyz-frame
 void GetRotationAngles(const TVector3& vec, double &rot_Z, double &rot_X) {
+
   // Get rotation angle from z-axis to central direction
   rot_Z = acos(e3*(vec.Unit()));         // rotate counter-clockwise, towards x-axis by [0,pi]
   
@@ -62,8 +65,9 @@ void GetRotationAngles(const TVector3& vec, double &rot_Z, double &rot_X) {
   rot_X = sign*acos(e1*(vect.Unit()));   // rotate around z-axis by [-pi,pi]
 }
 
+// -----------------------------------------------------------------------------
 // Get maximum allowed hits/PMT before qualifying as hot PMT
-void GetHotLimit(int* pmthitcount, int NPMTS, int &maxnhit) { 
+void GetHotLimit(int* pmthitcount, int NPMTS, int &maxnhit) {
   const int NBINS = 100;
   int MAX_NHIT = *max_element(pmthitcount,pmthitcount+NPMTS);   // hottest PMT
   TH1F *hCount = new TH1F("hCount","",NBINS,0.,log10(MAX_NHIT+1.));
@@ -74,21 +78,13 @@ void GetHotLimit(int* pmthitcount, int NPMTS, int &maxnhit) {
   int i = hCount->GetMaximumBin(); // start at max. bin
   while (hCount->GetBinContent(i) > 1) i++;
   maxnhit = (int)round(pow(10.,hCount->GetBinLowEdge(i)));
-  /*
-  TCanvas *c1 = new TCanvas();
-  c1->SetGrid();
-  c1->SetLogy();
-  hCount->Draw();
-  c1->Print("hitcount.png");
-  c1->Close();
-  */
   if (hCount) delete hCount;
 }
 
+// -----------------------------------------------------------------------------
 // Get maximum nhit values within both hemispheres, excluding hot PMTs
 void GetMaxColVal(const TVector3& center, int* pmthitcount, int NPMTS, int &nearval, int &farval, const RAT::DU::PMTInfo& pmtinfo) {
   const int NBINS = 1e3;
-  //int MAX_NHIT = *max_element(pmthitcount,pmthitcount+NPMTS);   // hottest PMT
   int hotlimit;
   GetHotLimit(pmthitcount, NPMTS, hotlimit);
   TH1F *hNear = new TH1F("hNear","",NBINS,0,hotlimit);
@@ -98,7 +94,7 @@ void GetMaxColVal(const TVector3& center, int* pmthitcount, int NPMTS, int &near
     pmtpos = pmtinfo.GetPosition(id);
     if (pmtpos.Mag()==0) continue;              // not a valid PMT position
     if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT
-    if (pmthitcount[id] > hotlimit) continue;	// hot PMT
+    if (pmthitcount[id] > hotlimit) continue;	  // hot PMT
     if (center.Angle(pmtpos) <= pi/15.)         // narrow cone around central point
       hNear->Fill(pmthitcount[id]);
     else if (center.Angle(pmtpos) >= pi*14/15.) // same around opposite side
@@ -107,26 +103,13 @@ void GetMaxColVal(const TVector3& center, int* pmthitcount, int NPMTS, int &near
   int j=1, k=1;
   while (hNear->Integral(1,j)/hNear->Integral(1,NBINS) < 0.99) j++;
   while (hFar->Integral(1,k)/hFar->Integral(1,NBINS) < 0.99) k++;
-  //while (hNear->GetBinContent(j) > hNear->GetEntries()/1.e3) j++;
-  //while (hFar->GetBinContent(k) > hFar->GetEntries()/1.e3) k++;
   nearval = hNear->GetXaxis()->GetBinCenter(j);
   farval = hFar->GetXaxis()->GetBinCenter(k);
-  /*  
-  TCanvas *c1 = new TCanvas();
-  c1->Divide(2,1);
-  c1->cd(1)->SetGrid();
-  c1->cd(1)->SetLogy();
-  hNear->Draw();
-  c1->cd(2)->SetGrid();
-  c1->cd(2)->SetLogy();
-  hFar->Draw();
-  c1->Print(Form("test_z=%d.png",(int)center.Z()));
-  c1->Close();
-  */
   if(hNear) delete hNear;
   if(hFar) delete hFar;
 }
 
+// -----------------------------------------------------------------------------
 // Create detector view from above central point
 void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph** dots, TGraph2D* graph, int NCOL, int MAXVAL, const RAT::DU::PMTInfo& pmtinfo) {
   
@@ -160,7 +143,7 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
     newpos.RotateZ(-rot_X);
     newpos.RotateY(-rot_Z);
 
-    // Fill graph
+    // Fill array of 1D graphs (TODO - bad practice)
     int step = (int)TMath::Ceil(pmthitcount[id]/(1.*MAXVAL/NCOL))+1;
     if (pmthitcount[id] >= MAXVAL) step = NCOL+1;   // cap color range
     if (pmthitcount[id] >= HOTLIMIT) step = 0;      // hot PMT
@@ -171,15 +154,13 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
     
     // Fill 2D graph (more effective?)
     if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT (remove OWLEs)
-    if (pmthitcount[id]==0 || pmthitcount[id]>HOTLIMIT) continue;  // hot/off PMT
+    if (pmthitcount[id] == 0) continue;         // off PMT
+    if (pmthitcount[id] > HOTLIMIT) continue;   // hot PMT
     if (newpos.Z() <= 0) continue;              // not in hemisphere (safety check)
     double xpt = newpos.X()/1e3;//*cos(pi/4)/cos(newpos.Theta());
     double ypt = newpos.Y()/1e3;//*cos(pi/4)/cos(newpos.Theta());
-    //if(fabs(xpt)>10 || fabs(ypt)>10) continue;
     graph->SetPoint(counter, xpt, ypt, pmthitcount[id]);
     counter++;
-    //for (int n=0; n<pmthitcount[id]; n++) 
-    //  hist->Fill(newpos.X()/1e3*cos(pi/4)/cos(newpos.Theta()), newpos.Y()/1e3*cos(pi/4)/cos(newpos.Theta()));
   }
 
   for (int s=0; s<NCOL+2; s++) {
@@ -196,6 +177,7 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 
 }
 
+// -----------------------------------------------------------------------------
 int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs, float *output) {
 
   int npts = 0;
@@ -222,20 +204,19 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
     fitPMT->SetParameters(temp->GetMaximum(), temp->GetBinCenter(htime->GetMaximumBin()), temp->GetRMS());
     temp->Fit("fitPMT","R,q");
     
-    /*
     // Investigate individual PMTs
-    if (fitPMT->GetParameter(1) > 200) {
-      TCanvas *c = new TCanvas("c","",800,600);
-      c->SetGrid();
-      temp->Draw("");
-      temp->Fit("fitPMT","R,q");
-      c->Print("angular_singlepmt.png");
-      c->Print("angular_singlepmt.pdf");
-      c->Close();
-      delete c;
-      return 1;
+    if (MORE_OUTPUT) {
+      if (fitPMT->GetParameter(1) > 200) {
+        TCanvas *c = new TCanvas("c","",800,600);
+        c->SetGrid();
+        temp->Draw("");
+        temp->Fit("fitPMT","R,q");
+        c->Print("angular_singlepmt.png");
+        c->Print("angular_singlepmt.pdf");
+        c->Close();
+        if (c) delete c;
+      }
     }
-    */
     
     // Fill fitted hit times vs. angle into graph
     x[iPMT]  = pmtangs[iPMT];
@@ -297,6 +278,7 @@ int FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs
   
 }
 
+// -----------------------------------------------------------------------------
 void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   // Get input graph entries
   int npts = graph->GetN();
@@ -375,29 +357,31 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   params[2] = sy;     // mu_y
   params[3] = sigma;  // sigma
   
-  /*
   // Plot fit results (for testing purposes only)
-  gStyle->SetOptStat(0);
-  TCanvas *c = new TCanvas("","",800,800);
-  c->SetGrid();
-  TH3F *hempty = new TH3F("hempty","",10,-10,10,10,-10,10,10,0,maxval+1);
-  hempty->Draw("");             // empty histogram for plot range
-  //c->SetTheta(90-0.001);      // view from above
-  //c->SetPhi(0+0.001);         // no x-y rotation
-  graf->SetMarkerStyle(8);
-  graf->Draw("pcol,same");
-  fit->Draw("surf,same");
-  string name = Form("fit_%d.png",(int)cone);
-  c->Print(name.c_str());
-  c->Close();
-  if (hempty) delete hempty;
-  if (c) delete c;
-  */
+  if (MORE_OUTPUT) {
+    gStyle->SetOptStat(0);
+    TCanvas *c = new TCanvas("","",800,800);
+    c->SetGrid();
+    TH3F *hempty = new TH3F("hempty","",10,-10,10,10,-10,10,10,0,maxval+1);
+    hempty->Draw("");             // empty histogram for plot range
+    //c->SetTheta(90-0.001);      // view from above
+    //c->SetPhi(0+0.001);         // no x-y rotation
+    graf->SetMarkerStyle(8);
+    graf->Draw("pcol,same");
+    fit->Draw("surf,same");
+    string name = Form("fit_%d.png",(int)cone);
+    c->Print(name.c_str());
+    c->Close();
+    if (hempty) delete hempty;
+    if (c) delete c;
+  }
   
   if (graf) delete graf;
   if (fit) delete fit;
 }
 
+// -----------------------------------------------------------------------------
+// Draw a circle around a point in a plane orthogonal to an angle with N dots
 void DrawCircle(const TVector3& center, double angle, TVector3** dots, int NDOTS) {
   TVector3 dot(0,0,0);
   for (int i=0; i<NDOTS; i++) {
@@ -414,12 +398,12 @@ void DrawCircle(const TVector3& center, double angle, TVector3** dots, int NDOTS
 // ***********************
 // This code lazily copied from $RATROOT/src/calib/quality/DataQualityProc.hh
 // after failing to access it directly - do not modify!
+// -----------------------------------------------------------------------------
 namespace func{
 
   // Vectors For PSUP Projection
   double fa = 1.0 / 5.5;
   double fb = fa * sqrt( 3.0 ) / 2.0;
-
   TVector2 *fA12a = new TVector2( fa / 2.0, 0.0 );
   TVector2 *fA12b = new TVector2( 3.0 * fa / 2.0, 0.0 );
   TVector2 *fA12c = new TVector2( 5.0 * fa / 2.0, 0.0 );
@@ -443,6 +427,7 @@ namespace func{
   TVector2 *fA58 = new TVector2( 5.0 * fa / 2.0 , 2.0 * fb );
   TVector2 *fA54 = new TVector2( 7.0 * fa / 2.0 , 2.0 * fb );
 
+  // ---------------------------------------------------------------------------
   TVector2 TransformCoord( const TVector3& V1, const TVector3& V2, const TVector3& V3, const TVector2& A1, const TVector2& A2, const TVector2& A3,const TVector3& P ) {
     TVector3 xV = V2 - V1;
     TVector3 yV = ( ( V3 - V1 ) + ( V3 - V2 ) ) * 0.5;
@@ -465,6 +450,7 @@ namespace func{
     return result;
   };
 
+  // ---------------------------------------------------------------------------
   TVector2 IcosProject( TVector3 pmtPos , int &segment ) {
     TVector3 pointOnSphere( pmtPos.X(), pmtPos.Y(), pmtPos.Z() );
     pointOnSphere = pointOnSphere.Unit();
@@ -588,6 +574,7 @@ namespace func{
     return TVector2(1.0 - resultPosition.X(), 1.0 - 2.0 * resultPosition.Y() );
   };
   
+  // ---------------------------------------------------------------------------
   void ReverseXAxis (TH1 *h) {
      // Remove the current axis
      h->GetXaxis()->SetLabelOffset(999);
@@ -606,6 +593,7 @@ namespace func{
      newaxis->Draw();
   };
 
+  // ---------------------------------------------------------------------------
   void ReverseYAxis (TH1 *h) {
      // Remove the current axis
      h->GetYaxis()->SetLabelOffset(999);
@@ -624,4 +612,4 @@ namespace func{
      newaxis->Draw();
   };
   
-};
+}; // end of namespace func
