@@ -26,8 +26,8 @@
 #include <RAT/DU/Utility.hh>
 
 // Helper functions
-#include "../fibre_validation/HelperFunc.C"
-#include "../fibre_validation/Xianguo.C"
+#include "../HelperFunc.C"
+#include "../Xianguo.C"
 
 // Run time parameters
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)

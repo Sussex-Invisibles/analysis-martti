@@ -34,8 +34,8 @@
 #include "RAT/DS/MC.hh"
 
 // Helper functions
-#include "HelperFunc.C"
-#include "Xianguo.C"
+#include "../HelperFunc.C"
+#include "../Xianguo.C"
 
 // Global constants
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
