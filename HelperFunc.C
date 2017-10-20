@@ -55,7 +55,7 @@ void printProgress(int it, int n) {
     else if (i == pos)          cout << ">";
     else                        cout << " ";
   }
-  cout << "] " << int(100.*prog) << "%\r" << flush;
+  cout << "] " << (int)round(100.*prog) << "%\r" << flush;
 }
 
 // -----------------------------------------------------------------------------

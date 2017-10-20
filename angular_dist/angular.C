@@ -226,7 +226,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     cout << "Looping over entries..." << endl;
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
       // Print progress
-      if (iEntry % (int)round(dsreader.GetEntryCount()/100.) == 0) {
+      if (iEntry % int(dsreader.GetEntryCount()/100.) == 0) {
         printProgress(iEntry, dsreader.GetEntryCount());
       }
       const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
