@@ -15,7 +15,12 @@
 #include <TROOT.h>
 #include <TVector2.h>
 #include <TVector3.h>
-using namespace std;
+
+// Include frequently used functions from 'std' (entire namespace is bad practice)
+using std::cerr;
+using std::cout;
+using std::endl;
+using std::flush;
 
 // Run time parameters
 const int MORE_OUTPUT = 0;                // additional plots for testing
@@ -43,10 +48,10 @@ TGraphErrors* FitPromptPeaks(int, TH2D*, int, int*, float*, float*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 
 // -----------------------------------------------------------------------------
-// Display progress within a loop
+// Display progress bar within a loop (can't have any other output in loop!)
 void printProgress(int it, int n) {
   float prog = (float)it/n;
-  int barWidth = 100;
+  int barWidth = 70;
   cout << "[";
   int pos = barWidth * prog;
   for (int i=0; i<barWidth; ++i) {
@@ -86,7 +91,7 @@ void GetRotationAngles(const TVector3& vec, double &rot_Z, double &rot_X) {
 // Get maximum allowed hits/PMT before qualifying as hot PMT
 void GetHotLimit(int* pmthitcount, int NPMTS, int &maxnhit) {
   const int NBINS = 100;
-  int MAX_NHIT = *max_element(pmthitcount,pmthitcount+NPMTS);   // hottest PMT
+  int MAX_NHIT = *std::max_element(pmthitcount,pmthitcount+NPMTS);   // hottest PMT
   TH1F *hCount = new TH1F("hCount","",NBINS,0.,log10(MAX_NHIT+1.));
   for(int id=0; id<NPMTS; id++) {
     if (pmthitcount[id]==0) continue; 
@@ -263,7 +268,7 @@ TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, floa
   FILE *out = fopen(outfile.c_str(),"w");
   double meanhittime = gpmts->GetMean(2);
   double rmshittime = gpmts->GetRMS(2);
-  fprintf(out,"# Mean %.1lf ns, RMS %.1lf ns. PMTs with unusually high offsets (>3*RMS):\n",run,meanhittime,rmshittime);
+  fprintf(out,"# Mean %.1lf ns, RMS %.1lf ns. PMTs with unusually high offsets (>3*RMS):\n",meanhittime,rmshittime);
   fprintf(out,"# PmtId Offset[ns]\n");
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
     if (x[iPMT]==0 && y[iPMT]==0) continue;
@@ -504,7 +509,7 @@ namespace func{
     // {17, 33, 51}, {17, 51, 37}, {37, 51, 54}, {58, 54, 51}, {58, 46, 54}, {58, 31, 46},
     // {58, 33, 31}, {58, 51, 33}}
 
-    vector<TVector3> IcosahedralCentres;
+    std::vector<TVector3> IcosahedralCentres;
     IcosahedralCentres.push_back( ( V2 + V6 + V17 ) * ( 1.0 / 3.0 ) );
     IcosahedralCentres.push_back( ( V2 + V12 + V6 ) * ( 1.0 / 3.0 ) );
     IcosahedralCentres.push_back( ( V2 + V17 + V37 ) * ( 1.0 / 3.0 ) );
@@ -528,7 +533,7 @@ namespace func{
     IcosahedralCentres.push_back( ( V58 + V33 + V31 ) * ( 1.0 / 3.0 ) );
     IcosahedralCentres.push_back( ( V58 + V51 + V33 ) * ( 1.0 / 3.0 ) );
 
-    vector<double> distFromCentre;
+    std::vector<double> distFromCentre;
     unsigned int uLoop;
     for( uLoop = 0; uLoop < IcosahedralCentres.size(); uLoop++ ){
       distFromCentre.push_back( ( IcosahedralCentres[uLoop] - pointOnSphere ).Mag() );
