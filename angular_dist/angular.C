@@ -213,15 +213,15 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightpos)*180./pi << " deg deviation" << endl;
     
     // Initialise histograms
-    const int NBINS = 30;
-    const int MAXANG = 30;
+    const int NBINS = 24;
+    const int MAXANG = 24;
     hcoarse = new TH1D("hcoarse",fibre.c_str(),300,-100,200);
     hpmtseg = new TH1D("hpmtseg",fibre.c_str(),NBINS,0,MAXANG);
     
     // First iteration: Get average hit time and number of PMTs in each segment
-    int hitpmts=0, allpmts[NPMTS];
-    float angpmts[NPMTS];
-    memset( allpmts, 0, NPMTS*sizeof(int) );                  // NPMTS only known at runtime
+    int nevents=0, hitpmts=0;
+    float allpmts[NPMTS], angpmts[NPMTS];
+    memset( allpmts, 0, NPMTS*sizeof(float) );                // NPMTS only known at runtime
     memset( angpmts, 0, NPMTS*sizeof(float) );                // NPMTS only known at runtime
     TH2D *htime = new TH2D("htime","",NPMTS+1,0,NPMTS+1,600,-300,300);
     cout << "Looping over entries..." << endl;
@@ -235,6 +235,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         const RAT::DS::EV& ev = ds.GetEV(iEv);
         int trig = ev.GetTrigType();
         if (!(trig & 0x8000)) continue;                       // EXT trigger only
+        nevents++;
         const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
         for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
           RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
@@ -245,22 +246,30 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
           TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
           TVector3 track = pmtpos-fibrepos;
           double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
+          double angle = theta*180./pi;                       // angle w.r.t. fibre [deg]
           double pmttime = pmt.GetTime();                     // hit time [ns]
           double corr = track.Mag()/c_water;                  // light travel time [ns]
           double offset = pmttime-corr+fibre_delay+trig_delay;
+          if (angle > MAXANG) continue;
           hcoarse->Fill(offset-pca_offset);   // total offset minus PCA offset
           //htime->Fill(pmtID, pmttime-corr);   // corrected hit time vs PMT ID
           htime->Fill(pmtID, offset-pca_offset);  // corrected hit time vs PMT ID
           if (allpmts[pmtID]==0) {            // fill angles only once per PMT
-            hpmtseg->Fill(theta*180./pi);
-            angpmts[pmtID] = theta*180./pi;
+            hpmtseg->Fill(angle);
+            angpmts[pmtID] = angle;
           }
-          allpmts[pmtID]++;
+          allpmts[pmtID] += 1.;
           hitpmts++;
         } // pmt loop
       } // event loop
     } // entry loop
     cout << endl;
+
+    // Turn array of PMTs into percentage (occupancy)
+    cout << "Number of events was " << nevents << endl;
+    for (int iPMT=0; iPMT<NPMTS; iPMT++) {
+      allpmts[iPMT] /= nevents;
+    }
     
     // Fit 1D Gaussian over PMT hit times (prompt peak)
     float fitgaus[4] = {0}; // fit results
@@ -274,33 +283,33 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     
     // -----
     
-    const int NBINSZOOM = 24;
-    hmeantime = new TH1D("hmeantime","",NBINSZOOM,0,NBINSZOOM);
-    hrmstime = new TH1D("hrmstime","",NBINSZOOM,0,NBINSZOOM);
+    hmeantime = new TH1D("hmeantime","",NBINS,0,NBINS);
+    hrmstime = new TH1D("hrmstime","",NBINS,0,NBINS);
     double *tx = pmtfits->GetX();
     double *ty = pmtfits->GetY();
     double *tex = pmtfits->GetEX();           // should always be zero
     double *tey = pmtfits->GetEY();
-    int tb, tn[NBINSZOOM] = {0};
-    double tavg[NBINSZOOM] = {0};
-    double terr[NBINSZOOM] = {0};
+    int tb, tn[NBINS] = {0};
+    double tavg[NBINS] = {0};
+    double terr[NBINS] = {0};
     // Loop over all PMTs in the graph and bin the data
     for (int i=0; i<pmtfits->GetN(); i++) {
       tb = (int)tx[i];                        // bin index (1 degree bins)
       tn[tb]++;                               // number of PMTs in each bin
-      tavg[tb] += ty[i];                      // sum of hit times
-      terr[tb] += tey[i]*tey[i];              // sum of errors squared
+      //tavg[tb] += ty[i];                      // sum of hit times
+      tavg[tb] += ty[i]/(tey[i]*tey[i]);      // sum of weighted hit times
+      terr[tb] += 1./(tey[i]*tey[i]);         // sum of errors squared
     }
     // Loop over each bin to get the average and propagated error
-    for (int j=0; j<NBINSZOOM; j++) {
+    for (int j=0; j<NBINS; j++) {
       if (tn[j]==0) continue;                 // no PMTs in this bin
-      tavg[j] = tavg[j]/tn[j];                // average hit time for this bin
-      terr[j] = sqrt(terr[j]);                // error of single PMT
+      tavg[j] = tavg[j]/terr[j];              // weighted mean hit time
+      terr[j] = sqrt(1./terr[j]);             // error on weighted mean
       //else terr[j] = sqrt(terr[j]/(tn[j]-1)); // standard deviation
       //printf("Bin %2d, Hit time %8.3lf ns, error %8.3lf ns.\n",j,tavg[j],terr[j]);
       hmeantime->SetBinContent(j+1,tavg[j]);
       hmeantime->SetBinError(j+1,terr[j]);
-      hrmstime->SetBinContent(j+1,terr[j]/sqrt(tn[j]));
+      hrmstime->SetBinContent(j+1,terr[j]);
     }
     
     // TODO - Replace times below with these fit results!
@@ -314,9 +323,9 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     //int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
     //int commontime = round(fitgaus[0] + fibre_delay + trig_delay - pca_offset);
     int commontime = round(fitgaus[0] + fitgaus[2]*12.0);
+    if (VERBOSE) printf("Most common hit time (after fit): %d ns\n",commontime);
     commontime += 5/2;              // intermediate step
     commontime -= commontime % 5;   // rounded to the nearest multiple of 5
-    if (VERBOSE) printf("Most common hit time: %d ns\n",commontime);
     
     // More histograms
     h1 = new TH1D("h1",fibre.c_str(),NBINS,0,MAXANG);
@@ -359,9 +368,16 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
           double pmttime = pmt.GetTime();                       // hit time [ns]
           double corr = track.Mag()/c_water;                    // light travel time [ns]
           double offset = pmttime-corr+fibre_delay+trig_delay;  // total offset
+          if (angle > MAXANG) continue;
           // TODO - only fill histogram if pmttime is within prompt peak?
-          // if(fabs(pmttime - pmtfits.Y(it)) > pmtfits.EY(it)) continue;
-          h2->Fill(angle, offset-pca_offset);                   // angle [deg], time [ns]
+          for (int iFit=0; iFit<pmtfits->GetN(); iFit++) {
+            if (fabs(tx[iFit]-angle)>1e-6) continue;
+            //if (tx[iFit] != angle) continue;
+            //cout << "Compared " << angle << " to " << tx[iFit] << endl;
+            if (fabs(offset-pca_offset - ty[iFit]) > 8.) continue; // prompt peak estimate (TODO - get proper Gaussian width somehow)
+            h2->Fill(angle, offset-pca_offset);                   // angle [deg], time [ns]
+            break;
+          }
         } // pmt loop
       } // event loop
     } // entry loop
@@ -389,7 +405,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       h2_2->SetBinContent(b, h2_py->GetRMS());  // overwrite Gaussian sigma with RMS
       h2_2->SetBinError(b, h2_py->GetRMSError());  // overwrite Gaussian sigma error with RMS error
       herr->SetBinContent(b, h2_py->GetMeanError()); // not *quite* the same as error on Gaussian mean
-      if (h1->GetBinCenter(b)>0 && h1->GetBinCenter(b)<30) {  // within 30 deg cone
+      if (h1->GetBinCenter(b)>0 && h1->GetBinCenter(b)<MAXANG) {  // within 24 deg cone
         avgmean += h2_1->GetBinContent(b);
         avgdev += h2_2->GetBinContent(b);
         binscone++;
@@ -397,8 +413,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     }
     avgmean/=binscone;
     avgdev/=binscone;
-    if (VERBOSE) printf("Average hit time mean (< 30 deg): %6.2f\n", avgmean);
-    if (VERBOSE) printf("Average hit time RMS (< 30 deg):  %6.2f\n", avgdev);
+    if (VERBOSE) printf("Average hit time mean (< %d deg): %6.2f\n", MAXANG, avgmean);
+    if (VERBOSE) printf("Average hit time RMS (< %d deg):  %6.2f\n", MAXANG, avgdev);
     
     // Normalise angular slices to number of PMTs in slice
     double tmp, pmts;
@@ -453,6 +469,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   pmtfits->Draw("AP same");
   pmtfits->GetXaxis()->SetTitleOffset(1.2);
   pmtfits->GetYaxis()->SetTitleOffset(1.5);
+  pmtfits->GetXaxis()->SetRangeUser(0,24);
   /*
   h2_1->SetTitle("Mean hit time;Angle [deg];Time [ns]");
   h2_1->SetLineWidth(2);
@@ -462,7 +479,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   float minval = h2_1->GetMaximum();
   float maxval = h2_1->GetMinimum();
   float val;
-  for (int b=1; b<=30; b++) { 
+  for (int b=1; b<=NBINS; b++) { 
     val = h2_1->GetBinContent(b);
     if (val==0.) continue;
     if (minval>val) minval=val;
@@ -490,7 +507,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   float minval = hmeantime->GetMaximum();
   float maxval = hmeantime->GetMinimum();
   float val;
-  for (int b=1; b<=30; b++) { 
+  for (int b=1; b<=NBINS; b++) { 
     val = hmeantime->GetBinContent(b);
     if (val==0.) continue;
     if (minval>val) minval=val;
@@ -520,7 +537,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   float minerr = hrmstime->GetMaximum();
   float maxerr = hrmstime->GetMinimum();
   float err;
-  for (int b=1; b<=30; b++) { 
+  for (int b=1; b<=NBINS; b++) { 
     err = hrmstime->GetBinContent(b);
     if (val==0.) continue;
     if (minerr>val) minerr=err;
@@ -536,7 +553,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_1->GetYaxis()->SetTitleOffset(1.7);
   float minval1 = h2_1->GetMaximum();
   float maxval1 = h2_1->GetMinimum();
-  for (int b=1; b<=30; b++) { 
+  for (int b=1; b<=NBINS; b++) { 
     val = h2_1->GetBinContent(b);
     if (val==0.) continue;
     if (minval1>val) minval1=val;

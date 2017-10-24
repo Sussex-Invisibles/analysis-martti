@@ -23,7 +23,7 @@ using std::endl;
 using std::flush;
 
 // Run time parameters
-const int MORE_OUTPUT = 0;                // additional plots for testing
+const int MORE_OUTPUT = 1;                // additional plots for testing
 
 // Global constants
 const double pi = TMath::Pi();
@@ -44,7 +44,7 @@ void GetHotLimit(int*, int&);
 void GetMaxColVal(const TVector3&, int*, int, int&, int&, const RAT::DU::PMTInfo&);
 void FillHemisphere(const TVector3&, int*, int, TGraph**, TGraph2D*, int, int, const RAT::DU::PMTInfo&);
 void DrawCircle(const TVector3&, double, TVector3**, int);
-TGraphErrors* FitPromptPeaks(int, TH2D*, int, int*, float*, float*);
+TGraphErrors* FitPromptPeaks(int, TH2D*, int, float*, float*, float*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 
 // -----------------------------------------------------------------------------
@@ -200,7 +200,7 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 }
 
 // -----------------------------------------------------------------------------
-TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, float *pmtangs, float *output) {
+TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, float *pmthits, float *pmtangs, float *output) {
 
   int npts = 0;
   TGraphErrors *gpmts = new TGraphErrors();
@@ -209,15 +209,17 @@ TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, floa
   memset( y,  0, NPMTS*sizeof(double) );
   memset( ex, 0, NPMTS*sizeof(double) );
   memset( ey, 0, NPMTS*sizeof(double) );
-  
+
+  int plotted_pmt[24] = {0};  
+
   TCanvas *c0 = NULL;
   cout << "Fitting PMT prompt peaks..." << endl;
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
     if (iPMT % (int)round(NPMTS/100.) == 0) printProgress(iPMT, NPMTS);
     
     // Reject PMTs outside ROI
-    if (pmthits[iPMT]<2000) continue;  // only consider PMTs with >1% occupancy
-    if (pmtangs[iPMT]>24) continue;    // only consider PMTs within nominal aperture (12 deg)
+    if (pmthits[iPMT]<0.01) continue;  // only consider PMTs with >1% occupancy
+    if (pmtangs[iPMT]>24) continue;    // only consider PMTs within twice the nominal aperture (12 deg)
     TH1D *temp = htime->ProjectionY("temp",iPMT,iPMT+1,"");
 
     // Define prompt peak range (>20% of max. intensity)
@@ -234,17 +236,23 @@ TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, int *pmthits, floa
     c0->Close();
     
     // Investigate individual PMTs
-    if (MORE_OUTPUT) {
-      if (fitPMT->GetParameter(1) > 200) {
-        TCanvas *c = new TCanvas("c","",800,600);
-        c->SetGrid();
-        temp->Draw("");
-        temp->Fit("fitPMT","R,q");
-        c->Print("angular_singlepmt.png");
-        c->Print("angular_singlepmt.pdf");
-        c->Close();
-        if (c) delete c;
-      }
+    int thisbin = (int)pmtangs[iPMT];
+    if (MORE_OUTPUT && plotted_pmt[thisbin]==0) {
+      TCanvas *c = new TCanvas("c","",800,600);
+      c->SetGrid();
+      //c->DrawFrame(-40,0,60,1000,"PMT hit time (prompt peak);Hit time [ns];Number of events")->SetStats(1);
+      temp->SetStats(1);
+      temp->Draw("same");
+      temp->Fit("fitPMT","R,q");
+      temp->SetTitle("Single PMT hit distribution;Hit time offset [ns];Number of events");
+      temp->GetXaxis()->SetRangeUser(-40,60);
+      temp->GetYaxis()->SetRangeUser(0,1000);
+      string sglstr = Form("images/angular_singlePMT_%02d",thisbin);
+      c->Print((sglstr+".png").c_str());
+      c->Print((sglstr+".pdf").c_str());
+      c->Close();
+      if (c) delete c;
+      plotted_pmt[thisbin] = 1;
     }
     
     // Fill fitted hit times vs. angle into graph
