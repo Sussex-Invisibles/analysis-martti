@@ -313,7 +313,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     // Central hit time for 2D plot
     //int commontime = hcoarse->GetXaxis()->GetBinLowEdge(hcoarse->GetMaximumBin());
     //int commontime = round(fitgaus[0] + fibre_delay + trig_delay - pca_offset);
-    int commontime = round(fitgaus[0]);
+    int commontime = round(fitgaus[0] + fitgaus[2]*12.0);
     commontime += 5/2;              // intermediate step
     commontime -= commontime % 5;   // rounded to the nearest multiple of 5
     if (VERBOSE) printf("Most common hit time: %d ns\n",commontime);
@@ -355,10 +355,13 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
           TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
           TVector3 track = pmtpos-fibrepos;
           double theta = track.Angle(fitdir);                   // angle w.r.t. fibre [rad]
+          double angle = theta*180./pi;                         // angle w.r.t. fibre [deg]
           double pmttime = pmt.GetTime();                       // hit time [ns]
           double corr = track.Mag()/c_water;                    // light travel time [ns]
           double offset = pmttime-corr+fibre_delay+trig_delay;  // total offset
-          h2->Fill(theta*180./pi, offset-pca_offset);           // angle [deg], time [ns]
+          // TODO - only fill histogram if pmttime is within prompt peak?
+          // if(fabs(pmttime - pmtfits.Y(it)) > pmtfits.EY(it)) continue;
+          h2->Fill(angle, offset-pca_offset);                   // angle [deg], time [ns]
         } // pmt loop
       } // event loop
     } // entry loop
@@ -443,8 +446,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   // Mean
   pad0->cd()->SetGrid();
   pad0->SetLeftMargin(0.12);
-  pmtfits->SetTitle("Fitted PMT hit times (prompt peaks);Angle [deg];Time [ns]");
   //pad1->DrawFrame(0,-5,24,5);
+  pmtfits->SetTitle("Fitted PMT hit times (prompt peaks);Angle [deg];Time [ns]");
   pmtfits->SetMarkerColor(4);
   pmtfits->SetMarkerStyle(6);
   pmtfits->Draw("AP same");
@@ -468,7 +471,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_1->GetYaxis()->SetRangeUser(0.75*minval, 1.25*maxval);
   */
   
-  // Time vs. angle (2D)
+  // Normalised intensity profile as time vs. angle (2D)
   pad1->cd()->SetGrid();
   pad1->SetRightMargin(0.12);   // for TH2D color scale
   h2->SetTitle(Form("Intensity profile %s (norm.);Angle [deg];Time [ns]",fibre.c_str()));
@@ -476,29 +479,14 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2->GetXaxis()->SetTitleOffset(1.2);
   h2->GetYaxis()->SetTitleOffset(1.5);
   
-  // Sum
+  // Mean hit times (binned PMT fits)
   pad2->cd()->SetGrid();
-  pad2->SetLeftMargin(0.2);   // for axis label
-  h2_0->SetTitle("Intensity (norm.);Angle [deg];Avg. NHit/PMT [ ]");
-  h2_0->SetLineWidth(2);
-  h2_0->Draw();
-  h2_0->GetXaxis()->SetTitleOffset(1.2);
-  h2_0->GetYaxis()->SetTitleOffset(1.7);
-  h2_0->GetYaxis()->SetRangeUser(0, 1e4);
-  hpmtseg->Scale(10);
-  hpmtseg->SetLineWidth(2);
-  hpmtseg->SetLineColor(2);
-  hpmtseg->SetTitle("NPMTs (#times10)");
-  hpmtseg->Draw("same");
-  pad2->BuildLegend();
-  
-  // RMS
-  pad3->cd()->SetGrid();
-  pad3->DrawFrame(0,0,24,5,"Binned PMT mean times;Angle [deg];Time [ns]");
+  pad2->DrawFrame(0,0,24,5,"Binned PMT mean times (new);Angle [deg];Time [ns]");
   hmeantime->SetLineWidth(2);
   hmeantime->Draw("same");
   hmeantime->GetXaxis()->SetTitleOffset(1.2);
   hmeantime->GetYaxis()->SetTitleOffset(1.7);
+  /*
   float minval = hmeantime->GetMaximum();
   float maxval = hmeantime->GetMinimum();
   float val;
@@ -509,6 +497,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     if (maxval<val) maxval=val;
   }
   hmeantime->GetYaxis()->SetRangeUser(0.75*minval, 1.25*maxval);
+  */
   /*
   h2_2->SetTitle("RMS hit time;Angle [deg];Time [ns]");
   h2_2->SetLineWidth(2);
@@ -518,8 +507,10 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_2->GetYaxis()->SetRangeUser(3.8, 6.2);
   */
   
-  pad4->cd()->SetGrid();
-  //pad4->DrawFrame(0,0,24,0.2,"Binned PMT errors;Angle [deg];Time [ns]");
+  // Mean errors (fitted PMT widths added in quadrature)
+  pad3->cd()->SetGrid();
+  //pad3->DrawFrame(0,0,24,0.2,"Binned PMT errors;Angle [deg];Time [ns]");
+  hrmstime->SetTitle("Binned PMT errors (new);Angle [deg];Time [ns]");
   hrmstime->SetLineWidth(2);
   hrmstime->Draw();
   hrmstime->GetXaxis()->SetTitleOffset(1.2);
@@ -554,16 +545,32 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   h2_1->GetYaxis()->SetRangeUser(0.75*minval1, 1.25*maxval1);
   */
   
-  // Error on mean
-  pad5->cd()->SetGrid();
-  pad5->SetLeftMargin(0.2);   // for axis label
-  herr->SetTitle("Error on mean hit time;Angle [deg];#Delta t_{mean} [ns]");
+  // Error on mean (old method)
+  pad4->cd()->SetGrid();
+  pad4->SetLeftMargin(0.2);   // for axis label
+  herr->SetTitle("Error on mean hit time (old);Angle [deg];#Delta t_{mean} [ns]");
   herr->SetLineWidth(2);
   herr->Draw();
   herr->GetXaxis()->SetTitleOffset(1.2);
   herr->GetYaxis()->SetTitleOffset(1.7);
   herr->GetYaxis()->SetRangeUser(0, 0.1);
 
+  // Summed intensities (projected profile)
+  pad5->cd()->SetGrid();
+  pad5->SetLeftMargin(0.2);   // for axis label
+  h2_0->SetTitle("Intensity (norm.);Angle [deg];Avg. NHit/PMT [ ]");
+  h2_0->SetLineWidth(2);
+  h2_0->Draw();
+  h2_0->GetXaxis()->SetTitleOffset(1.2);
+  h2_0->GetYaxis()->SetTitleOffset(1.7);
+  h2_0->GetYaxis()->SetRangeUser(0, 1e4);
+  hpmtseg->Scale(10);
+  hpmtseg->SetLineWidth(2);
+  hpmtseg->SetLineColor(2);
+  hpmtseg->SetTitle("NPMTs (#times10)");
+  hpmtseg->Draw("same");
+  pad5->BuildLegend();
+  
   // Chisquare/NDOF
   /*
   pad5->cd()->SetGrid();
