@@ -6,6 +6,7 @@
 #include <TF2.h>
 #include <TGaxis.h>
 #include <TGraph2D.h>
+#include <TGraph2DErrors.h>
 #include <TGraphErrors.h>
 #include <TH1F.h>
 #include <TH2F.h>
@@ -37,15 +38,24 @@ const double n_water = 1.33772;           // at 500 nm -> http://www.philiplaven
 const double c_water = c_vacuum/n_water;  // mm/ns
 
 // Initialise functions
-void printProgress(int, int);
 string printVector(const TVector3&);
+void printProgress(int, int);
 void GetRotationAngles(const TVector3&, double&, double&);
 void GetHotLimit(int*, int&);
 void GetMaxColVal(const TVector3&, int*, int, int&, int&, const RAT::DU::PMTInfo&);
 void FillHemisphere(const TVector3&, int*, int, TGraph**, TGraph2D*, int, int, const RAT::DU::PMTInfo&);
 void DrawCircle(const TVector3&, double, TVector3**, int);
-TGraphErrors* FitPromptPeaks(int, TH2D*, int, float*, float*, float*);
+void FitPromptPeaks(TH2D*, int, float*, float*, TGraph2DErrors*);
 void FitLightSpot(TGraph2D*, double, double, double*);
+
+// -----------------------------------------------------------------------------
+// Display vector as string
+string printVector(const TVector3& v) {
+  string out;
+  if (v.Mag() < 10) out = Form("(%.3f, %.3f, %.3f)", v.X(),  v.Y(), v.Z());
+  else              out = Form("(%.1f, %.1f, %.1f)", v.X(),  v.Y(), v.Z());
+  return out.c_str();
+}
 
 // -----------------------------------------------------------------------------
 // Display progress bar within a loop (can't have any other output in loop!)
@@ -61,15 +71,6 @@ void printProgress(int it, int n) {
     else                        cout << " ";
   }
   cout << "] " << (int)round(100.*prog) << "%\r" << flush;
-}
-
-// -----------------------------------------------------------------------------
-// Display vector as string
-string printVector(const TVector3& v) {
-  string out;
-  if (v.Mag() < 10) out = Form("(%.3f, %.3f, %.3f)", v.X(),  v.Y(), v.Z());
-  else              out = Form("(%.1f, %.1f, %.1f)", v.X(),  v.Y(), v.Z());
-  return out.c_str();
 }
 
 // -----------------------------------------------------------------------------
@@ -200,15 +201,19 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 }
 
 // -----------------------------------------------------------------------------
-TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, float *pmthits, float *pmtangs, float *output) {
-
-  int npts = 0;
-  TGraphErrors *gpmts = new TGraphErrors();
-  double x[NPMTS], y[NPMTS], ex[NPMTS], ey[NPMTS];
+/// Fit the prompt peaks (direct light) of the individual PMTs hit time
+/// Input:  run number, time-vs-pmtID histogram, number of PMTs, PMT occupancy,
+///         PMT angle w.r.t. fibre, array for overall fit parameters
+/// Output: 3D graph containing fit results for each PMT
+void FitPromptPeaks(TH2D *htime, int NPMTS, float *pmthits, float *pmtangs, TGraph2DErrors *result) {
+  
+  double x[NPMTS], y[NPMTS], z[NPMTS], ex[NPMTS], ey[NPMTS], ez[NPMTS];
   memset( x,  0, NPMTS*sizeof(double) );
   memset( y,  0, NPMTS*sizeof(double) );
+  memset( z,  0, NPMTS*sizeof(double) );
   memset( ex, 0, NPMTS*sizeof(double) );
   memset( ey, 0, NPMTS*sizeof(double) );
+  memset( ez, 0, NPMTS*sizeof(double) );
 
   int plotted_pmt[24] = {0};  
 
@@ -220,7 +225,7 @@ TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, float *pmthits, fl
     // Reject PMTs outside ROI
     if (pmthits[iPMT]<0.01) continue;  // only consider PMTs with >1% occupancy
     if (pmtangs[iPMT]>24) continue;    // only consider PMTs within twice the nominal aperture (12 deg)
-    TH1D *temp = htime->ProjectionY("temp",iPMT,iPMT+1,"");
+    TH1D *temp = htime->ProjectionY("temp",iPMT+1,iPMT+1,""); // histogram bins in [1,N]
 
     // Define prompt peak range (>20% of max. intensity)
     int lobin = temp->GetMaximumBin();
@@ -240,7 +245,6 @@ TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, float *pmthits, fl
     if (MORE_OUTPUT && plotted_pmt[thisbin]==0) {
       TCanvas *c = new TCanvas("c","",800,600);
       c->SetGrid();
-      //c->DrawFrame(-40,0,60,1000,"PMT hit time (prompt peak);Hit time [ns];Number of events")->SetStats(1);
       temp->SetStats(1);
       temp->Draw("same");
       temp->Fit("fitPMT","R,q");
@@ -256,13 +260,12 @@ TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, float *pmthits, fl
     }
     
     // Fill fitted hit times vs. angle into graph
-    x[iPMT]  = pmtangs[iPMT];
+    x[iPMT]  = fitPMT->GetParameter(0);
     y[iPMT]  = fitPMT->GetParameter(1);
-    ex[iPMT] = 0.;
+    z[iPMT]  = fitPMT->GetParameter(2);
+    ex[iPMT] = fitPMT->GetParError(0);
     ey[iPMT] = fitPMT->GetParError(1);
-    gpmts->SetPoint(npts,x[iPMT],y[iPMT]);
-    gpmts->SetPointError(npts,ex[iPMT],ey[iPMT]);
-    npts++;
+    ez[iPMT] = fitPMT->GetParError(2);
     
     delete fitPMT;
     delete temp;
@@ -270,53 +273,9 @@ TGraphErrors *FitPromptPeaks(int run, TH2D *htime, int NPMTS, float *pmthits, fl
   } // PMT loop
   cout << endl;
   if (c0) delete c0;
-    
-  // Investigate PMTs with unusual offsets w.r.t. mean hit time
-  string outfile = Form("logs/unusual_timing_%d.log", run);
-  FILE *out = fopen(outfile.c_str(),"w");
-  double meanhittime = gpmts->GetMean(2);
-  double rmshittime = gpmts->GetRMS(2);
-  fprintf(out,"# Mean %.1lf ns, RMS %.1lf ns. PMTs with unusually high offsets (>3*RMS):\n",meanhittime,rmshittime);
-  fprintf(out,"# PmtId Offset[ns]\n");
-  for (int iPMT=0; iPMT<NPMTS; iPMT++) {
-    if (x[iPMT]==0 && y[iPMT]==0) continue;
-    // Check for unusual offsets (seen e.g. for FT019A, PMTs 4393-4416)
-    if (fabs(y[iPMT]-meanhittime)/fabs(rmshittime) > 3.) { // more than 3x RMS deviation
-      fprintf(out,"%4d %5.1lf\n",iPMT,y[iPMT]-meanhittime);
-    }
-  }
-  fclose(out);
   
-  // Fit line through all PMT hit times
-  TCanvas *c = new TCanvas("c","",800,600);
-  TF1 *fitSyst = new TF1("fitSyst", "pol1", 0, 24);
-  fitSyst->SetParameters(meanhittime, 0); // assume flat line at mean as prior
-  gpmts->Fit("fitSyst", "R,q"); // force range, quiet mode
-  cout << "Parametrised angular systematic: Hit time [ns] = " << fitSyst->GetParameter(0) << " + " << fitSyst->GetParameter(1) << " * angle [deg]" << endl;
-  c->Close();
-  if (c) delete c;
-  
-  if (MORE_OUTPUT) {
-      TCanvas *c = new TCanvas("c","",800,600);
-      c->SetGrid();
-      string tstr = Form("Angular systematic (run %d); Angle [deg]; Hit time [ns]",run);
-      gpmts->SetTitle(tstr.c_str());
-      gpmts->SetMarkerColor(4);
-      gpmts->SetMarkerStyle(7);
-      gpmts->Draw("AP");
-      gpmts->Fit("fitSyst", "R,q");
-      c->Print("angular_allpmts.png");
-      c->Print("angular_allpmts.pdf");
-      c->Close();
-      delete c;
-  }
-  
-  // Output fit results
-  output[0] = fitSyst->GetParameter(0);
-  output[1] = fitSyst->GetParError(0);
-  output[2] = fitSyst->GetParameter(1);
-  output[3] = fitSyst->GetParError(1);
-  return gpmts;
+  // Return 2D graph with fit results (by reconstructing object at given address)
+  new (result) TGraph2DErrors(NPMTS,x,y,z,ex,ey,ez);
   
 }
 
