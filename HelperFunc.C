@@ -23,6 +23,7 @@ using std::cout;
 using std::endl;
 using std::flush;
 
+// -----------------------------------------------------------------------------
 // Run time parameters
 const int MORE_OUTPUT = 1;                // additional plots for testing
 
@@ -37,6 +38,7 @@ const double c_vacuum = 299.792458;       // mm/ns (detector units)
 const double n_water = 1.33772;           // at 500 nm -> http://www.philiplaven.com/p20.html
 const double c_water = c_vacuum/n_water;  // mm/ns
 
+// -----------------------------------------------------------------------------
 // Initialise functions
 string printVector(const TVector3&);
 void printProgress(int, int);
@@ -49,7 +51,7 @@ void FitPromptPeaks(TH2D*, int, float*, float*, TGraph2DErrors*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 
 // -----------------------------------------------------------------------------
-// Display vector as string
+/// Display vector as a string
 string printVector(const TVector3& v) {
   string out;
   if (v.Mag() < 10) out = Form("(%.3f, %.3f, %.3f)", v.X(),  v.Y(), v.Z());
@@ -58,7 +60,7 @@ string printVector(const TVector3& v) {
 }
 
 // -----------------------------------------------------------------------------
-// Display progress bar within a loop (can't have any other output in loop!)
+/// Display progress bar within a loop (can't have any other output in loop!)
 void printProgress(int it, int n) {
   float prog = (float)it/n;
   int barWidth = 70;
@@ -74,7 +76,7 @@ void printProgress(int it, int n) {
 }
 
 // -----------------------------------------------------------------------------
-// Rotate from given direction (z') to xyz-frame
+/// Get rotation angles to rotate from given direction to xyz-frame
 void GetRotationAngles(const TVector3& vec, double &rot_Z, double &rot_X) {
 
   // Get rotation angle from z-axis to central direction
@@ -89,7 +91,7 @@ void GetRotationAngles(const TVector3& vec, double &rot_Z, double &rot_X) {
 }
 
 // -----------------------------------------------------------------------------
-// Get maximum allowed hits/PMT before qualifying as hot PMT
+/// Get intensity limit (hits/PMT) above which PMT is considered a screamer
 void GetHotLimit(int* pmthitcount, int NPMTS, int &maxnhit) {
   const int NBINS = 100;
   int MAX_NHIT = *std::max_element(pmthitcount,pmthitcount+NPMTS);   // hottest PMT
@@ -105,7 +107,7 @@ void GetHotLimit(int* pmthitcount, int NPMTS, int &maxnhit) {
 }
 
 // -----------------------------------------------------------------------------
-// Get maximum nhit values within both hemispheres, excluding hot PMTs
+/// Get maximum nhit values within both hemispheres, excluding hot PMTs
 void GetMaxColVal(const TVector3& center, int* pmthitcount, int NPMTS, int &nearval, int &farval, const RAT::DU::PMTInfo& pmtinfo) {
   const int NBINS = 1e3;
   int hotlimit;
@@ -117,7 +119,7 @@ void GetMaxColVal(const TVector3& center, int* pmthitcount, int NPMTS, int &near
     pmtpos = pmtinfo.GetPosition(id);
     if (pmtpos.Mag()==0) continue;              // not a valid PMT position
     if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT
-    if (pmthitcount[id] > hotlimit) continue;	  // hot PMT
+    if (pmthitcount[id] > hotlimit) continue;   // hot PMT
     if (center.Angle(pmtpos) <= pi/15.)         // narrow cone around central point
       hNear->Fill(pmthitcount[id]);
     else if (center.Angle(pmtpos) >= pi*14/15.) // same around opposite side
@@ -133,13 +135,12 @@ void GetMaxColVal(const TVector3& center, int* pmthitcount, int NPMTS, int &near
 }
 
 // -----------------------------------------------------------------------------
-// Create detector view from above central point
+/// Create detector view from above central point
 void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph** dots, TGraph2D* graph, int NCOL, int MAXVAL, const RAT::DU::PMTInfo& pmtinfo) {
   
   // Get maximum value for color scale
   int HOTLIMIT;
   GetHotLimit(pmthitcount, NPMTS, HOTLIMIT);
-  //GetMaxColVal(center, pmthitcount, NPMTS, MAXVAL, empty, pmtinfo);
    
   int ndot[NCOL+2];
   double dotx[NCOL+2][NPMTS], doty[NCOL+2][NPMTS];
@@ -170,7 +171,6 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
     int step = (int)TMath::Ceil(pmthitcount[id]/(1.*MAXVAL/NCOL))+1;
     if (pmthitcount[id] >= MAXVAL) step = NCOL+1;   // cap color range
     if (pmthitcount[id] >= HOTLIMIT) step = 0;      // hot PMT
-    //if (newpos.Perp()<1e3) printf("%s has step %d\n",printVector(newpos).c_str(),step);
     dotx[step][ndot[step]]=newpos.X()/1e3;
     doty[step][ndot[step]]=newpos.Y()/1e3;
     ndot[step]++;
@@ -280,6 +280,7 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *pmthits, float *pmtangs, TGra
 }
 
 // -----------------------------------------------------------------------------
+/// Fit 2D Gaussian surface over intensities for PMTs in a plane
 void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   // Get input graph entries
   int npts = graph->GetN();
@@ -382,7 +383,7 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
 }
 
 // -----------------------------------------------------------------------------
-// Draw a circle around a point in a plane orthogonal to an angle with N dots
+/// Draw a circle around a point in a plane orthogonal to an angle with N dots
 void DrawCircle(const TVector3& center, double angle, TVector3** dots, int NDOTS) {
   TVector3 dot(0,0,0);
   for (int i=0; i<NDOTS; i++) {
@@ -400,6 +401,7 @@ void DrawCircle(const TVector3& center, double angle, TVector3** dots, int NDOTS
 // This code lazily copied from $RATROOT/src/calib/quality/DataQualityProc.hh
 // after failing to access it directly - do not modify!
 // -----------------------------------------------------------------------------
+/// Namespace taken from DataQualityProc class to get flatmap detector view
 namespace func{
 
   // Vectors For PSUP Projection
