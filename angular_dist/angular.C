@@ -488,7 +488,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   pad5->Draw();
   
   // *****
-  // Projected mean hit time (fit results) vs angle
+  // Projected mean hit time (fit results) vs angle - TODO: Add fit results (as text) to plot!
   pad0->cd()->SetGrid();
   pad0->SetLeftMargin(0.12);    // for label
   string tstr = Form("TELLIE angular systematic (run %d); Angle of PMT w.r.t. fitted fibre direction [deg]; Hit time [ns]",run);
@@ -497,8 +497,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   gpmts->SetMarkerStyle(6);
   gpmts->Draw("AP");
   gpmts->GetXaxis()->SetTitleOffset(1.2);
-  gpmts->GetYaxis()->SetTitleOffset(1.5);
-  gpmts->GetXaxis()->SetRangeUser(0,24);
+  gpmts->GetYaxis()->SetTitleOffset(1.6);
+  gpmts->GetXaxis()->SetLimits(0,24);
   
   // *****
   // Normalised intensity profile, hit time vs angle
@@ -517,7 +517,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   hmean->Draw();
   hmean->GetXaxis()->SetTitleOffset(1.2);
   hmean->GetYaxis()->SetTitleOffset(1.2);
-  hmean->GetYaxis()->SetRangeUser(0,8);
+  hmean->GetYaxis()->SetRangeUser(0,8.5);
   
   // *****
   // Mean errors (fitted PMT widths added in quadrature)
@@ -527,7 +527,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   hmeanerr->Draw();
   hmeanerr->GetXaxis()->SetTitleOffset(1.2);
   hmeanerr->GetYaxis()->SetTitleOffset(1.8);
-  hmeanerr->GetYaxis()->SetRangeUser(0,0.16);
+  hmeanerr->GetYaxis()->SetRangeUser(0,0.17);
   
   // *****
   // Mean signal widths
@@ -537,7 +537,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   hwdth->Draw();
   hwdth->GetXaxis()->SetTitleOffset(1.2);
   hwdth->GetYaxis()->SetTitleOffset(1.5);
-  hwdth->GetYaxis()->SetRangeUser(3.5,5.5);
+  hwdth->GetYaxis()->SetRangeUser(3.8,5.2);
   
   // *****
   // Mean intensities and number of PMTs in angular segment
