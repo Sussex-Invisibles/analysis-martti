@@ -30,7 +30,7 @@
 #include "../Xianguo.C"
 
 // Run time parameters
-const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int USE_RATDB = 1;    // whether to use RATDB to get fibre positions (1=yes)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 

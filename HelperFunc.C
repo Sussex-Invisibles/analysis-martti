@@ -25,7 +25,7 @@ using std::flush;
 
 // -----------------------------------------------------------------------------
 // Run time parameters
-const int MORE_OUTPUT = 1;                // additional plots for testing
+const int MORE_OUTPUT = 0;                // additional plots for testing
 
 // Global constants
 const double pi = TMath::Pi();
