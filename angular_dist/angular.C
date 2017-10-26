@@ -448,13 +448,14 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     outfile->Write();
   }
 
-  // Parametrise angular systematic: y = a + b/cos(x)
+  // Parametrise angular systematic: y = a - b + b/cos(x)
   TCanvas *c = new TCanvas("c","",800,600);
-  TF1 *fitSyst = new TF1("fitSyst", "[0] + [1]/cos(x/180.*pi)", 0, 24);
+  TF1 *fitSyst = new TF1("fitSyst", "[0] - [1] + [1]/cos(x/180.*pi)", 0, 24);
   fitSyst->SetParameter(0, gpmts->GetMean(2));  // overall mean hit time
   fitSyst->SetParameter(1, 0);                  // assume flat line a priori
   gpmts->Fit("fitSyst", "R,q");                 // force range, quiet mode
-  printf("ANGULAR SYSTEMATIC: y = a + b/cos(x)\n --> a = ( %f +/- %f ) ns\n --> b = ( %f +/- %f ) ns\n", fitSyst->GetParameter(0), fitSyst->GetParError(0), fitSyst->GetParameter(1), fitSyst->GetParError(1));
+  printf("ANGULAR SYSTEMATIC: y = a - b + b/cos(x)\n --> a = ( %f +/- %f ) ns\n --> b = ( %f +/- %f ) ns\n",
+         fitSyst->GetParameter(0), fitSyst->GetParError(0), fitSyst->GetParameter(1), fitSyst->GetParError(1));
   c->Close();
   if (c) delete c;
   
