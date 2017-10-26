@@ -138,6 +138,6 @@ TH1D* get_histo(string fibre, int run, bool MC=false, bool TEST=false) {
     printf("OK. Extracting data for fibre %s.\n",fibre.c_str());
   }
   TFile* infile = new TFile(in.c_str(),"READ");
-  TH1D* hist = (TH1D*)infile->Get("h2_1");  // Mean time
+  TH1D* hist = (TH1D*)infile->Get("hmean");  // Mean time
   return hist;
 }

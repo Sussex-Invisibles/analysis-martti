@@ -36,7 +36,7 @@ const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
-float angular(string, int, bool, bool);
+int angular(string, int, bool, bool);
 
 // Main program
 int main(int argc, char** argv) {
@@ -60,22 +60,20 @@ int main(int argc, char** argv) {
     in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
-    float avgnhit = angular(fibre, run, IS_MC, TEST);
-    if (avgnhit==-2.) { printf("Could not find data for fibre %s!\n",fibre.c_str()); continue; }
-    if (avgnhit==-1.) { if (VERBOSE) printf("Nothing to do!\n"); continue; }
-    printf("%3d %8s %8.1f nhit (extracted) %8.1f nhit (table)\n",channel,fibre.c_str(),avgnhit,nhit);
-    nfiles++;
+    int errors = angular(fibre, run, IS_MC, TEST);
+    if (errors) cerr<<"*** WARNING *** Run "<<run<<" was not processed correctly."<<endl;
+    else nfiles++;
   }
   printf("Ran over %d files.\n",nfiles);
   if (nfiles==0) { 
-    cerr<<"*** ERROR *** No input files found."<<endl;
+    cerr<<"*** ERROR *** Did not process any files."<<endl;
     return 1; 
   }
   return 0;
 }
 
 // Define macro
-float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
+int angular(string fibre, int run, bool isMC=false, bool TEST=false) {
 
   // ********************************************************************
   // Initialisation
@@ -99,31 +97,29 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   int scanned_file = 0;
   if (!TEST && h.good()) {        // file downloaded and processed
     printf("already processed! Skipping fibre %s.\n",fibre.c_str());
-    return -1.;
+    return 1;
   } else if(g.good()) {  // file extracted, but not processed
     printf("not processed! Generating plots for fibre %s.\n",fibre.c_str());
     scanned_file = 1;
   } else if(!f.good()) {          // file not downloaded
     printf("not downloaded! Skipping fibre %s.\n",fibre.c_str());
-    return -2.;
+    return 2;
   } else {                        // file downloaded, but not processed
     printf("OK. Extracting data for fibre %s.\n",fibre.c_str());
   }
 
   string outstr = Form("output/angular_%s.root",fibre.c_str());
   TFile *outfile = NULL;
-  int hitpmts, nevents;
   TH1D *hpeak=NULL, *hpeakerr=NULL;
   TH1D *hmean=NULL, *hmeanerr=NULL;
   TH1D *hwdth=NULL, *hwdtherr=NULL;
-  TH1D *herr=NULL, *hpmtseg=NULL, *hpmtgood=NULL;
-  TH1D *h2_0=NULL, *h2_1=NULL, *h2_2=NULL, *h2_3=NULL, *h2_py=NULL;
-  TH2D *h2=NULL;
+  TH1D *hpmtseg=NULL, *hpmtgood=NULL;
+  TH2D *hprofile=NULL;
   TGraph2DErrors *pmtfits=NULL;
   TGraphErrors *gpmts=NULL;
   if (scanned_file) {
     outfile = new TFile(outstr.c_str(),"READ");
-    h2 = (TH2D*)outfile->Get("h2"); // Time vs angle
+    hprofile = (TH2D*)outfile->Get("hprofile"); // Time vs angle
     pmtfits = (TGraph2DErrors*)outfile->Get("pmtfits"); // Fitted prompt peaks (3D)
     gpmts = (TGraphErrors*)outfile->Get("gpmts"); // Fitted prompt peaks (time vs angle)
     hpeak = (TH1D*)outfile->Get("hpeak");       // Binned intensities
@@ -132,15 +128,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     hmeanerr = (TH1D*)outfile->Get("hmeanerr"); // Binned errors on mean times
     hwdth = (TH1D*)outfile->Get("hwdth");       // Binned mean signal widths
     hwdtherr = (TH1D*)outfile->Get("hwdtherr"); // Binned errors on signal widths
-    herr = (TH1D*)outfile->Get("herr");         // Error on mean time
     hpmtseg = (TH1D*)outfile->Get("hpmtseg");   // PMTs in angular bin
     hpmtgood = (TH1D*)outfile->Get("hpmtgood"); // Good PMTs in angular bin
-    h2_0 = (TH1D*)outfile->Get("h2_0");         // Intensity (normalised)
-    h2_1 = (TH1D*)outfile->Get("h2_1");         // Mean
-    h2_2 = (TH1D*)outfile->Get("h2_2");         // RMS
-    h2_3 = (TH1D*)outfile->Get("h2_chi2");      // Gaussian GOF
-    hitpmts = -999; // h2_0->Integral(); // TODO - fix this!
-    nevents = 1; // h2_0->GetEntries()*h2_0->GetNbinsX(); // histogram normalised
   } else {
     outfile = new TFile(outstr.c_str(),"RECREATE");
 
@@ -184,7 +173,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
 
     // TELLIE fibre/trigger delays & Mark's PCA offsets
     ifstream del("TELLIE_delays.txt");
-    if (!del) { cerr<<"ERROR - could not open TELLIE_delays.txt!"<<endl; return -999.; }
+    if (!del) { cerr<<"ERROR - could not open TELLIE_delays.txt!"<<endl; return 3; }
     int num, trig_delay;
     float fibre_delay, pca_offset;
     string line;
@@ -227,8 +216,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     hpmtgood = new TH1D("hpmtgood",fibre.c_str(),NBINS,0,MAXANG);
     
     // Loop over all entries
-    nevents=0;
-    hitpmts=0;
+    int nevents=0;
+    int hitpmts=0;
     float allpmts[NPMTS], angpmts[NPMTS];
     memset( allpmts, 0, NPMTS*sizeof(float) );                // NPMTS only known at runtime
     memset( angpmts, 0, NPMTS*sizeof(float) );                // NPMTS only known at runtime
@@ -297,8 +286,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     // Fit PMT hit times (Gaussian prompt peak)
     pmtfits = new TGraph2DErrors();
     FitPromptPeaks(htime, NPMTS, allpmts, angpmts, pmtfits);
-    if (!pmtfits) { cout << "*** ERROR *** Could not fit PMT prompt peaks!" << endl; return -999; }
-    if (!pmtfits->GetN()) { cout << "*** ERROR *** Graph contains zero points!" << endl; return -999; }
+    if (!pmtfits) { cout << "*** ERROR *** Could not fit PMT prompt peaks!" << endl; return 4; }
+    if (!pmtfits->GetN()) { cout << "*** ERROR *** Graph contains zero points!" << endl; return 4; }
     
     double *tx = pmtfits->GetX();   // Constant (A)
     double *ty = pmtfits->GetY();   // Mean value (mu)
@@ -306,7 +295,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     double *tex = pmtfits->GetEX();
     double *tey = pmtfits->GetEY();
     double *tez = pmtfits->GetEZ();
-  
+    
     // Fill 1D graph with time vs angle (use only PMTs of interest)
     gpmts = new TGraphErrors();
     int npmts=0;
@@ -316,7 +305,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       gpmts->SetPointError(npmts, 0, tey[iPMT]);
       npmts++;
     }
-
+    
     // Investigate PMTs with unusual offsets w.r.t. mean hit time
     string outlogstr = Form("logs/unusual_timing_%d.log", run);
     FILE *outlog = fopen(outlogstr.c_str(),"w");
@@ -382,15 +371,11 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       hwdtherr->SetBinContent(j+1,terrz[j]);
     }
     
-    // Central hit time for 2D plot
-    //int centraltime = round(fitSyst->GetParameter(0) + fitSyst->GetParameter(1)*12.0);
+    // Get central hit time and initialise 2D histogram
     if (VERBOSE) printf("Mean hit time: %.2lf ns\n",meanhittime);
     int centraltime = (int)round(meanhittime + 5/2.);
     centraltime -= centraltime % 5;             // rounded to the nearest multiple of 5
-    
-    // More histograms
-    h2 = new TH2D("h2",fibre.c_str(),NBINS,0,MAXANG,30,centraltime-15,centraltime+15);
-    herr = new TH1D("herr",fibre.c_str(),NBINS,0,MAXANG);
+    hprofile = new TH2D("hprofile",fibre.c_str(),NBINS,0,MAXANG,30,centraltime-15,centraltime+15);
     
     for (int i=0; i<NPMTS; i++) {
       if (tx[i]+ty[i]+tz[i]==0) continue;     // not good PMT
@@ -399,46 +384,19 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       for (int j=0; j<=htime->GetNbinsY()+1; j++) {
         float time = htime->GetYaxis()->GetBinCenter(j+1);
         if (fabs(time - ty[i]) > 1.645*tz[i]) continue;     // not in prompt peak
-        //printf("!!! PMT #%4d (bin %4d) at time %8.3f (bin %3d) has content %3d\n",i,i+1,time,j+1,(int)htime->GetBinContent(i+1,j+1));
         for (int k=0; k<(int)htime->GetBinContent(i+1,j+1); k++)
-          h2->Fill(angpmts[i], time);         // Angle of PMT w.r.t. fitted fibre direction [deg], time [ns]
+          hprofile->Fill(angpmts[i], time);         // Angle of PMT w.r.t. fitted fibre direction [deg], time [ns]
       }
-    }
-    
-    // Fit angular slices with a gaussian distribution in time
-    h2->FitSlicesY();
-    h2_0 = (TH1D*)gDirectory->Get("h2_0");  // Constant
-    h2_1 = (TH1D*)gDirectory->Get("h2_1");  // Mean
-    h2_2 = (TH1D*)gDirectory->Get("h2_2");  // StdDev
-    h2_3 = (TH1D*)gDirectory->Get("h2_chi2");  // chi^2/ndof  
-    h2_py = NULL;
-    
-    // Put mean and RMS into 1D histogram
-    for (int b=0; b<=NBINS+1; b++) {
-      h2->ProjectionY("_py",b,b);
-      h2_py = (TH1D*)gDirectory->Get("h2_py");
-      h2_0->SetBinContent(b, h2_py->GetSum());  // overwrite Gaussian constant with intensity
-      h2_0->SetBinError(b, sqrt(h2_py->GetSum()));  // overwrite Gaussian constant error with sqrt(intensity)
-      h2_1->SetBinContent(b, h2_py->GetMean()); // overwrite Gaussian mean with mean
-      h2_1->SetBinError(b, h2_py->GetMeanError()); // overwrite Gaussian mean error with mean error
-      h2_2->SetBinContent(b, h2_py->GetRMS());  // overwrite Gaussian sigma with RMS
-      h2_2->SetBinError(b, h2_py->GetRMSError());  // overwrite Gaussian sigma error with RMS error
-      herr->SetBinContent(b, h2_py->GetMeanError()); // not *quite* the same as error on Gaussian mean
     }
     
     // Normalise angular slices to number of PMTs in slice
     double tmp, goodpmts;
-    for (int binx=0; binx<=h2->GetNbinsX()+1; binx++) {     // include underflow/overflow
+    for (int binx=0; binx<=hprofile->GetNbinsX()+1; binx++) {     // include underflow/overflow
       goodpmts = hpmtgood->GetBinContent(binx);
-      tmp = h2_0->GetBinContent(binx);
-      //printf("Angular bin #%2d has %3d good PMTs with intensity %3d.\n",binx,(int)goodpmts,(int)tmp);
-      if (goodpmts<=0) { h2_0->SetBinContent(binx,0); h2_0->SetBinError(binx,0); }
-      else { h2_0->SetBinContent(binx,tmp/goodpmts); h2_0->SetBinError(binx,sqrt(tmp)/goodpmts); }
-      //if (VERBOSE) printf("Bin #2d contains %3d good PMTs.\n",binx,(int)goodpmts);
-      for (int biny=0; biny<=h2->GetNbinsY()+1; biny++) {   // include underflow/overflow
-        tmp = h2->GetBinContent(binx,biny);
-        if (goodpmts<=0) h2->SetBinContent(binx,biny,0);
-        else h2->SetBinContent(binx,biny,tmp/goodpmts);
+      for (int biny=0; biny<=hprofile->GetNbinsY()+1; biny++) {   // include underflow/overflow
+        tmp = hprofile->GetBinContent(binx,biny);
+        if (goodpmts<=0) hprofile->SetBinContent(binx,biny,0);
+        else hprofile->SetBinContent(binx,biny,tmp/goodpmts);
       }
     }
     
@@ -463,6 +421,9 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   // ******************
   //  PLOTTING SECTION
   // ******************
+  int minvalY = (int)round(hprofile->GetMean(2)); // lower limit for times to display
+  minvalY -= minvalY % 5;                         // round down to next multiple of 5
+  
   // Plotting options
   gStyle->SetOptStat(0);
   gStyle->SetPadLeftMargin(0.1);
@@ -499,15 +460,16 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   gpmts->GetXaxis()->SetTitleOffset(1.2);
   gpmts->GetYaxis()->SetTitleOffset(1.6);
   gpmts->GetXaxis()->SetLimits(0,24);
+  gpmts->GetYaxis()->SetRangeUser(minvalY,minvalY+8); // suppresses outliers!
   
   // *****
   // Normalised intensity profile, hit time vs angle
   pad1->cd()->SetGrid();
   pad1->SetRightMargin(0.15);   // for TH2D color scale
-  h2->SetTitle(Form("Normalised intensity profile (%s);Angle of PMT w.r.t. fitted fibre direction [deg];Time [ns]",fibre.c_str()));
-  h2->Draw("colz");
-  h2->GetXaxis()->SetTitleOffset(1.2);
-  h2->GetYaxis()->SetTitleOffset(1.5);
+  hprofile->SetTitle(Form("Normalised intensity profile (%s);Angle of PMT w.r.t. fitted fibre direction [deg];Time [ns]",fibre.c_str()));
+  hprofile->Draw("colz");
+  hprofile->GetXaxis()->SetTitleOffset(1.2);
+  hprofile->GetYaxis()->SetTitleOffset(1.5);
   
   // *****
   // Mean hit times (binned PMT fits)
@@ -517,7 +479,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   hmean->Draw();
   hmean->GetXaxis()->SetTitleOffset(1.2);
   hmean->GetYaxis()->SetTitleOffset(1.2);
-  hmean->GetYaxis()->SetRangeUser(0,8.5);
+  hmean->GetYaxis()->SetRangeUser(minvalY,minvalY+8);
   
   // *****
   // Mean errors (fitted PMT widths added in quadrature)
@@ -527,7 +489,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   hmeanerr->Draw();
   hmeanerr->GetXaxis()->SetTitleOffset(1.2);
   hmeanerr->GetYaxis()->SetTitleOffset(1.8);
-  hmeanerr->GetYaxis()->SetRangeUser(0,0.17);
+  hmeanerr->GetYaxis()->SetRangeUser(0,0.16);
   
   // *****
   // Mean signal widths
@@ -575,7 +537,7 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   if (leg) delete leg;
   if (c0) delete c0;
   
-  // Return averaged nhit/event
-  return (float)hitpmts/nevents;
+  // Return no errors
+  return 0;
 }
 
