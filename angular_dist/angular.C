@@ -332,17 +332,6 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
       }
     }
     fclose(outlog);
-
-    // Fit line through all PMT hit times
-    TCanvas *c = new TCanvas("c","",800,600);
-    TF1 *fitSyst = new TF1("fitSyst", "pol1", 0, 24);
-    fitSyst->SetParameters(meanhittime, 0);   // assume flat line at mean as prior
-    gpmts->Fit("fitSyst", "R,q");             // force range, quiet mode
-    c->Close();
-    if (c) delete c;
-    printf("Angular systematic: Constant ( %f +/- %f ) ns, Slope ( %f +/- %f ) ns/deg\n", 
-            fitSyst->GetParameter(0), fitSyst->GetParError(0), 
-            fitSyst->GetParameter(1), fitSyst->GetParError(1));
     
     // Fill fit results into histograms
     hpeak = new TH1D("hpeak","",NBINS,0,NBINS);         // mean intensity
@@ -394,13 +383,13 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     }
     
     // Central hit time for 2D plot
-    int commontime = round(fitSyst->GetParameter(0) + fitSyst->GetParameter(1)*12.0);
-    if (VERBOSE) printf("Most common hit time (after fit): %d ns\n",commontime);
-    commontime += 5/2;                        // intermediate step
-    commontime -= commontime % 5;             // rounded to the nearest multiple of 5
+    //int centraltime = round(fitSyst->GetParameter(0) + fitSyst->GetParameter(1)*12.0);
+    if (VERBOSE) printf("Mean hit time: %.2lf ns\n",meanhittime);
+    int centraltime = (int)round(meanhittime + 5/2.);
+    centraltime -= centraltime % 5;             // rounded to the nearest multiple of 5
     
     // More histograms
-    h2 = new TH2D("h2",fibre.c_str(),NBINS,0,MAXANG,30,commontime-15,commontime+15);
+    h2 = new TH2D("h2",fibre.c_str(),NBINS,0,MAXANG,30,centraltime-15,centraltime+15);
     herr = new TH1D("herr",fibre.c_str(),NBINS,0,MAXANG);
     
     for (int i=0; i<NPMTS; i++) {
@@ -412,57 +401,9 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
         if (fabs(time - ty[i]) > 1.645*tz[i]) continue;     // not in prompt peak
         //printf("!!! PMT #%4d (bin %4d) at time %8.3f (bin %3d) has content %3d\n",i,i+1,time,j+1,(int)htime->GetBinContent(i+1,j+1));
         for (int k=0; k<(int)htime->GetBinContent(i+1,j+1); k++)
-          h2->Fill(angpmts[i], time);         // angle [deg], time [ns]
+          h2->Fill(angpmts[i], time);         // Angle of PMT w.r.t. fitted fibre direction [deg], time [ns]
       }
     }
-    
-    /*
-    // Second iteration: Fill histograms (TODO - is this still needed?)
-    totalnhit=0;
-    count=0;
-    for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
-      const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
-      RAT::DS::MC mc;
-      if (isMC) mc = ds.GetMC();  // don't initialise this for real data (crashes)
-      
-      // Loop over triggered events in each entry
-      for(int iEv=0; iEv<ds.GetEVCount(); iEv++) {              // mostly 1 event per entry
-        const RAT::DS::EV& ev = ds.GetEV(iEv);
-        
-        // Trigger type
-        int trig = ev.GetTrigType();
-        if (!(trig & 0x8000)) continue;                         // EXT trigger only
-        
-        // Event observables
-        int nhitscleaned = ev.GetNhitsCleaned();   // calibrated PMT hits with removed crosstalk
-        totalnhit += nhitscleaned;
-        count++;
-        
-        // PMT information
-        const RAT::DS::CalPMTs& pmts = ev.GetCalPMTs();
-        for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
-          RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
-          int pmtID = pmt.GetID();
-          if (!chs.IsTubeOnline(pmtID)) continue;               // test CHS
-          if (pmt.GetCrossTalkFlag()) continue;                 // remove crosstalk
-          if (pmt.GetStatus().GetULong64_t(0) != 0) continue;   // test PCA
-          TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
-          TVector3 track = pmtpos-fibrepos;
-          double theta = track.Angle(fitdir);                   // angle w.r.t. fibre [rad]
-          double angle = theta*180./pi;                         // angle w.r.t. fibre [deg]
-          double pmttime = pmt.GetTime();                       // hit time [ns]
-          double corr = track.Mag()/c_water;                    // light travel time [ns]
-          double offset = pmttime-corr+fibre_delay+trig_delay;  // total offset
-          if (angle > MAXANG) continue;
-          if (tx[pmtID]+ty[pmtID]+tz[pmtID]==0) continue;        // not good PMT
-          printf("Fit result for PMT %d is %.3f, %.3f, %.3f.\n",pmtID,tx[pmtID],ty[pmtID],tz[pmtID]);
-          // Only fill histogram if pmttime is within prompt peak (90% area ~ 1.645 sigma)
-          if (fabs(offset-pca_offset - ty[pmtID]) > 1.645*tz[pmtID]) continue;
-          h2->Fill(angle, offset-pca_offset);                 // angle [deg], time [ns]
-        } // pmt loop
-      } // event loop
-    } // entry loop
-    */
     
     // Fit angular slices with a gaussian distribution in time
     h2->FitSlicesY();
@@ -506,7 +447,21 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     gpmts->Write("gpmts");
     outfile->Write();
   }
- 
+
+  // Parametrise angular systematic: y = a + b/cos(x)
+  TCanvas *c = new TCanvas("c","",800,600);
+  TF1 *fitSyst = new TF1("fitSyst", "[0] + [1]/cos(x/180.*pi)", 0, 24);
+  fitSyst->SetParameter(0, gpmts->GetMean(2));  // overall mean hit time
+  fitSyst->SetParameter(1, 0);                  // assume flat line a priori
+  gpmts->Fit("fitSyst", "R,q");                 // force range, quiet mode
+  printf("ANGULAR SYSTEMATIC: y = a + b/cos(x)\n --> a = ( %f +/- %f ) ns\n --> b = ( %f +/- %f ) ns\n", fitSyst->GetParameter(0), fitSyst->GetParError(0), fitSyst->GetParameter(1), fitSyst->GetParError(1));
+  c->Close();
+  if (c) delete c;
+  
+  
+  // ******************
+  //  PLOTTING SECTION
+  // ******************
   // Plotting options
   gStyle->SetOptStat(0);
   gStyle->SetPadLeftMargin(0.1);
@@ -514,7 +469,8 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   gStyle->SetPadTopMargin(0.1);
   gStyle->SetPadBottomMargin(0.1);
   gStyle->SetPadBorderSize(0);
-   
+  
+  // *****
   // Define canvas and pads
   TCanvas *c0 = new TCanvas("","",1200,900);
   TPad *pad0 = new TPad("pad0","Hist",0.01,0.35,0.48,0.99);
@@ -530,204 +486,95 @@ float angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   pad4->Draw();
   pad5->Draw();
   
-  // Mean
+  // *****
+  // Projected mean hit time (fit results) vs angle
   pad0->cd()->SetGrid();
-  pad0->SetLeftMargin(0.12);
-  string tstr = Form("TELLIE angular systematic (run %d); Angle [deg]; Hit time [ns]",run);
+  pad0->SetLeftMargin(0.12);    // for label
+  string tstr = Form("TELLIE angular systematic (run %d); Angle of PMT w.r.t. fitted fibre direction [deg]; Hit time [ns]",run);
   gpmts->SetTitle(tstr.c_str());
   gpmts->SetMarkerColor(4);
   gpmts->SetMarkerStyle(6);
   gpmts->Draw("AP");
-  //gpmts->Fit("fitSyst", "R,q");
   gpmts->GetXaxis()->SetTitleOffset(1.2);
   gpmts->GetYaxis()->SetTitleOffset(1.5);
   gpmts->GetXaxis()->SetRangeUser(0,24);
-  /*
-  pmtfits->SetTitle("Fitted PMT hit times (prompt peaks);Angle [deg];Time [ns]");
-  pmtfits->SetMarkerColor(4);
-  pmtfits->SetMarkerStyle(6);
-  pmtfits->Draw("AP same");
-  */
-  /*
-  h2_1->SetTitle("Mean hit time;Angle [deg];Time [ns]");
-  h2_1->SetLineWidth(2);
-  h2_1->Draw();
-  h2_1->GetXaxis()->SetTitleOffset(1.2);
-  h2_1->GetYaxis()->SetTitleOffset(1.7);
-  float minval = h2_1->GetMaximum();
-  float maxval = h2_1->GetMinimum();
-  float val;
-  for (int b=1; b<=NBINS; b++) { 
-    val = h2_1->GetBinContent(b);
-    if (val==0.) continue;
-    if (minval>val) minval=val;
-    if (maxval<val) maxval=val;
-  }
-  h2_1->GetYaxis()->SetRangeUser(0.75*minval, 1.25*maxval);
-  */
   
-  // Normalised intensity profile as time vs. angle (2D)
+  // *****
+  // Normalised intensity profile, hit time vs angle
   pad1->cd()->SetGrid();
-  pad1->SetRightMargin(0.12);   // for TH2D color scale
-  h2->SetTitle(Form("Normalised intensity profile (%s);Angle [deg];Time [ns]",fibre.c_str()));
+  pad1->SetRightMargin(0.15);   // for TH2D color scale
+  h2->SetTitle(Form("Normalised intensity profile (%s);Angle of PMT w.r.t. fitted fibre direction [deg];Time [ns]",fibre.c_str()));
   h2->Draw("colz");
   h2->GetXaxis()->SetTitleOffset(1.2);
   h2->GetYaxis()->SetTitleOffset(1.5);
   
+  // *****
   // Mean hit times (binned PMT fits)
   pad2->cd()->SetGrid();
-  pad2->DrawFrame(0,0,24,5,"Mean PMT hit time;Angle [deg];Time [ns]");
-  //hmean->SetTitle("Mean PMT hit time;Angle [deg];Time [ns]");
+  hmean->SetTitle("Mean PMT hit time;Angle of PMT w.r.t. fitted fibre direction [deg];Mean time [ns]");
   hmean->SetLineWidth(2);
-  hmean->Draw("same");
+  hmean->Draw();
   hmean->GetXaxis()->SetTitleOffset(1.2);
-  hmean->GetYaxis()->SetTitleOffset(1.7);
-  //hmean->GetYaxis()->SetRangeUser(0, 1.1*hmean->GetMaximum());
-  /*
-  float minval = hmean->GetMaximum();
-  float maxval = hmean->GetMinimum();
-  float val;
-  for (int b=1; b<=NBINS; b++) { 
-    val = hmean->GetBinContent(b);
-    if (val==0.) continue;
-    if (minval>val) minval=val;
-    if (maxval<val) maxval=val;
-  }
-  hmean->GetYaxis()->SetRangeUser(0.75*minval, 1.25*maxval);
-  */
-  /*
-  h2_2->SetTitle("RMS hit time;Angle [deg];Time [ns]");
-  h2_2->SetLineWidth(2);
-  h2_2->Draw();
-  h2_2->GetXaxis()->SetTitleOffset(1.2);
-  h2_2->GetYaxis()->SetTitleOffset(1.4);
-  h2_2->GetYaxis()->SetRangeUser(3.8, 6.2);
-  */
+  hmean->GetYaxis()->SetTitleOffset(1.2);
+  hmean->GetYaxis()->SetRangeUser(0,8);
   
+  // *****
   // Mean errors (fitted PMT widths added in quadrature)
   pad3->cd()->SetGrid();
-  //pad3->DrawFrame(0,0,24,0.2,"Error on mean PMT hit time;Angle [deg];Time [ns]");
-  hmeanerr->SetTitle("Error on mean PMT hit time;Angle [deg];Time [ns]");
+  hmeanerr->SetTitle("Error on mean PMT hit time;Angle of PMT w.r.t. fitted fibre direction [deg];Error on mean time [ns]");
   hmeanerr->SetLineWidth(2);
   hmeanerr->Draw();
   hmeanerr->GetXaxis()->SetTitleOffset(1.2);
-  hmeanerr->GetYaxis()->SetTitleOffset(1.7);
-  hmeanerr->GetYaxis()->SetRangeUser(0, 1.1*hmeanerr->GetMaximum());
-  /*
-  float minerr = hmeanerr->GetMaximum();
-  float maxerr = hmeanerr->GetMinimum();
-  float err;
-  for (int b=1; b<=NBINS; b++) { 
-    err = hmeanerr->GetBinContent(b);
-    if (val==0.) continue;
-    if (minerr>val) minerr=err;
-    if (maxerr<val) maxerr=err;
-  }
-  hmeanerr->GetYaxis()->SetRangeUser(0.75*minerr, 1.25*maxerr);
-  */
-  /*
-  h2_1->SetTitle("Mean hit time;Angle [deg];Time [ns]");
-  h2_1->SetLineWidth(2);
-  h2_1->Draw();
-  h2_1->GetXaxis()->SetTitleOffset(1.2);
-  h2_1->GetYaxis()->SetTitleOffset(1.7);
-  float minval1 = h2_1->GetMaximum();
-  float maxval1 = h2_1->GetMinimum();
-  for (int b=1; b<=NBINS; b++) { 
-    val = h2_1->GetBinContent(b);
-    if (val==0.) continue;
-    if (minval1>val) minval1=val;
-    if (maxval1<val) maxval1=val;
-  }
-  h2_1->GetYaxis()->SetRangeUser(0.75*minval1, 1.25*maxval1);
-  */
+  hmeanerr->GetYaxis()->SetTitleOffset(1.8);
+  hmeanerr->GetYaxis()->SetRangeUser(0,0.16);
   
+  // *****
   // Mean signal widths
   pad4->cd()->SetGrid();
-  //pad4->DrawFrame(0,0,24,0.2,"Binned PMT errors;Angle [deg];Time [ns]");
-  hwdth->SetTitle("Mean PMT signal width;Angle [deg];Time [ns]");
+  hwdth->SetTitle("Binned PMT signal width;Angle of PMT w.r.t. fitted fibre direction [deg];Mean signal width [ns]");
   hwdth->SetLineWidth(2);
   hwdth->Draw();
   hwdth->GetXaxis()->SetTitleOffset(1.2);
-  hwdth->GetYaxis()->SetTitleOffset(1.7);
-  hwdth->GetYaxis()->SetRangeUser(0.9*hwdth->GetMinimum(), 1.1*hwdth->GetMaximum());
+  hwdth->GetYaxis()->SetTitleOffset(1.5);
+  hwdth->GetYaxis()->SetRangeUser(3.5,5.5);
   
+  // *****
   // Mean intensities and number of PMTs in angular segment
   pad5->cd()->SetGrid();
-  //pad5->DrawFrame(0,0,24,500,"Mean PMT intensity;Angle [deg];Time [ns]");
-  hpeak->SetTitle("Mean PMT intensity");
+  hpeak->SetTitle("Mean PMT intensity;Angle of PMT w.r.t. fitted fibre direction [deg];Mean peak intensity [a.u.]");
   hpeak->SetLineWidth(2);
-  hpeak->Draw("same");
+  hpeak->Draw();
   hpeak->GetXaxis()->SetTitleOffset(1.2);
   hpeak->GetYaxis()->SetTitleOffset(1.7);
-  hpeak->GetYaxis()->SetRangeUser(0, 1.1*hpeak->GetMaximum());
+  hpeak->GetYaxis()->SetRangeUser(0, 900);
   // PMTs in that angular segment
   hpmtseg->SetLineWidth(2);
   hpmtseg->SetLineColor(2);
-  hpmtseg->SetTitle("All PMTs");
+  hpmtseg->SetTitle("# All PMTs");
   hpmtseg->Draw("same");
   // PMTs with occupancy >1%
   hpmtgood->SetLineWidth(2);
   hpmtgood->SetLineColor(3);
-  hpmtgood->SetTitle("Good PMTs");
+  hpmtgood->SetTitle("# Good PMTs");
   hpmtgood->Draw("same");
-  pad5->BuildLegend();
-  /*
-  herr->SetTitle("Error on mean hit time (old);Angle [deg];#Delta t_{mean} [ns]");
-  herr->SetLineWidth(2);
-  herr->Draw();
-  herr->GetXaxis()->SetTitleOffset(1.2);
-  herr->GetYaxis()->SetTitleOffset(1.7);
-  herr->GetYaxis()->SetRangeUser(0, 0.1);
-  */
-  /*
-  // Summed intensities (projected profile)
-  pad5->cd()->SetGrid();
-  pad5->SetLeftMargin(0.2);   // for axis label
-  h2_0->SetTitle("Intensity (norm.);Angle [deg];Avg. NHit/PMT [ ]");
-  h2_0->SetLineWidth(2);
-  h2_0->Draw();
-  h2_0->GetXaxis()->SetTitleOffset(1.2);
-  h2_0->GetYaxis()->SetTitleOffset(1.7);
-  h2_0->GetYaxis()->SetRangeUser(0, 1e4);
-  // PMTs in that angular segment
-  hpmtseg->Scale(10);
-  hpmtseg->SetLineWidth(2);
-  hpmtseg->SetLineColor(2);
-  hpmtseg->SetTitle("nPMTs (#times10)");
-  hpmtseg->Draw("same");
-  // PMTs with occupancy >1%
-  hpmtgood->Scale(10);
-  hpmtgood->SetLineWidth(2);
-  hpmtgood->SetLineColor(3);
-  hpmtgood->SetTitle("nGoodPMTs (#times10)");
-  hpmtgood->Draw("same");
-  pad5->BuildLegend();
-  */
+  // Legend
+  TLegend *leg = pad5->BuildLegend();
   
-  // Chisquare/NDOF
-  /*
-  pad5->cd()->SetGrid();
-  pad5->SetLogy();
-  h2_3->SetTitle("Gaussian fit #chi^{2}/ndof;Angle [deg];");
-  h2_3->SetLineWidth(2);
-  h2_3->Draw();
-  h2_3->GetXaxis()->SetTitleOffset(1.2);
-  h2_3->GetYaxis()->SetRangeUser(0.5, 500);
-  */
-  
+  // *****
   // Save canvas and close
   string imgfile = "angular";
   if (!TEST) imgfile = Form("images/angular_%s",fibre.c_str());
   c0->Print(Form("%s.png",imgfile.c_str()));
   c0->Print(Form("%s.pdf",imgfile.c_str()));
   c0->Close();
- 
+  
   // Close files and free memory
   outfile->Close();
   if (outfile) delete outfile;
+  if (leg) delete leg;
   if (c0) delete c0;
   
+  // Return averaged nhit/event
   return (float)hitpmts/nevents;
 }
 
