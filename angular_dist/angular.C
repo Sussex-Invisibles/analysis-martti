@@ -30,13 +30,13 @@
 #include "../Xianguo.C"
 
 // Run time parameters
-const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
+const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
 const int USE_RATDB = 1;    // whether to use RATDB to get fibre positions (1=yes)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 
 // Initialise functions
-int angular(string, int, bool, bool);
+int angular(string, int, TF1*, bool, bool);
 
 // Main program
 int main(int argc, char** argv) {
@@ -44,28 +44,62 @@ int main(int argc, char** argv) {
   // Test flag (0 = process all runs, else run number)
   const int TEST = (RUN_CLUSTER) ? 0 : 102315;// 101410;
 
-  // Loop over all fibres in list
+  // Initialise input file
   string input = "../pca_runs/TELLIE_PCA.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
-  string line, fibre;
-  int node, channel, run, ipw, photons, pin, rms;
-  float nhit;
+  string line;
   for (int hdr=0; hdr<2; hdr++) {
-    getline(in,line);      // header
+    getline(in,line);      // skip header
   }
   
-  int nfiles=0; 
+  // Initialise fit result
+  TF1 *fitResult = new TF1("fitResult", "[0] - [1] + [1]/cos(x/180.*pi)", 0, 24);
+  double reset[2] = {-999, -999};
+  
+  // Initialise output file
+  string output = "ANGULAR_FITRESULTS.txt";
+  FILE *out = fopen(output.c_str(),"w");
+  fprintf(out,"Fibre  Run    Val_a Err_a Val_b  Err_b Chi_sq NDF\n");
+  fprintf(out,"-------------------------------------------------\n");
+  
+  // Loop over all fibres in list
+  string fibre;
+  int node, channel, run, ipw, photons, pin, rms;
+  float nhit;
+  int nfiles=0;
   while (true) {
+    
+    // Check for correct run
     in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
-    int errors = angular(fibre, run, IS_MC, TEST);
+    
+    // Reset parameters
+    fitResult->SetParameters(reset);
+    fitResult->SetParErrors(reset);
+    
+    // Fit angular systematic
+    int errors = angular(fibre, run, fitResult, IS_MC, TEST);
     if (errors) cerr<<"*** WARNING *** Run "<<run<<" was not processed correctly."<<endl;
-    else nfiles++;
+    else {
+      // Print fit results
+      double a = fitResult->GetParameter(0);
+      double b = fitResult->GetParameter(1);
+      double sa = fitResult->GetParError(0);
+      double sb = fitResult->GetParError(1);
+      int chi2 = round(fitResult->GetChisquare());
+      int ndof = fitResult->GetNDF();
+      fprintf(out,"%s %d %.3lf %.3lf %.3lf %.3lf %d %d\n",fibre.c_str(),run,a,sa,b,sb,chi2,ndof);
+      if (VERBOSE) printf("ANGULAR SYSTEMATIC: y = a - b + b/cos(x)\n --> a = ( %f +/- %f ) ns\n --> b = ( %f +/- %f ) ns\n --> chi^2 / NDF = %d / %d\n", a, sa, b, sb, chi2, ndof);
+      nfiles++;
+    }
   }
+  
+  // Close output file and exit
+  fclose(out);
   printf("Ran over %d files.\n",nfiles);
-  if (nfiles==0) { 
+  if (nfiles==0) {
     cerr<<"*** ERROR *** Did not process any files."<<endl;
     return 1; 
   }
@@ -73,7 +107,7 @@ int main(int argc, char** argv) {
 }
 
 // Define macro
-int angular(string fibre, int run, bool isMC=false, bool TEST=false) {
+int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=false) {
 
   // ********************************************************************
   // Initialisation
@@ -406,16 +440,12 @@ int angular(string fibre, int run, bool isMC=false, bool TEST=false) {
     outfile->Write();
   }
 
-  // Parametrise angular systematic: y = a - b + b/cos(x)
+  // Fit angular systematic: y = a - b + b/cos(x)
   TCanvas *c = new TCanvas("c","",800,600);
-  TF1 *fitSyst = new TF1("fitSyst", "[0] - [1] + [1]/cos(x/180.*pi)", 0, 24);
-  fitSyst->SetParameter(0, gpmts->GetMean(2));  // overall mean hit time
-  fitSyst->SetParameter(1, 0);                  // assume flat line a priori
-  gpmts->Fit("fitSyst", "R,q");                 // force range, quiet mode
-  printf("ANGULAR SYSTEMATIC: y = a - b + b/cos(x)\n --> a = ( %f +/- %f ) ns\n --> b = ( %f +/- %f ) ns\n",
-         fitSyst->GetParameter(0), fitSyst->GetParError(0), fitSyst->GetParameter(1), fitSyst->GetParError(1));
-  c->Close();
-  if (c) delete c;
+  fitResult->SetParameter(0, gpmts->GetMean(2));  // value at zero angle
+  fitResult->SetParameter(1, 0);                  // assume flat line a priori
+  gpmts->Fit("fitResult", "R,q");                 // force range, quiet mode  
+  c->Close(); delete c;
   
   
   // ******************
@@ -449,6 +479,23 @@ int angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   pad5->Draw();
   
   // *****
+  // Text boxes to display fit results
+  TBox *tbox = new TBox(0.6,6.1,15.7,7.9);
+  tbox->SetLineColor(2);
+  tbox->SetFillColor(kYellow-9);
+  TLatex *tfit[3] = {NULL};
+  tfit[0] = new TLatex(1,7.7,"Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
+  tfit[1] = new TLatex(1,7.0,Form(" #Rightarrow a = ( %.3lf #pm %.3lf ) ns",
+                                fitResult->GetParameter(0), fitResult->GetParError(0)));
+  tfit[2] = new TLatex(1,6.5,Form(" #Rightarrow b = ( %.3lf #pm %.3lf ) ns",
+                                fitResult->GetParameter(1), fitResult->GetParError(1)));
+  for (int l=0; l<3; l++) {
+    tfit[l]->SetTextAlign(13);
+    tfit[l]->SetTextFont(62);
+    tfit[l]->SetTextSize(0.03);
+  }
+  
+  // *****
   // Projected mean hit time (fit results) vs angle - TODO: Add fit results (as text) to plot!
   pad0->cd()->SetGrid();
   pad0->SetLeftMargin(0.12);    // for label
@@ -461,6 +508,8 @@ int angular(string fibre, int run, bool isMC=false, bool TEST=false) {
   gpmts->GetYaxis()->SetTitleOffset(1.6);
   gpmts->GetXaxis()->SetLimits(0,24);
   gpmts->GetYaxis()->SetRangeUser(minvalY,minvalY+8); // suppresses outliers!
+  tbox->Draw("L same");
+  for (int l=0; l<3; l++) tfit[l]->Draw("same");
   
   // *****
   // Normalised intensity profile, hit time vs angle
