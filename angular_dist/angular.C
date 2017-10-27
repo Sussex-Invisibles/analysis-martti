@@ -480,16 +480,16 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   
   // *****
   // Text boxes to display fit results
-  TBox *tbox = new TBox(0.6,5.6,15.5,7.85);
+  TBox *tbox = new TBox(0.6,minvalY+5.6,15.5,minvalY+7.85);
   tbox->SetLineColor(2);
   tbox->SetFillColor(kYellow-9);
   TLatex *tfit[4] = {NULL};
-  tfit[0] = new TLatex(1,7.7,"Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
-  tfit[1] = new TLatex(1,7.0,Form(" #Rightarrow a = ( %.3lf #pm %.3lf ) ns",
+  tfit[0] = new TLatex(1,minvalY+7.7,"Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
+  tfit[1] = new TLatex(1,minvalY+7.0,Form(" #Rightarrow a = ( %.3lf #pm %.3lf ) ns",
                                   fitResult->GetParameter(0), fitResult->GetParError(0)));
-  tfit[2] = new TLatex(1,6.5,Form(" #Rightarrow b = ( %.3lf #pm %.3lf ) ns",
+  tfit[2] = new TLatex(1,minvalY+6.5,Form(" #Rightarrow b = ( %.3lf #pm %.3lf ) ns",
                                   fitResult->GetParameter(1), fitResult->GetParError(1)));
-  tfit[3] = new TLatex(1,6.05,Form(" #Rightarrow #chi^{2}/ndf = %d / %d",
+  tfit[3] = new TLatex(1,minvalY+6.05,Form(" #Rightarrow #chi^{2}/ndf = %d / %d",
                                    (int)round(fitResult->GetChisquare()), fitResult->GetNDF()));
   for (int l=0; l<4; l++) {
     tfit[l]->SetTextAlign(13);
