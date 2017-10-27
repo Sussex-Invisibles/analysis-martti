@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     if (TEST && TEST!=run) continue; // only want specified run
     int result = check_offsets(fibre, run, histos, pmtinfo, IS_MC, TEST);
     if (result==-1) { printf("Could not find data for fibre %s!\n",fibre.c_str()); continue; }
-    printf("%6s - %2d PMTs with unusually high timing offsets (>3*RMS)\n",fibre.c_str(),result);
+    printf("%6s run %6d has %2d PMTs with unusual hit time offsets (>3*RMS)\n",fibre.c_str(),run,result);
     nfiles++;
   }
   
