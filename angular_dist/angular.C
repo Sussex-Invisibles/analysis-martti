@@ -30,7 +30,7 @@
 #include "../Xianguo.C"
 
 // Run time parameters
-const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int USE_RATDB = 1;    // whether to use RATDB to get fibre positions (1=yes)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
@@ -480,16 +480,16 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   
   // *****
   // Text boxes to display fit results
-  TBox *tbox = new TBox(0.6,minvalY+5.6,15.5,minvalY+7.85);
+  TBox *tbox = new TBox(0.6,minvalY+6.6,15.5,minvalY+8.85);
   tbox->SetLineColor(2);
   tbox->SetFillColor(kYellow-9);
   TLatex *tfit[4] = {NULL};
-  tfit[0] = new TLatex(1,minvalY+7.7,"Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
-  tfit[1] = new TLatex(1,minvalY+7.0,Form(" #Rightarrow a = ( %.3lf #pm %.3lf ) ns",
+  tfit[0] = new TLatex(1,minvalY+8.7,"Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
+  tfit[1] = new TLatex(1,minvalY+8.0,Form(" #Rightarrow a = ( %.3lf #pm %.3lf ) ns",
                                   fitResult->GetParameter(0), fitResult->GetParError(0)));
-  tfit[2] = new TLatex(1,minvalY+6.5,Form(" #Rightarrow b = ( %.3lf #pm %.3lf ) ns",
+  tfit[2] = new TLatex(1,minvalY+7.5,Form(" #Rightarrow b = ( %.3lf #pm %.3lf ) ns",
                                   fitResult->GetParameter(1), fitResult->GetParError(1)));
-  tfit[3] = new TLatex(1,minvalY+6.05,Form(" #Rightarrow #chi^{2}/ndf = %d / %d",
+  tfit[3] = new TLatex(1,minvalY+7.05,Form(" #Rightarrow #chi^{2}/ndf = %d / %d",
                                    (int)round(fitResult->GetChisquare()), fitResult->GetNDF()));
   for (int l=0; l<4; l++) {
     tfit[l]->SetTextAlign(13);
@@ -509,7 +509,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   gpmts->GetXaxis()->SetTitleOffset(1.2);
   gpmts->GetYaxis()->SetTitleOffset(1.5);
   gpmts->GetXaxis()->SetLimits(0,24);
-  gpmts->GetYaxis()->SetRangeUser(minvalY,minvalY+8); // suppresses outliers!
+  gpmts->GetYaxis()->SetRangeUser(minvalY,minvalY+9); // suppresses outliers!
   tbox->Draw("L same");
   for (int l=0; l<4; l++) tfit[l]->Draw("same");
   
@@ -530,7 +530,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hmean->Draw();
   hmean->GetXaxis()->SetTitleOffset(1.2);
   hmean->GetYaxis()->SetTitleOffset(1.2);
-  hmean->GetYaxis()->SetRangeUser(minvalY,minvalY+8);
+  hmean->GetYaxis()->SetRangeUser(minvalY,minvalY+9);
   
   // *****
   // Mean errors (fitted PMT widths added in quadrature)
