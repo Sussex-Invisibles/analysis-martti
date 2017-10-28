@@ -484,13 +484,13 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   tbox->SetLineColor(2);
   tbox->SetFillColor(kYellow-9);
   TLatex *tfit[4] = {NULL};
-  tfit[0] = new TLatex(1,minvalY+8.7,"Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
-  tfit[1] = new TLatex(1,minvalY+8.0,Form(" #Rightarrow a = ( %.3lf #pm %.3lf ) ns",
-                                  fitResult->GetParameter(0), fitResult->GetParError(0)));
-  tfit[2] = new TLatex(1,minvalY+7.5,Form(" #Rightarrow b = ( %.3lf #pm %.3lf ) ns",
-                                  fitResult->GetParameter(1), fitResult->GetParError(1)));
-  tfit[3] = new TLatex(1,minvalY+7.05,Form(" #Rightarrow #chi^{2}/ndf = %d / %d",
-                                   (int)round(fitResult->GetChisquare()), fitResult->GetNDF()));
+  tfit[0] = new TLatex(1, minvalY+8.7, "Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
+  tfit[1] = new TLatex(1, minvalY+8.0, Form(" #Rightarrow a = ( %.3lf #pm %.3lf ) ns",
+                                            fitResult->GetParameter(0), fitResult->GetParError(0)));
+  tfit[2] = new TLatex(1, minvalY+7.5, Form(" #Rightarrow b = ( %.3lf #pm %.3lf ) ns",
+                                            fitResult->GetParameter(1), fitResult->GetParError(1)));
+  tfit[3] = new TLatex(1, minvalY+7.05, Form(" #Rightarrow #chi^{2}/ndf = %d / %d",
+                                             (int)round(fitResult->GetChisquare()), fitResult->GetNDF()));
   for (int l=0; l<4; l++) {
     tfit[l]->SetTextAlign(13);
     tfit[l]->SetTextFont(62);
@@ -498,7 +498,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   }
   
   // *****
-  // Projected mean hit time (fit results) vs angle - TODO: Add fit results (as text) to plot!
+  // PMT hit time offsets and parametrised angular systematic
   pad0->cd()->SetGrid();
   pad0->SetLeftMargin(0.12);    // for label
   string tstr = Form("TELLIE angular systematic (run %d);Angle of PMT w.r.t. fitted fibre direction [deg];Offset in PMT hit time [ns]",run);
@@ -514,7 +514,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   for (int l=0; l<4; l++) tfit[l]->Draw("same");
   
   // *****
-  // Normalised intensity profile, hit time vs angle
+  // Normalised intensity profile (time vs angle)
   pad1->cd()->SetGrid();
   pad1->SetRightMargin(0.15);   // for TH2D color scale
   hprofile->SetTitle(Form("Normalised intensity profile (%s);Angle of PMT w.r.t. fitted fibre direction [deg];Offset in PMT hit time [ns]",fibre.c_str()));
@@ -523,9 +523,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hprofile->GetYaxis()->SetTitleOffset(1.5);
   
   // *****
-  // Mean hit times (binned PMT fits)
+  // Mean hit times (binned PMTs)
   pad2->cd()->SetGrid();
-  hmean->SetTitle("Mean PMT hit time;Angle of PMT w.r.t. fitted fibre direction [deg];Mean hit time offset [ns]");
+  hmean->SetTitle("Signal hit time;Angle of PMT w.r.t. fitted fibre direction [deg];Mean PMT signal offset [ns]");
   hmean->SetLineWidth(2);
   hmean->Draw();
   hmean->GetXaxis()->SetTitleOffset(1.2);
@@ -533,10 +533,10 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hmean->GetYaxis()->SetRangeUser(minvalY,minvalY+9);
   
   // *****
-  // Mean errors (fitted PMT widths added in quadrature)
+  // Mean errors (calculated with weighted arithmetic mean method)
   pad3->cd()->SetGrid();
   pad3->SetLeftMargin(0.12);
-  hmeanerr->SetTitle("Error on mean PMT hit time;Angle of PMT w.r.t. fitted fibre direction [deg];Error on mean hit time offset [ns]");
+  hmeanerr->SetTitle("Error on hit time;Angle of PMT w.r.t. fitted fibre direction [deg];Error on mean PMT signal offset [ns]");
   hmeanerr->SetLineWidth(2);
   hmeanerr->Draw();
   hmeanerr->GetXaxis()->SetTitleOffset(1.2);
@@ -546,7 +546,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   // *****
   // Mean signal widths
   pad4->cd()->SetGrid();
-  hwdth->SetTitle("Binned PMT signal width;Angle of PMT w.r.t. fitted fibre direction [deg];Mean signal width [ns]");
+  hwdth->SetTitle("Signal width;Angle of PMT w.r.t. fitted fibre direction [deg];Mean PMT signal width [ns]");
   hwdth->SetLineWidth(2);
   hwdth->Draw();
   hwdth->GetXaxis()->SetTitleOffset(1.2);
@@ -557,13 +557,13 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   // Mean intensities and number of PMTs in angular segment
   pad5->cd()->SetGrid();
   pad5->SetLeftMargin(0.12);
-  hpeak->SetTitle("Mean PMT intensity;Angle of PMT w.r.t. fitted fibre direction [deg];Mean peak intensity [a.u.]");
+  hpeak->SetTitle("Signal amplitude;Angle of PMT w.r.t. fitted fibre direction [deg];Mean PMT signal amplitude [a.u.]");
   hpeak->SetLineWidth(2);
   hpeak->Draw();
   hpeak->GetXaxis()->SetTitleOffset(1.2);
   hpeak->GetYaxis()->SetTitleOffset(1.7);
   hpeak->GetYaxis()->SetRangeUser(0, 900);
-  // PMTs in that angular segment
+  // PMTs in that bin
   hpmtseg->SetLineWidth(2);
   hpmtseg->SetLineColor(2);
   hpmtseg->SetTitle("# All PMTs");
