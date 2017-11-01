@@ -22,6 +22,8 @@
 #include <RAT/DS/MC.hh>
 #include <RAT/DS/Run.hh>
 #include <RAT/DU/DSReader.hh>
+#include <RAT/DU/GroupVelocity.hh>
+#include <RAT/DU/LightPathCalculator.hh>
 #include <RAT/DU/PMTInfo.hh>
 #include <RAT/DU/Utility.hh>
 
@@ -30,10 +32,11 @@
 #include "../Xianguo.C"
 
 // Run time parameters
-const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
-const int USE_RATDB = 1;    // whether to use RATDB to get fibre positions (1=yes)
-const int VERBOSE = 1;      // verbosity flag
-const int IS_MC = 0;        // Monte-Carlo flag 
+const int RUN_CLUSTER = 0;    // whether running on cluster (0=local)
+const int USE_BUCKETTIME = 0; // whether to use PMTBucketTime
+const int USE_RATDB = 1;      // whether to use RATDB to get fibre positions
+const int VERBOSE = 1;        // verbosity flag
+const int IS_MC = 0;          // Monte-Carlo flag 
 
 // Initialise functions
 int angular(string, int, TF1*, bool, bool);
@@ -164,27 +167,36 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     hwdtherr = (TH1D*)outfile->Get("hwdtherr"); // Binned errors on signal widths
     hpmtseg = (TH1D*)outfile->Get("hpmtseg");   // PMTs in angular bin
     hpmtgood = (TH1D*)outfile->Get("hpmtgood"); // Good PMTs in angular bin
+    cout << "Read from file " << outstr << endl;
   } else {
     outfile = new TFile(outstr.c_str(),"RECREATE");
 
     // Initialise RAT
     RAT::DU::DSReader dsreader(fname);
+    RAT::DU::Utility::Get()->BeginOfRun();
+    RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
+    //lpc.BeginOfRun(); // TODO - find out if this is needed too!
+    RAT::DU::GroupVelocity gv = RAT::DU::Utility::Get()->GetGroupVelocity();
     const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
+    //gv.BeginOfRun(); // TODO - find out if this is needed too!
     const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     const int NPMTS = pmtinfo.GetCount();
+    //const double ENERGY = lpc.WavelengthToEnergy(LAMBDA);   // TODO - update RAT version
+    const double ENERGY = 2.479684e-6;  // photon energy [MeV]
+    const double LOCALITY = 10.0; // accepted tolerance [mm] for light path
     
-    TVector3 fibrepos(0,0,0);
-    TVector3 fibredir(0,0,0);
-    TVector3 lightpos(0,0,0);
+    TVector3 fibrePos(0,0,0);
+    TVector3 fibreDir(0,0,0);
+    TVector3 lightPos(0,0,0);
     if (USE_RATDB) {
       // Get fibre info (from RATDB) 
       RAT::DB *db = RAT::DB::Get();
       //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
       RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
-      fibrepos.SetXYZ(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position of fibre [mm]
-      fibredir.SetXYZ(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction of fibre
-      lightpos = fibrepos + 2*fibrepos.Mag()*fibredir;                       // projected light spot centre
-      if (VERBOSE)  cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+      fibrePos.SetXYZ(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position of fibre [mm]
+      fibreDir.SetXYZ(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction of fibre
+      lightPos = fibrePos + 2*fibrePos.Mag()*fibreDir;                       // projected light spot centre
+      if (VERBOSE)  cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrePos) << ", dir " << printVector(fibreDir) << endl;
     } else {
       // Get fibre information (without using RATDB) 
       string fibre_table = "Fibre_Positions_DocDB1730.csv";
@@ -199,27 +211,27 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
         if (ff==fibre) break;
       }
       if(ff!=fibre) { cerr << "Failed to find information for fibre " << fibre << endl; exit(1); }
-      fibrepos.SetXYZ(10*fx,10*fy,10*fz);                // position of fibre [mm]
-      fibredir.SetXYZ(fu,fv,fw);                         // direction of fibre
-      lightpos = fibrepos + 2*fibrepos.Mag()*fibredir;   // projected light spot centre 
-      if (VERBOSE) cout << "DocDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
+      fibrePos.SetXYZ(10*fx,10*fy,10*fz);                // position of fibre [mm]
+      fibreDir.SetXYZ(fu,fv,fw);                         // direction of fibre
+      lightPos = fibrePos + 2*fibrePos.Mag()*fibreDir;   // projected light spot centre 
+      if (VERBOSE) cout << "DocDB: fibre " << fibre << ", pos " << printVector(fibrePos) << ", dir " << printVector(fibreDir) << endl;
     }
 
     // TELLIE fibre/trigger delays & Mark's PCA offsets
     ifstream del("TELLIE_delays.txt");
     if (!del) { cerr<<"ERROR - could not open TELLIE_delays.txt!"<<endl; return 3; }
-    int num, trig_delay;
-    float fibre_delay, pca_offset;
+    int num, triggerDelay;
+    float fibreDelay, pcaOffset;
     string line;
     for (int hdr=0; hdr<2; hdr++) {
       getline(del,line);      // header
     }
     while (true) {
-      del >> num >> fibre_delay >> trig_delay >> pca_offset;
+      del >> num >> fibreDelay >> triggerDelay >> pcaOffset;
       if (!del.good()) break;
       if (num == run) break;
     }
-    if (VERBOSE) cout<<"TELLIE: trigger delay "<<trig_delay<<" ns, fibre delay "<<fibre_delay<<" ns, total offset "<<pca_offset<<" ns."<<endl;
+    if (VERBOSE) cout<<"TELLIE: trigger delay "<<triggerDelay<<" ns, fibre delay "<<fibreDelay<<" ns, total offset "<<pcaOffset<<" ns."<<endl;
     
     // Get fitted light position (from file)
     string fitfile = "../fibre_validation/TELLIE_FITRESULTS.txt";
@@ -240,8 +252,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
       fitpos.SetXYZ(dirx,diry,dirz);
       if (fitpos.Mag()!=0) break;
     }
-    TVector3 fitdir = (fitpos-fibrepos).Unit();
-    cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightpos)*180./pi << " deg deviation" << endl;
+    TVector3 fitdir = (fitpos-fibrePos).Unit();
+    cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightPos)*180./pi << " deg deviation" << endl;
     
     // Initialise histograms
     const int NBINS = 24;
@@ -252,9 +264,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     // Loop over all entries
     int nevents=0;
     int hitpmts=0;
-    float allpmts[NPMTS], angpmts[NPMTS];
-    memset( allpmts, 0, NPMTS*sizeof(float) );                // NPMTS only known at runtime
-    memset( angpmts, 0, NPMTS*sizeof(float) );                // NPMTS only known at runtime
+    float pmtOccup[NPMTS], pmtAngle[NPMTS];                   // occupancy and angle
+    memset( pmtOccup, 0, NPMTS*sizeof(float) );               // NPMTS only known at runtime
+    memset( pmtAngle, 0, NPMTS*sizeof(float) );               // NPMTS only known at runtime
     TH2D *htime = new TH2D("htime","",NPMTS,0,NPMTS,200,-100,100);
     cout << "Looping over entries..." << endl;
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
@@ -288,23 +300,49 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
           if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
           if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA / ECA
           
-          // Get PMT info
-          TVector3 pmtpos = pmtinfo.GetPosition(pmtID);
-          TVector3 track = pmtpos-fibrepos;
-          double theta = track.Angle(fitdir);                 // angle w.r.t. fibre [rad]
-          double angle = theta*180./pi;                       // angle w.r.t. fibre [deg]
-          double pmttime = pmt.GetTime();                     // hit time [ns]
-          double corr = track.Mag()/c_water;                  // light travel time [ns]
-          double offset = pmttime-corr+fibre_delay+trig_delay;
+          // Get info for this PMT
+          TVector3 pmtPos = pmtinfo.GetPosition(pmtID);       // position [mm]
+          TVector3 pmtDir = pmtinfo.GetDirection(pmtID);      // direction
+          double pmtTime = pmt.GetTime();                     // hit time [ns]
+          
+          // Get light travel time (as done in BiPoLikelihoodDiff.cc)
+          lpc.CalcByPosition(fibrePos, pmtPos, ENERGY, LOCALITY);
+          double distInInnerAV = lpc.GetDistInInnerAV();
+          double distInAV = lpc.GetDistInAV();
+          double distInWater = lpc.GetDistInWater();
+          double lightTravelTime = gv.CalcByDistance(distInInnerAV, distInAV, distInWater, ENERGY);
+          
+          // Get light bucket time (as done in DQLaserBallProc.cc)
+          TVector3 endDir = lpc.GetIncidentVecOnPMT();        // end direction at PMT
+          double thetaAtPMT = endDir.Angle(pmtDir)*180./pi;   // incident angle with bucket face
+          double lightBucketTime = gv.PMTBucketTime(thetaAtPMT);  // DocDB 3138
+          if (!USE_BUCKETTIME) lightBucketTime = 0.0;         // ignore PMT bucket time
+          
+          // Get residual time after correcting for all offsets
+          double emissionTime = pmtTime - lightTravelTime - lightBucketTime;
+          double totalOffset = emissionTime + fibreDelay + triggerDelay;
+          double residualTime = totalOffset - pcaOffset;      // residual w.r.t. Mark's analysis
+          
+          // Get light emission angle
+          TVector3 startDir = lpc.GetInitialLightVec();       // start direction at fibre
+          double theta = startDir.Angle(fitdir)*180./pi;      // emission angle at fibre
+          
+          /*
+          // DEPRECATED - used this before light path calculator
+          TVector3 track = pmtPos-fibrePos;                   // straight line assumption
+          double theta_old = track.Angle(fitdir)*180./pi;     // angle w.r.t. fibre [deg]
+          double lightTravelTime_old = track.Mag()/C_WATER;   // light travel time [ns]
+          if (VERBOSE) printf("Photon at PMT #%04d has differences %6.3lf ns (travel time) and %6.3lf deg (initial angle)\n", pmtID, lightTravelTime-lightTravelTime_old, theta-theta_old);
+          */
           
           // Fill histograms/arrays
-          if (angle > MAXANG) continue;
-          htime->Fill(pmtID, offset-pca_offset);    // corrected hit time vs PMT ID
-          if (allpmts[pmtID]==0) {                  // fill angles only once per PMT
-            hpmtseg->Fill(angle);
-            angpmts[pmtID] = angle;
+          if (theta > MAXANG) continue;
+          htime->Fill(pmtID, residualTime);         // time residual vs PMT ID
+          if (pmtOccup[pmtID]==0) {                  // fill angles only once per PMT
+            hpmtseg->Fill(theta);
+            pmtAngle[pmtID] = theta;
           }
-          allpmts[pmtID] += 1.;
+          pmtOccup[pmtID]++;
           
         } // pmt loop
       } // event loop
@@ -314,12 +352,12 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     // Turn array of PMTs into percentage (occupancy)
     cout << "Number of events was " << nevents << endl;
     for (int iPMT=0; iPMT<NPMTS; iPMT++) {
-      allpmts[iPMT] /= nevents;
+      pmtOccup[iPMT] /= (float)nevents;
     }
     
     // Fit PMT hit times (Gaussian prompt peak)
     pmtfits = new TGraph2DErrors();
-    FitPromptPeaks(htime, NPMTS, allpmts, angpmts, pmtfits);
+    FitPromptPeaks(htime, NPMTS, pmtOccup, pmtAngle, pmtfits);
     if (!pmtfits) { cout << "*** ERROR *** Could not fit PMT prompt peaks!" << endl; return 4; }
     if (!pmtfits->GetN()) { cout << "*** ERROR *** Graph contains zero points!" << endl; return 4; }
     
@@ -335,7 +373,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     int npmts=0;
     for (int iPMT=0; iPMT<NPMTS; iPMT++) {
       if (tx[iPMT]+ty[iPMT]+tz[iPMT]==0) continue;
-      gpmts->SetPoint(npmts, angpmts[iPMT], ty[iPMT]);
+      gpmts->SetPoint(npmts, pmtAngle[iPMT], ty[iPMT]);
       gpmts->SetPointError(npmts, 0, tey[iPMT]);
       npmts++;
     }
@@ -373,7 +411,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     // Loop over all PMTs in the graph and bin the data
     for (int i=0; i<NPMTS; i++) {
       if (tx[i]+ty[i]+tz[i]==0) continue;     // not good PMT
-      tb = (int)angpmts[i];                   // bin index (1 degree bins)
+      tb = (int)pmtAngle[i];                  // bin index (1 degree bins)
       tn[tb]++;                               // number of PMTs in each bin
       tavgx[tb] += tx[i]/(tex[i]*tex[i]);     // sum of weighted intensities
       terrx[tb] += 1./(tex[i]*tex[i]);        // sum of errors squared
@@ -408,18 +446,18 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     // Get central hit time and initialise 2D histogram
     if (VERBOSE) printf("Mean hit time: %.2lf ns\n",meanhittime);
     int centraltime = (int)round(meanhittime + 5/2.);
-    centraltime -= centraltime % 5;             // rounded to the nearest multiple of 5
+    centraltime -= centraltime % 5;           // rounded to the nearest multiple of 5
     hprofile = new TH2D("hprofile",fibre.c_str(),NBINS,0,MAXANG,30,centraltime-15,centraltime+15);
     
     for (int i=0; i<NPMTS; i++) {
       if (tx[i]+ty[i]+tz[i]==0) continue;     // not good PMT
-      hpmtgood->Fill(angpmts[i]);
+      hpmtgood->Fill(pmtAngle[i]);
       // Only fill histogram if pmttime is within prompt peak (90% area ~ 1.645 sigma)
       for (int j=0; j<=htime->GetNbinsY()+1; j++) {
         float time = htime->GetYaxis()->GetBinCenter(j+1);
-        if (fabs(time - ty[i]) > 1.645*tz[i]) continue;     // not in prompt peak
+        if (fabs(time - ty[i]) > 1.645*tz[i]) continue; // not in prompt peak
         for (int k=0; k<(int)htime->GetBinContent(i+1,j+1); k++)
-          hprofile->Fill(angpmts[i], time);         // Angle of PMT w.r.t. fitted fibre direction [deg], time [ns]
+          hprofile->Fill(pmtAngle[i], time);  // Angle of PMT w.r.t. fitted fibre direction [deg], time [ns]
       }
     }
     
@@ -438,6 +476,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     pmtfits->Write("pmtfits");
     gpmts->Write("gpmts");
     outfile->Write();
+    cout << "Wrote output to file " << outstr << endl;
   }
 
   // Fit angular systematic: y = a - b + b/cos(x)
@@ -480,16 +519,16 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   
   // *****
   // Text boxes to display fit results
-  TBox *tbox = new TBox(0.6,minvalY+6.6,15.5,minvalY+8.85);
+  TBox *tbox = new TBox(0.6,minvalY+4.45,15.5,minvalY+6.85);
   tbox->SetLineColor(2);
   tbox->SetFillColor(kYellow-9);
   TLatex *tfit[4] = {NULL};
-  tfit[0] = new TLatex(1, minvalY+8.7, "Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
-  tfit[1] = new TLatex(1, minvalY+8.0, Form(" #Rightarrow a = ( %.3lf #pm %.3lf ) ns",
+  tfit[0] = new TLatex(1, minvalY+6.7, "Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
+  tfit[1] = new TLatex(1, minvalY+5.9, Form(" #Rightarrow a = ( %.3lf #pm %.3lf ) ns",
                                             fitResult->GetParameter(0), fitResult->GetParError(0)));
-  tfit[2] = new TLatex(1, minvalY+7.5, Form(" #Rightarrow b = ( %.3lf #pm %.3lf ) ns",
+  tfit[2] = new TLatex(1, minvalY+5.4, Form(" #Rightarrow b = ( %.3lf #pm %.3lf ) ns",
                                             fitResult->GetParameter(1), fitResult->GetParError(1)));
-  tfit[3] = new TLatex(1, minvalY+7.05, Form(" #Rightarrow #chi^{2}/ndf = %d / %d",
+  tfit[3] = new TLatex(1, minvalY+4.95, Form(" #Rightarrow #chi^{2}/ndf = %d / %d",
                                              (int)round(fitResult->GetChisquare()), fitResult->GetNDF()));
   for (int l=0; l<4; l++) {
     tfit[l]->SetTextAlign(13);
@@ -509,7 +548,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   gpmts->GetXaxis()->SetTitleOffset(1.2);
   gpmts->GetYaxis()->SetTitleOffset(1.5);
   gpmts->GetXaxis()->SetLimits(0,24);
-  gpmts->GetYaxis()->SetRangeUser(minvalY,minvalY+9); // suppresses outliers!
+  gpmts->GetYaxis()->SetRangeUser(minvalY-3,minvalY+7); // suppresses outliers!
   tbox->Draw("L same");
   for (int l=0; l<4; l++) tfit[l]->Draw("same");
   
@@ -530,7 +569,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hmean->Draw();
   hmean->GetXaxis()->SetTitleOffset(1.2);
   hmean->GetYaxis()->SetTitleOffset(1.2);
-  hmean->GetYaxis()->SetRangeUser(minvalY,minvalY+9);
+  hmean->GetYaxis()->SetRangeUser(minvalY-3,minvalY+7);
   
   // *****
   // Mean errors (calculated with weighted arithmetic mean method)
