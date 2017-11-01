@@ -38,6 +38,7 @@ const double LAMBDA   = 5.0e-4;             // mm -> TELLIE wavelength
 const double N_WATER  = 1.33772;            // at 500 nm -> http://www.philiplaven.com/p20.html
 const double C_VACUUM = 299.792458;         // mm/ns (detector units)
 const double C_WATER  = C_VACUUM/N_WATER;   // mm/ns
+const double ENERGY   = RAT::util::WavelengthToEnergy(LAMBDA); // photon energy [MeV]
 
 // -----------------------------------------------------------------------------
 // Initialise functions
