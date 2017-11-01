@@ -26,17 +26,19 @@
 #include <RAT/DU/LightPathCalculator.hh>
 #include <RAT/DU/PMTInfo.hh>
 #include <RAT/DU/Utility.hh>
+#include <RAT/PhysicsUtil.hh>
 
 // Helper functions
 #include "../HelperFunc.C"
 #include "../Xianguo.C"
 
 // Run time parameters
-const int RUN_CLUSTER = 0;    // whether running on cluster (0=local)
+const int RUN_CLUSTER = 1;    // whether running on cluster (0=local)
 const int USE_BUCKETTIME = 0; // whether to use PMTBucketTime
 const int USE_RATDB = 1;      // whether to use RATDB to get fibre positions
 const int VERBOSE = 1;        // verbosity flag
 const int IS_MC = 0;          // Monte-Carlo flag 
+const double LOCALITY = 10.0; // accepted tolerance [mm] for LightPathCalculator
 
 // Initialise functions
 int angular(string, int, TF1*, bool, bool);
@@ -173,7 +175,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
 
     // Initialise RAT
     RAT::DU::DSReader dsreader(fname);
-    RAT::DU::Utility::Get()->BeginOfRun();
+    //RAT::DU::Utility::Get()->BeginOfRun();
     RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
     //lpc.BeginOfRun(); // TODO - find out if this is needed too!
     RAT::DU::GroupVelocity gv = RAT::DU::Utility::Get()->GetGroupVelocity();
@@ -181,9 +183,6 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     //gv.BeginOfRun(); // TODO - find out if this is needed too!
     const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     const int NPMTS = pmtinfo.GetCount();
-    //const double ENERGY = lpc.WavelengthToEnergy(LAMBDA);   // TODO - update RAT version
-    const double ENERGY = 2.479684e-6;  // photon energy [MeV]
-    const double LOCALITY = 10.0; // accepted tolerance [mm] for light path
     
     TVector3 fibrePos(0,0,0);
     TVector3 fibreDir(0,0,0);
