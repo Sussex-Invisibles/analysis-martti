@@ -25,7 +25,7 @@ using std::flush;
 
 // -----------------------------------------------------------------------------
 // Run time parameters
-const int MORE_OUTPUT = 0;                // additional plots for testing
+const int MORE_OUTPUT = 0;                  // additional plots for testing
 
 // Global constants
 const double pi = TMath::Pi();
@@ -34,9 +34,10 @@ const TVector3 e2(0,1,0);
 const TVector3 e3(0,0,1);
 
 // Physical constants
-const double c_vacuum = 299.792458;       // mm/ns (detector units)
-const double n_water = 1.33772;           // at 500 nm -> http://www.philiplaven.com/p20.html
-const double c_water = c_vacuum/n_water;  // mm/ns
+const double LAMBDA   = 5.0e-4;             // mm -> TELLIE wavelength
+const double N_WATER  = 1.33772;            // at 500 nm -> http://www.philiplaven.com/p20.html
+const double C_VACUUM = 299.792458;         // mm/ns (detector units)
+const double C_WATER  = C_VACUUM/N_WATER;   // mm/ns
 
 // -----------------------------------------------------------------------------
 // Initialise functions
