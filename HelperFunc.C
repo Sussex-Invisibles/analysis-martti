@@ -17,6 +17,8 @@
 #include <TVector2.h>
 #include <TVector3.h>
 
+#include <RAT/PhysicsUtil.hh>
+
 // Include frequently used functions from 'std' (entire namespace is bad practice)
 using std::cerr;
 using std::cout;

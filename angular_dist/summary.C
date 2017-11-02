@@ -52,7 +52,6 @@ int main(int argc, char** argv) {
 
   // Initialise input file
   string input = "ANGULAR_FITRESULTS.txt";
-  //string input = "../pca_runs/TELLIE_PCA.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line;
@@ -62,39 +61,53 @@ int main(int argc, char** argv) {
 
   // Initialise graph
   TGraph* graph[95] = {NULL};
-  //TH1D* temp = NULL;
-  //TH1D* hist[95] = {NULL};
   TF1* func[95] = {NULL}; 
  
   // Loop over all fibres in list
   string fibre;
   int run, chisq, ndof;
   float a, sa, b, sb;
-  //int node, channel, run, ipw, photons, pin, rms;
-  //float nhit;
+  float xmin=1e6, ymin=1e6, amin=1e6, bmin=1e6;
+  float xmax=-1e6, ymax=-1e6, amax=-1e6, bmax=-1e6;
+  float xavg=0, yavg=0, aavg=0, bavg=0;
+  float f0, f1, f, sf;
   int nfiles=0;
   while (true) {
     in >> fibre >> run >> a >> sa >> b >> sb >> chisq >> ndof;
-    //in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
     if (!in.good()) break;
     if (TEST && TEST!=run) continue; // only want specified run
     graph[nfiles] = new TGraph();
     graph[nfiles]->SetTitle(fibre.c_str());
     graph[nfiles]->SetPoint(0,a,b);
-    //graph->SetPointError(nfiles,sa,sb);
-    //temp = get_histo(fibre, run, IS_MC, TEST);
-    //if (!temp) continue;
-    //hist[nfiles] = temp;
     func[nfiles] = new TF1(fibre.c_str(), "[0] - [1] + [1]/cos(x/180.*pi)", 0, 24);
     func[nfiles]->SetParameters(a,b);
+    f0 = func[nfiles]->GetMinimum();
+    f1 = func[nfiles]->GetMaximum();
+    f  = (f1+f0)/2.;
+    //f = func[nfiles]->Mean(0,24);
+    //sf = func[nfiles]->GetRMS();
     nfiles++;
+
+    // Get max/min/avg
+    if (a<amin) amin=a;
+    if (b<bmin) bmin=b;
+    if (f0<ymin) ymin=f0;
+    if (a>amax) amax=a;
+    if (b>bmax) bmax=b;
+    if (f1>ymax) ymax=f1;
+    aavg+=a;
+    bavg+=b;
+    yavg+=f;
   }
   printf("Ran over %d files.\n",nfiles);
   if (nfiles==0) { 
     cerr<<"*** ERROR *** No input files found."<<endl;
     return 1; 
   }
-
+  aavg/=nfiles;
+  bavg/=nfiles;
+  yavg/=nfiles;
+  
   // Plotting options
   gStyle->SetOptStat(0);
   gStyle->SetPadLeftMargin(0.1);
@@ -111,12 +124,8 @@ int main(int argc, char** argv) {
 
   // Fit lines (full range)
   c0->cd(1)->SetGrid();
-  c0->cd(1)->DrawFrame(0,0,24,40,"TELLIE angular systematic fits;Angle of PMT w.r.t. fitted fibre direction [deg];Mean hit time offset [ns]");
+  c0->cd(1)->DrawFrame(0,ymin-5,24,ymax+10,"TELLIE angular systematic fits;Angle of PMT w.r.t. fitted fibre direction [deg];Mean hit time offset [ns]");
   for (int fib=0; fib<95; fib++) {
-    //if (!hist[fib]) continue;
-    //hist[fib]->SetLineWidth(1);
-    //hist[fib]->SetLineColor(100-fib);
-    //hist[fib]->Draw("hist same L");
     if (!func[fib]) continue;
     func[fib]->SetLineWidth(1);
     func[fib]->SetLineColor(100-fib);
@@ -124,17 +133,17 @@ int main(int argc, char** argv) {
    
     // Highlight unusual fibres
     float yval = func[fib]->GetParameter(0);
-    if(yval > 10) {
+    if(yval > 5) {
       tname->DrawLatex(10,yval-1.5,func[fib]->GetName());
     }
   }
   // Box for text
-  TBox *tbox = new TBox(0.6,33.5,14.8,39);
+  TBox *tbox = new TBox(0.6,ymax+3.5,14.8,ymax+9);
   tbox->SetLineColor(2);
   tbox->SetFillColor(kYellow-9);
   tbox->Draw("L same");
   // Fit function as text
-  TLatex *text = new TLatex(1,38,"Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
+  TLatex *text = new TLatex(1,ymax+8,"Fit function: y = a #plus b#left(#frac{1}{cos(x)} #minus 1#right)");
   text->SetTextAlign(13);
   text->SetTextFont(62);
   text->SetTextSize(0.04);
@@ -142,12 +151,8 @@ int main(int argc, char** argv) {
 
   // Fit lines (zoomed in)
   c0->cd(2)->SetGrid();
-  c0->cd(2)->DrawFrame(0,0,16,5,"TELLIE angular systematic fits (zoom);Angle of PMT w.r.t. fitted fibre direction [deg];Mean hit time offset [ns]");
+  c0->cd(2)->DrawFrame(0,yavg-3,16,yavg+3,"TELLIE angular systematic fits (zoom);Angle of PMT w.r.t. fitted fibre direction [deg];Mean hit time offset [ns]");
   for (int fib=0; fib<95; fib++) {
-    //if (!hist[fib]) continue;
-    //hist[fib]->SetLineWidth(1);
-    //hist[fib]->SetLineColor(100-fib);
-    //hist[fib]->Draw("hist same L");
     if (!func[fib]) continue;
     func[fib]->SetLineWidth(1);
     func[fib]->SetLineColor(100-fib);
@@ -162,7 +167,7 @@ int main(int argc, char** argv) {
   
   // Fit parameters (full range)
   c0->cd(3)->SetGrid();
-  c0->cd(3)->DrawFrame(0,-10,30,70,"Fit parameters;Fit parameter a [ns];Fit parameter b [ns]");
+  c0->cd(3)->DrawFrame(amin-5,bmin-10,amax+5,bmax+10,"Fit parameters;Fit parameter a [ns];Fit parameter b [ns]");
   for (int fib=0; fib<95; fib++) {
     graph[fib]->SetMarkerStyle(7);
     graph[fib]->SetMarkerColor(100-fib);
@@ -171,7 +176,7 @@ int main(int argc, char** argv) {
     // Highlight unusual fibres
     double xval,yval;
     graph[fib]->GetPoint(0,xval,yval);
-    if(xval > 10 || yval < 0) {
+    if(xval > 5 || yval < 10) {
       tname->SetTextAlign(23);
       tname->DrawLatex(xval-0.5,yval-2,graph[fib]->GetTitle());
     }
@@ -179,7 +184,7 @@ int main(int argc, char** argv) {
   
   // Fit parameters (zoomed in)
   c0->cd(4)->SetGrid();
-  c0->cd(4)->DrawFrame(1,10,3,70,"Fit parameters (zoom);Fit parameter a [ns];Fit parameter b [ns]");
+  c0->cd(4)->DrawFrame(aavg-1.5,bavg-30,aavg+0.5,bavg+30,"Fit parameters (zoom);Fit parameter a [ns];Fit parameter b [ns]");
   for (int fib=0; fib<95; fib++) {
     graph[fib]->SetMarkerStyle(7);
     graph[fib]->SetMarkerColor(100-fib);
@@ -188,7 +193,7 @@ int main(int argc, char** argv) {
     // Highlight unusual fibres
     double xval,yval;
     graph[fib]->GetPoint(0,xval,yval);
-    if(xval > 2.9 || yval < 15 || (xval>1.6 && xval<2.1)) {
+    if(xval > aavg+0.2 || yval < 15 || (xval>1.6 && xval<2.1)) {
       tname->SetTextAlign(32);
       tname->DrawLatex(xval-0.02,yval,graph[fib]->GetTitle());
     }
@@ -204,7 +209,6 @@ int main(int argc, char** argv) {
   if (c0) delete c0;
   if (func) for (int fib=0; fib<95; fib++) delete func[fib];
   if (graph) for (int fib=0; fib<95; fib++) delete graph[fib];
-  //if (hist) for (int fib=0; fib<95; fib++) delete hist[fib];
   return 0;
 }
 

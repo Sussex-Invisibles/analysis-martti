@@ -26,7 +26,6 @@
 #include <RAT/DU/LightPathCalculator.hh>
 #include <RAT/DU/PMTInfo.hh>
 #include <RAT/DU/Utility.hh>
-#include <RAT/PhysicsUtil.hh>
 
 // Helper functions
 #include "../HelperFunc.C"
