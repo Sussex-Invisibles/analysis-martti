@@ -33,7 +33,6 @@
 
 // Run time parameters
 const int RUN_CLUSTER = 1;    // whether running on cluster (0=local)
-const int USE_BUCKETTIME = 0; // whether to use PMTBucketTime
 const int USE_RATDB = 1;      // whether to use RATDB to get fibre positions
 const int VERBOSE = 1;        // verbosity flag
 const int IS_MC = 0;          // Monte-Carlo flag 
@@ -216,8 +215,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     }
 
     // TELLIE fibre/trigger delays & Mark's PCA offsets
-    ifstream del("TELLIE_delays.txt");
-    if (!del) { cerr<<"ERROR - could not open TELLIE_delays.txt!"<<endl; return 3; }
+    string delayfile = "TELLIE_delays.txt";
+    ifstream del(delayfile.c_str());
+    if (!del) { cerr<<"ERROR - Failed to open "<<delayfile<<endl; exit(1); }
     int num, triggerDelay;
     float fibreDelay, pcaOffset;
     string line;
@@ -234,7 +234,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     // Get fitted light position (from file)
     string fitfile = "../fibre_validation/TELLIE_FITRESULTS.txt";
     ifstream fit(fitfile.c_str());
-    if (!fit) { cerr<<"Failed to open "<<fitfile<<endl; exit(1); }
+    if (!fit) { cerr<<"ERROR - Failed to open "<<fitfile<<endl; exit(1); }
     string fibrecheck;
     TVector3 fitpos(0,0,0);
     int runcheck;
@@ -258,6 +258,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     const int MAXANG = 24;
     hpmtseg = new TH1D("hpmtseg",fibre.c_str(),NBINS,0,MAXANG);
     hpmtgood = new TH1D("hpmtgood",fibre.c_str(),NBINS,0,MAXANG);
+    TH2D *htime = new TH2D("htime","",NPMTS,0,NPMTS,200,-100,100);
     
     // Loop over all entries
     int nevents=0;
@@ -265,7 +266,6 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     float pmtOccup[NPMTS], pmtAngle[NPMTS];                   // occupancy and angle
     memset( pmtOccup, 0, NPMTS*sizeof(float) );               // NPMTS only known at runtime
     memset( pmtAngle, 0, NPMTS*sizeof(float) );               // NPMTS only known at runtime
-    TH2D *htime = new TH2D("htime","",NPMTS,0,NPMTS,200,-100,100);
     cout << "Looping over entries..." << endl;
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
       const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
@@ -314,7 +314,6 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
           TVector3 endDir = lpc.GetIncidentVecOnPMT();        // end direction at PMT
           double thetaAtPMT = endDir.Angle(pmtDir)*180./pi;   // incident angle with bucket face
           double lightBucketTime = gv.PMTBucketTime(thetaAtPMT);  // DocDB 3138
-          if (!USE_BUCKETTIME) lightBucketTime = 0.0;         // ignore PMT bucket time
           
           // Get residual time after correcting for all offsets
           double emissionTime = pmtTime - lightTravelTime - lightBucketTime;
@@ -335,8 +334,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
           
           // Fill histograms/arrays
           if (theta > MAXANG) continue;
-          htime->Fill(pmtID, residualTime);         // time residual vs PMT ID
-          if (pmtOccup[pmtID]==0) {                  // fill angles only once per PMT
+          htime->Fill(pmtID, residualTime);                   // time residual vs PMT ID
+          if (pmtOccup[pmtID]==0) {                           // fill angles only once per PMT
             hpmtseg->Fill(theta);
             pmtAngle[pmtID] = theta;
           }
@@ -366,7 +365,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     double *tey = pmtfits->GetEY();
     double *tez = pmtfits->GetEZ();
     
-    // Fill 1D graph with time vs angle (use only PMTs of interest)
+    // Fill graph with time vs angle (use only PMTs of interest)
     gpmts = new TGraphErrors();
     int npmts=0;
     for (int iPMT=0; iPMT<NPMTS; iPMT++) {
@@ -452,7 +451,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
       hpmtgood->Fill(pmtAngle[i]);
       // Only fill histogram if pmttime is within prompt peak (90% area ~ 1.645 sigma)
       for (int j=0; j<=htime->GetNbinsY()+1; j++) {
-        float time = htime->GetYaxis()->GetBinCenter(j+1);
+        float time = htime->GetYaxis()->GetBinCenter(j);
         if (fabs(time - ty[i]) > 1.645*tz[i]) continue; // not in prompt peak
         for (int k=0; k<(int)htime->GetBinContent(i+1,j+1); k++)
           hprofile->Fill(pmtAngle[i], time);  // Angle of PMT w.r.t. fitted fibre direction [deg], time [ns]
@@ -477,6 +476,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     cout << "Wrote output to file " << outstr << endl;
   }
 
+  // TODO - apply global offsets here?
+  // would need to shift gpmts, hprofile, hmean
+  
   // Fit angular systematic: y = a - b + b/cos(x)
   TCanvas *c = new TCanvas("c","",800,600);
   fitResult->SetParameter(0, gpmts->GetMean(2));  // value at zero angle
@@ -484,12 +486,23 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   gpmts->Fit("fitResult", "R,q");                 // force range, quiet mode  
   c->Close(); delete c;
   
+  // Fill histograms with time residuals and pulls
+  TH1D *hresid = new TH1D("hresid","",40,-10,10);
+  TH1D *hpulls = new TH1D("hpulls","",40,-20,20);
+  double x,y,ey,y0;
+  for (int i=0; i<gpmts->GetN(); i++) {
+    gpmts->GetPoint(i,x,y);
+    ey = gpmts->GetErrorY(i);
+    y0 = fitResult->Eval(x);
+    hresid->Fill(y-y0);
+    hpulls->Fill((y-y0)/ey);
+  }
   
   // ******************
   //  PLOTTING SECTION
   // ******************
-  int minvalY = (int)round(hprofile->GetMean(2)); // lower limit for times to display
-  minvalY -= minvalY % 5;                         // round down to next multiple of 5
+  int minvalY = (int)round(fitResult->GetParameter(0)); // lower limit for times to display
+  minvalY -= minvalY % 5;                               // round down to next multiple of 5
   
   // Plotting options
   gStyle->SetOptStat(0);
@@ -501,19 +514,23 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   
   // *****
   // Define canvas and pads
-  TCanvas *c0 = new TCanvas("","",1200,900);
-  TPad *pad0 = new TPad("pad0","Hist",0.01,0.35,0.48,0.99);
-  TPad *pad1 = new TPad("pad1","Hist",0.52,0.35,1.00,0.99);
-  TPad *pad2 = new TPad("pad2","Hist",0.01,0.01,0.25,0.33);
-  TPad *pad3 = new TPad("pad3","Hist",0.26,0.01,0.50,0.33);
-  TPad *pad4 = new TPad("pad4","Hist",0.51,0.01,0.75,0.33);
-  TPad *pad5 = new TPad("pad5","Hist",0.76,0.01,1.00,0.33);
+  TCanvas *c0 = new TCanvas("","",1200,1400);
+  TPad *pad0 = new TPad("pad0","",0.01,0.58,0.48,0.99);
+  TPad *pad1 = new TPad("pad1","",0.52,0.58,1.00,0.99);
+  TPad *pad2 = new TPad("pad2","",0.01,0.29,0.33,0.57);
+  TPad *pad3 = new TPad("pad3","",0.34,0.29,0.66,0.57);
+  TPad *pad4 = new TPad("pad4","",0.67,0.29,0.99,0.57);
+  TPad *pad5 = new TPad("pad5","",0.01,0.01,0.33,0.29);
+  TPad *pad6 = new TPad("pad6","",0.34,0.01,0.66,0.29);
+  TPad *pad7 = new TPad("pad7","",0.67,0.01,0.99,0.29);
   pad0->Draw();
   pad1->Draw();
   pad2->Draw();
   pad3->Draw();
   pad4->Draw();
   pad5->Draw();
+  pad6->Draw();
+  pad7->Draw();
   
   // *****
   // Text boxes to display fit results
@@ -562,28 +579,18 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   // *****
   // Mean hit times (binned PMTs)
   pad2->cd()->SetGrid();
-  hmean->SetTitle("Signal hit time;Angle of PMT w.r.t. fitted fibre direction [deg];Mean PMT signal offset [ns]");
+  hmean->SetTitle("Signal mean (#mu);Angle of PMT w.r.t. fitted fibre direction [deg];Mean PMT signal offset [ns]");
   hmean->SetLineWidth(2);
   hmean->Draw();
   hmean->GetXaxis()->SetTitleOffset(1.2);
   hmean->GetYaxis()->SetTitleOffset(1.2);
   hmean->GetYaxis()->SetRangeUser(minvalY-3,minvalY+7);
-  
-  // *****
-  // Mean errors (calculated with weighted arithmetic mean method)
-  pad3->cd()->SetGrid();
-  pad3->SetLeftMargin(0.12);
-  hmeanerr->SetTitle("Error on hit time;Angle of PMT w.r.t. fitted fibre direction [deg];Error on mean PMT signal offset [ns]");
-  hmeanerr->SetLineWidth(2);
-  hmeanerr->Draw();
-  hmeanerr->GetXaxis()->SetTitleOffset(1.2);
-  hmeanerr->GetYaxis()->SetTitleOffset(1.8);
   hmeanerr->GetYaxis()->SetRangeUser(0,0.16);
   
   // *****
   // Mean signal widths
-  pad4->cd()->SetGrid();
-  hwdth->SetTitle("Signal width;Angle of PMT w.r.t. fitted fibre direction [deg];Mean PMT signal width [ns]");
+  pad3->cd()->SetGrid();
+  hwdth->SetTitle("Signal width (#sigma);Angle of PMT w.r.t. fitted fibre direction [deg];Mean PMT signal width [ns]");
   hwdth->SetLineWidth(2);
   hwdth->Draw();
   hwdth->GetXaxis()->SetTitleOffset(1.2);
@@ -592,9 +599,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   
   // *****
   // Mean intensities and number of PMTs in angular segment
-  pad5->cd()->SetGrid();
-  pad5->SetLeftMargin(0.12);
-  hpeak->SetTitle("Signal amplitude;Angle of PMT w.r.t. fitted fibre direction [deg];Mean PMT signal amplitude [a.u.]");
+  pad4->cd()->SetGrid();
+  pad4->SetLeftMargin(0.12);
+  hpeak->SetTitle("Signal amplitude (A);Angle of PMT w.r.t. fitted fibre direction [deg];Mean PMT signal amplitude [a.u.]");
   hpeak->SetLineWidth(2);
   hpeak->Draw();
   hpeak->GetXaxis()->SetTitleOffset(1.2);
@@ -611,7 +618,37 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hpmtgood->SetTitle("# Good PMTs");
   hpmtgood->Draw("same");
   // Legend
-  TLegend *leg = pad5->BuildLegend();
+  TLegend *leg = pad4->BuildLegend();
+  
+  // *****
+  // Mean errors (calculated with weighted arithmetic mean method)
+  pad5->cd()->SetGrid();
+  pad5->SetLeftMargin(0.12);
+  hmeanerr->SetTitle("Error on mean (s_{#mu});Angle of PMT w.r.t. fitted fibre direction [deg];Error on mean PMT signal offset [ns]");
+  hmeanerr->SetLineWidth(2);
+  hmeanerr->Draw();
+  hmeanerr->GetXaxis()->SetTitleOffset(1.2);
+  hmeanerr->GetYaxis()->SetTitleOffset(1.8);
+  
+  // *****
+  // Time residuals
+  pad6->cd()->SetGrid();
+  hresid->SetTitle("PMT time residuals;Time residual [ns];#PMTs/bin");
+  hresid->SetLineWidth(2);
+  hresid->Draw();
+  hresid->GetXaxis()->SetTitleOffset(1.2);
+  hresid->GetYaxis()->SetTitleOffset(1.5);
+  //hresid->GetYaxis()->SetRangeUser(0,1);
+  
+  // *****
+  // Pull variable
+  pad7->cd()->SetGrid();
+  hpulls->SetTitle("PMT pull variable;Pull [ ];#PMTs/bin");
+  hpulls->SetLineWidth(2);
+  hpulls->Draw();
+  hpulls->GetXaxis()->SetTitleOffset(1.2);
+  hpulls->GetYaxis()->SetTitleOffset(1.5);
+  //hpulls->GetYaxis()->SetRangeUser(0,1);
   
   // *****
   // Save canvas and close
