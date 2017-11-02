@@ -95,6 +95,7 @@ int main(int argc, char** argv) {
     if (a>amax) amax=a;
     if (b>bmax) bmax=b;
     if (f1>ymax) ymax=f1;
+    if (fibre=="FT047A" || fibre=="FT067A") continue; // skip bad fibres for average
     aavg+=a;
     bavg+=b;
     yavg+=f;
@@ -138,7 +139,7 @@ int main(int argc, char** argv) {
     }
   }
   // Box for text
-  TBox *tbox = new TBox(0.6,ymax+3.5,14.8,ymax+9);
+  TBox *tbox = new TBox(0.6,ymax+3,14.8,ymax+9);
   tbox->SetLineColor(2);
   tbox->SetFillColor(kYellow-9);
   tbox->Draw("L same");
@@ -151,7 +152,7 @@ int main(int argc, char** argv) {
 
   // Fit lines (zoomed in)
   c0->cd(2)->SetGrid();
-  c0->cd(2)->DrawFrame(0,yavg-3,16,yavg+3,"TELLIE angular systematic fits (zoom);Angle of PMT w.r.t. fitted fibre direction [deg];Mean hit time offset [ns]");
+  c0->cd(2)->DrawFrame(0,yavg-4,16,yavg+2,"TELLIE angular systematic fits (zoom);Angle of PMT w.r.t. fitted fibre direction [deg];Mean hit time offset [ns]");
   for (int fib=0; fib<95; fib++) {
     if (!func[fib]) continue;
     func[fib]->SetLineWidth(1);
@@ -160,7 +161,7 @@ int main(int argc, char** argv) {
     
     // Highlight unusual fibres
     float yval = func[fib]->GetParameter(0);
-    if(yval > 2.9) {
+    if(yval > 1.4) {
       tname->DrawLatex(2,yval+0.1,func[fib]->GetName());
     }
   }
@@ -184,7 +185,7 @@ int main(int argc, char** argv) {
   
   // Fit parameters (zoomed in)
   c0->cd(4)->SetGrid();
-  c0->cd(4)->DrawFrame(aavg-1.5,bavg-30,aavg+0.5,bavg+30,"Fit parameters (zoom);Fit parameter a [ns];Fit parameter b [ns]");
+  c0->cd(4)->DrawFrame(aavg-2,bavg-30,aavg+2,bavg+30,"Fit parameters (zoom);Fit parameter a [ns];Fit parameter b [ns]");
   for (int fib=0; fib<95; fib++) {
     graph[fib]->SetMarkerStyle(7);
     graph[fib]->SetMarkerColor(100-fib);
@@ -193,9 +194,9 @@ int main(int argc, char** argv) {
     // Highlight unusual fibres
     double xval,yval;
     graph[fib]->GetPoint(0,xval,yval);
-    if(xval > aavg+0.2 || yval < 15 || (xval>1.6 && xval<2.1)) {
-      tname->SetTextAlign(32);
-      tname->DrawLatex(xval-0.02,yval,graph[fib]->GetTitle());
+    if(xval > aavg+0.7 || yval < bavg-20) {
+      tname->SetTextAlign(12);
+      tname->DrawLatex(xval+0.05,yval,graph[fib]->GetTitle());
     }
   }
   
