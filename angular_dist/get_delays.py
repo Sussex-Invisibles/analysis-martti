@@ -33,7 +33,10 @@ with open(fname) as f:
         else: fibre_name = subRunInfo[0]['fibre'].getString()
 
         # Get information from Mark's fibre offsets table
+        run.SetRunID(103000)  # crazy DB hack cause of multiple versions
+        db.BeginOfRun(run)
         offsets = db.GetLink("TELLIE_PCA_FIBRE_OFFSETS",fibre_name[2:-1])
+        this_run = offsets.GetI("run_number_used")
         pca_offset = offsets.GetD("fibre_pca_offset")
 
         output.write("%6d %4.1f %3d %8.3f\n" % (num, fibre_delay, trig_delay, pca_offset))
