@@ -32,7 +32,7 @@
 #include "../Xianguo.C"
 
 // Run time parameters
-const int RUN_CLUSTER = 1;    // whether running on cluster (0=local)
+const int RUN_CLUSTER = 0;    // whether running on cluster (0=local)
 const int USE_RATDB = 1;      // whether to use RATDB to get fibre positions
 const int VERBOSE = 1;        // verbosity flag
 const int IS_MC = 0;          // Monte-Carlo flag 
@@ -115,6 +115,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   // ********************************************************************
   // Initialisation
   // ********************************************************************
+  const int NBINS = 24;
+  const int MAXANG = 24;
   
   // Check files for given run
   if(!TEST && VERBOSE) printf("*****\n");
@@ -214,28 +216,11 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
       if (VERBOSE) cout << "DocDB: fibre " << fibre << ", pos " << printVector(fibrePos) << ", dir " << printVector(fibreDir) << endl;
     }
 
-    // TELLIE fibre/trigger delays & Mark's PCA offsets
-    string delayfile = "TELLIE_delays.txt";
-    ifstream del(delayfile.c_str());
-    if (!del) { cerr<<"ERROR - Failed to open "<<delayfile<<endl; exit(1); }
-    int num, triggerDelay;
-    float fibreDelay, pcaOffset;
-    string line;
-    for (int hdr=0; hdr<2; hdr++) {
-      getline(del,line);      // header
-    }
-    while (true) {
-      del >> num >> fibreDelay >> triggerDelay >> pcaOffset;
-      if (!del.good()) break;
-      if (num == run) break;
-    }
-    if (VERBOSE) cout<<"TELLIE: trigger delay "<<triggerDelay<<" ns, fibre delay "<<fibreDelay<<" ns, total offset "<<pcaOffset<<" ns."<<endl;
-    
     // Get fitted light position (from file)
     string fitfile = "../fibre_validation/TELLIE_FITRESULTS.txt";
     ifstream fit(fitfile.c_str());
     if (!fit) { cerr<<"ERROR - Failed to open "<<fitfile<<endl; exit(1); }
-    string fibrecheck;
+    string line, fibrecheck;
     TVector3 fitpos(0,0,0);
     int runcheck;
     float dirx, diry, dirz, refx, refy, refz;
@@ -254,11 +239,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightPos)*180./pi << " deg deviation" << endl;
     
     // Initialise histograms
-    const int NBINS = 24;
-    const int MAXANG = 24;
     hpmtseg = new TH1D("hpmtseg",fibre.c_str(),NBINS,0,MAXANG);
     hpmtgood = new TH1D("hpmtgood",fibre.c_str(),NBINS,0,MAXANG);
-    TH2D *htime = new TH2D("htime","",NPMTS,0,NPMTS,200,-100,100);
+    TH2D *htime = new TH2D("htime","",NPMTS,0,NPMTS,500,0,500);
     
     // Loop over all entries
     int nevents=0;
@@ -317,8 +300,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
           
           // Get residual time after correcting for all offsets
           double emissionTime = pmtTime - lightTravelTime - lightBucketTime;
-          double totalOffset = emissionTime + fibreDelay + triggerDelay;
-          double residualTime = totalOffset - pcaOffset;      // residual w.r.t. Mark's analysis
+          //double totalOffset = emissionTime + fibreDelay + triggerDelay; // deprecated
+          //double residualTime = emissionTime - pcaOffset;     // residual w.r.t. Mark's analysis
           
           // Get light emission angle
           TVector3 startDir = lpc.GetInitialLightVec();       // start direction at fibre
@@ -334,7 +317,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
           
           // Fill histograms/arrays
           if (theta > MAXANG) continue;
-          htime->Fill(pmtID, residualTime);                   // time residual vs PMT ID
+          htime->Fill(pmtID, emissionTime);                   // time residual vs PMT ID
           if (pmtOccup[pmtID]==0) {                           // fill angles only once per PMT
             hpmtseg->Fill(theta);
             pmtAngle[pmtID] = theta;
@@ -476,8 +459,42 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     cout << "Wrote output to file " << outstr << endl;
   }
 
-  // TODO - apply global offsets here?
-  // would need to shift gpmts, hprofile, hmean
+  // TELLIE fibre/trigger delays & Mark's PCA offsets
+  string delayfile = "TELLIE_delays.txt";
+  ifstream del(delayfile.c_str());
+  if (!del) { cerr<<"ERROR - Failed to open "<<delayfile<<endl; exit(1); }
+  int num, triggerDelay;
+  float fibreDelay, pcaOffset;
+  string line;
+  for (int hdr=0; hdr<2; hdr++) {
+    getline(del,line);      // header
+  }
+  while (true) {
+    del >> num >> fibreDelay >> triggerDelay >> pcaOffset;
+    if (!del.good()) break;
+    if (num == run) break;
+  }
+  if (VERBOSE) cout<<"TELLIE: trigger delay "<<triggerDelay<<" ns, fibre delay "<<fibreDelay<<" ns, PCA offset "<<pcaOffset<<" ns."<<endl;
+    
+  // Apply global offset to histograms
+  double x,t;
+  for (int i=0; i<gpmts->GetN(); i++) {
+    gpmts->GetPoint(i,x,t);
+    gpmts->SetPoint(i,x,t-pcaOffset);
+  }
+  double meanhittime2 = gpmts->GetMean(2);
+  int centraltime2 = (int)round(meanhittime2 + 5/2.);
+  centraltime2 -= centraltime2 % 5;           // rounded to the nearest multiple of 5
+  TH2D *hprofile2 = new TH2D("hprofile2",fibre.c_str(),NBINS,0,MAXANG,30,centraltime2-15,centraltime2+15);
+  for (int i=0; i<=hprofile->GetNbinsX()+1; i++) {
+    for (int j=0; j<=hprofile->GetNbinsY()+1; j++) {
+      hprofile2->SetBinContent(i,j,hprofile->GetBinContent(i,j));
+    }
+  } 
+  for (int k=0; k<=hmean->GetNbinsX()+1; k++) {
+    t = hmean->GetBinContent(k);
+    hmean->SetBinContent(k,t-pcaOffset);
+  }
   
   // Fit angular systematic: y = a - b + b/cos(x)
   TCanvas *c = new TCanvas("c","",800,600);
@@ -489,7 +506,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   // Fill histograms with time residuals and pulls
   TH1D *hresid = new TH1D("hresid","",40,-10,10);
   TH1D *hpulls = new TH1D("hpulls","",40,-20,20);
-  double x,y,ey,y0;
+  double y,ey,y0;
   for (int i=0; i<gpmts->GetN(); i++) {
     gpmts->GetPoint(i,x,y);
     ey = gpmts->GetErrorY(i);
@@ -571,10 +588,10 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   // Normalised intensity profile (time vs angle)
   pad1->cd()->SetGrid();
   pad1->SetRightMargin(0.15);   // for TH2D color scale
-  hprofile->SetTitle(Form("Normalised intensity profile (%s);Angle of PMT w.r.t. fitted fibre direction [deg];Offset in PMT hit time [ns]",fibre.c_str()));
-  hprofile->Draw("colz");
-  hprofile->GetXaxis()->SetTitleOffset(1.2);
-  hprofile->GetYaxis()->SetTitleOffset(1.5);
+  hprofile2->SetTitle(Form("Normalised intensity profile (%s);Angle of PMT w.r.t. fitted fibre direction [deg];Offset in PMT hit time [ns]",fibre.c_str()));
+  hprofile2->Draw("colz");
+  hprofile2->GetXaxis()->SetTitleOffset(1.2);
+  hprofile2->GetYaxis()->SetTitleOffset(1.5);
   
   // *****
   // Mean hit times (binned PMTs)
