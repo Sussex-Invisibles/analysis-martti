@@ -504,7 +504,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   c->Close(); delete c;
   
   // Fill histograms with time residuals and pulls
-  TH1D *hresid = new TH1D("hresid","",40,-10,10);
+  TH1D *hresid = new TH1D("hresid","",40,-5,5);
   TH1D *hpulls = new TH1D("hpulls","",40,-20,20);
   double y,ey,y0;
   for (int i=0; i<gpmts->GetN(); i++) {
@@ -514,6 +514,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     hresid->Fill(y-y0);
     hpulls->Fill((y-y0)/ey);
   }
+  hresid->Fit("gaus","R,q");
+  //hpulls->Fit("gaus","R,q");
   
   // ******************
   //  PLOTTING SECTION
