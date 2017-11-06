@@ -504,7 +504,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   c->Close(); delete c;
   
   // Fill histograms with time residuals and pulls
-  TH1D *hresid = new TH1D("hresid","",40,-5,5);
+  TH1D *hresid = new TH1D("hresid","",30,-3,3);
   TH1D *hpulls = new TH1D("hpulls","",40,-20,20);
   double y,ey,y0;
   for (int i=0; i<gpmts->GetN(); i++) {
@@ -514,8 +514,6 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     hresid->Fill(y-y0);
     hpulls->Fill((y-y0)/ey);
   }
-  hresid->Fit("gaus","R,q");
-  //hpulls->Fit("gaus","R,q");
   
   // ******************
   //  PLOTTING SECTION
@@ -525,6 +523,11 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   
   // Plotting options
   gStyle->SetOptStat(0);
+  gStyle->SetOptFit(1);
+  gStyle->SetStatX(0.6);
+  gStyle->SetStatY(0.88);
+  gStyle->SetStatW(0.25);
+  gStyle->SetStatH(0.18);
   gStyle->SetPadLeftMargin(0.1);
   gStyle->SetPadRightMargin(0.1);
   gStyle->SetPadTopMargin(0.1);
@@ -583,14 +586,15 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   gpmts->GetYaxis()->SetTitleOffset(1.5);
   gpmts->GetXaxis()->SetLimits(0,24);
   gpmts->GetYaxis()->SetRangeUser(minvalY-3,minvalY+7); // suppresses outliers!
-  tbox->Draw("L same");
-  for (int l=0; l<4; l++) tfit[l]->Draw("same");
+  //tbox->Draw("L same");
+  //for (int l=0; l<4; l++) tfit[l]->Draw("same");
   
   // *****
   // Normalised intensity profile (time vs angle)
   pad1->cd()->SetGrid();
   pad1->SetRightMargin(0.15);   // for TH2D color scale
   hprofile2->SetTitle(Form("Normalised intensity profile (%s);Angle of PMT w.r.t. fitted fibre direction [deg];Offset in PMT hit time [ns]",fibre.c_str()));
+  hprofile2->SetStats(0);
   hprofile2->Draw("colz");
   hprofile2->GetXaxis()->SetTitleOffset(1.2);
   hprofile2->GetYaxis()->SetTitleOffset(1.5);
@@ -654,10 +658,11 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   pad6->cd()->SetGrid();
   hresid->SetTitle("PMT time residuals;Time residual [ns];#PMTs/bin");
   hresid->SetLineWidth(2);
+  hresid->Fit("gaus","R,q");
   hresid->Draw();
   hresid->GetXaxis()->SetTitleOffset(1.2);
   hresid->GetYaxis()->SetTitleOffset(1.5);
-  //hresid->GetYaxis()->SetRangeUser(0,1);
+  hresid->GetYaxis()->SetRangeUser(0,500);
   
   // *****
   // Pull variable
@@ -667,7 +672,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hpulls->Draw();
   hpulls->GetXaxis()->SetTitleOffset(1.2);
   hpulls->GetYaxis()->SetTitleOffset(1.5);
-  //hpulls->GetYaxis()->SetRangeUser(0,1);
+  hpulls->GetYaxis()->SetRangeUser(0,200);
   
   // *****
   // Save canvas and close
