@@ -16,6 +16,7 @@
 #include <TPaveStats.h>
 #include <TStyle.h>
 #include <TSystem.h>
+#include <TVirtualFitter.h>
 
 // RAT stuff
 #include <RAT/DS/Entry.hh>
@@ -500,7 +501,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   TCanvas *c = new TCanvas("c","",800,600);
   fitResult->SetParameter(0, gpmts->GetMean(2));  // value at zero angle
   fitResult->SetParameter(1, 0);                  // assume flat line a priori
-  gpmts->Fit("fitResult", "R,q");                 // force range, quiet mode  
+  gpmts->Fit("fitResult","R,q");                  // force range, quiet mode  
   c->Close(); delete c;
   
   // Fill histograms with time residuals and pulls
@@ -514,6 +515,10 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     hresid->Fill(y-y0);
     hpulls->Fill((y-y0)/ey);
   }
+  TF1 *fitresid = new TF1("fitresid","gaus",-3,3);
+  fitresid->SetParameters(hresid->GetMaximum(),hresid->GetMean(),hresid->GetRMS());
+  hresid->Fit("fitresid","R,q");
+  double sigma_resid = fitresid->GetParameter(2);
   
   // ******************
   //  PLOTTING SECTION
@@ -588,7 +593,37 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   gpmts->GetYaxis()->SetRangeUser(minvalY-3,minvalY+7); // suppresses outliers!
   //tbox->Draw("L same");
   //for (int l=0; l<4; l++) tfit[l]->Draw("same");
-  
+
+  //Create a histogram to hold the confidence intervals
+  TH1D *hint = new TH1D("hint", "Fitted function with error band", 10*NBINS, 0, MAXANG);
+  TH1D *hint2 = new TH1D("hint2", "Fitted function with error band", 10*NBINS, 0, MAXANG);
+  TH1D *hint3 = new TH1D("hint3", "Fitted function with error band", 10*NBINS, 0, MAXANG);
+  //(TVirtualFitter::GetFitter())->GetConfidenceIntervals(hint);
+  //Now the "hint" histogram has the fitted function values as the
+  //bin contents and the confidence intervals as bin errors
+  for(int i=0;i<=hint->GetNbinsX()+1;i++) {
+    float x = (float)MAXANG/hint->GetNbinsX()*(i-1);
+    hint->SetBinContent(i,fitResult->Eval(x));
+    hint->SetBinError(i,sigma_resid);
+    hint2->SetBinContent(i,fitResult->Eval(x));
+    hint2->SetBinError(i,2*sigma_resid);
+    hint3->SetBinContent(i,fitResult->Eval(x));
+    hint3->SetBinError(i,3*sigma_resid);
+  }
+  hint->SetStats(kFALSE);
+  hint->SetLineColor(0);
+  hint->SetFillColorAlpha(2, 0.2);
+  hint->Draw("e3 same");
+  hint2->SetStats(kFALSE);
+  hint2->SetLineColor(0);
+  hint2->SetFillColorAlpha(2, 0.2);
+  hint2->Draw("e3 same");
+  hint3->SetStats(kFALSE);
+  hint3->SetLineColor(0);
+  hint3->SetFillColorAlpha(2, 0.2);
+  hint3->Draw("e3 same");
+  gpmts->Draw("P same");
+ 
   // *****
   // Normalised intensity profile (time vs angle)
   pad1->cd()->SetGrid();
