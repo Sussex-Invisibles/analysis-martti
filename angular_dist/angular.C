@@ -328,7 +328,6 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
         } // pmt loop
       } // event loop
     } // entry loop
-    cout << endl;
 
     // Turn array of PMTs into percentage (occupancy)
     cout << "Number of events was " << nevents << endl;
@@ -693,7 +692,6 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   pad6->cd()->SetGrid();
   hresid->SetTitle("PMT time residuals;Time residual [ns];#PMTs/bin");
   hresid->SetLineWidth(2);
-  hresid->Fit("gaus","R,q");
   hresid->Draw();
   hresid->GetXaxis()->SetTitleOffset(1.2);
   hresid->GetYaxis()->SetTitleOffset(1.5);
