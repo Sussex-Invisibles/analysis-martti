@@ -77,6 +77,7 @@ void printProgress(int it, int n) {
     else                        cout << " ";
   }
   cout << "] " << (int)round(100.*prog) << "%\r" << flush;
+  if (fabs(prog-1.) < 1e-6) cout << endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -275,7 +276,7 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *pmthits, float *pmtangs, TGra
     delete temp;
     
   } // PMT loop
-  cout << endl;
+  
   if (c0) delete c0;
   
   // Return 2D graph with fit results (by reconstructing object at given address)
