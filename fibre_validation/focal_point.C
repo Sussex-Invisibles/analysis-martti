@@ -38,7 +38,7 @@
 #include "../Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
+const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int USE_RATDB = 1;    // whether to use RATDB to get fibre positions (1=yes)
 const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
@@ -237,8 +237,15 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
       else if(onspot==2) reflectednhit += pmthits;
     }
   } else {
+    // Loop over all entries in file
+    cout << "Looping over entries..." << endl;
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
       const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
+
+      // Print progress
+      if (iEntry % int(dsreader.GetEntryCount()/100.) == 0) {
+        printProgress(iEntry, dsreader.GetEntryCount());
+      }      
       
       // Loop over triggered events in each entry
       for(int iEv=0; iEv<ds.GetEVCount(); iEv++) { // mostly 1 event per entry
@@ -452,6 +459,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   // Fit 2D graphs with Gaussian surface
   const int NPARS = 4;
   double parDir[NPARS], parRef[NPARS];
+  cout << "Performing 2D Gaussian fits..." << endl;
   FitLightSpot(gDir2D,pmtrad/1e3,DIR_CONE,parDir); // units: dist [m], ang [deg]
   FitLightSpot(gRef2D,pmtrad/1e3,REF_CONE,parRef);
   cout << "FIT RESULTS:" << endl;
@@ -478,29 +486,23 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   double DIRANG = lightpos.Angle(*dirfit);   // angle between expected and fitted light spot
   double REFANG = fibrepos.Angle(*reffit);   // angle between fibre position and fitted light spot
   
+  // Overwrite value for direct light if affected by belly plates
   if (IS_BELLY_FIBRE) {
     cout << "Direct light will be affected by belly plates. Using weighted method instead of Gaussian fit." << endl;
-    // Output values (weighted average)
-    DIRANG = lightpos.Angle(direct);    // angle between expected and weighted light spot
-    REFANG = fibrepos.Angle(reflected); // angle between fibre position and weighted light spot
-    //dirfit->SetXYZ(direct.X(), direct.Y(), direct.Z());
-    //reffit->SetXYZ(reflected.X(), reflected.Y(), reflected.Z());
+    DIRANG = lightpos.Angle(direct);         // angle between expected and weighted light spot
   }
   
   
   // ********************************************************************
   // Create histograms and graphs for output
   // ********************************************************************
+  
   // Get contours around fitted light spots in (phi,theta)
   TVector3 *dotsD[NDOTS], *dotsR[NDOTS];
-  if (IS_BELLY_FIBRE) {    // use weighted average result
-    // TODO - still use the Gaussian standard deviation from the above fit?
-    DrawCircle(direct, sigmaAngDir, dotsD, NDOTS);
-    DrawCircle(reflected, sigmaAngRef, dotsR, NDOTS);
-  } else {                 // use 2D Gaussian fit result
-    DrawCircle(*dirfit, sigmaAngDir, dotsD, NDOTS);
-    DrawCircle(*reffit, sigmaAngRef, dotsR, NDOTS);
-  }
+  if (IS_BELLY_FIBRE) DrawCircle(direct, sigmaAngDir, dotsD, NDOTS); // weighted method (TODO - use fitted sigma?)
+  else DrawCircle(*dirfit, sigmaAngDir, dotsD, NDOTS);               // Gaussian fit
+  DrawCircle(*reffit, sigmaAngRef, dotsR, NDOTS);
+  
   double pcontDx[NDOTS], pcontDy[NDOTS];
   double pcontRx[NDOTS], pcontRy[NDOTS];
   for (int d=0; d<NDOTS; d++) {
@@ -529,10 +531,6 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   int weightMarker = 2;
   int fitMarker = 34;
   int trueMarker = 24;
-  if (IS_BELLY_FIBRE) {
-    fitMarker = 28;	// open cross to indicate fit is performed but not used
-    weightMarker = 34;	// full cross for weighted position (= result)
-  }
   
   // Create markers for relevant points (icosahedral view)
   int nope;
@@ -553,7 +551,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   pGssRef->SetMarkerColor(1);
   pGssRef->SetMarkerSize(1.5);
   
-  icospos = func::IcosProject(*dirfit,nope);
+  if (IS_BELLY_FIBRE) icospos = func::IcosProject(direct,nope); // use weighted average
+  else icospos = func::IcosProject(*dirfit,nope);               // use Gaussian fit
   ptX = icospos.X();
   ptY = icospos.Y();
   TGraph *pFitDir = new TGraph(1,&ptX,&ptY);          // direct light (fitted)
@@ -601,7 +600,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   // View is centered over weighted light spot
   const int nil = 0;
   TGraph *pWgtDir = new TGraph(1,&nil,&nil);         // direct light (weighted)
-  pWgtDir->SetMarkerStyle(weightMarker);
+  if (IS_BELLY_FIBRE) pWgtDir->SetMarkerStyle(fitMarker);
+  else pWgtDir->SetMarkerStyle(weightMarker);
   pWgtDir->SetMarkerColor(1);
   pWgtDir->SetMarkerSize(2);
   
@@ -654,6 +654,8 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   if(nbackR>0)  { pcircR2 = new TGraph(nbackR,pcircRx[1],pcircRy[1]);
                   pcircR2->SetMarkerStyle(1); }
   
+  // OVERWRITE DIRECT LIGHT FIT RESULT FOR FIBRES AFFECTED BY BELLY PLATES
+  if (IS_BELLY_FIBRE) dirfit->SetXYZ(direct.X(), direct.Y(), direct.Z());
   
   // ********************************************************************
   // Plotting section
@@ -717,6 +719,12 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     v[l]->SetTextSize(0.08);
     v[l]->Draw();
   }
+
+  // Indicate possible belly plate effect
+  TLatex *txtB = new TLatex(-9.25,9.5,"BELLY PLATE");
+  txtB->SetTextAlign(13);
+  txtB->SetTextFont(102);
+  txtB->SetTextSize(0.04);
   
   // Indicate colour scale
   TLatex *txtD = new TLatex(9.5,9.5,Form("NHit/PMT #leq %d",nearmax));
@@ -792,11 +800,14 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   pFibDir->Draw("P same");
   pGssDir->DrawGraph(1,&guessD_rotX,&guessD_rotY,"P same");
   pWgtDir->Draw("P same");
-  pFitDir->DrawGraph(1,&fitD_rotX,&fitD_rotY,"P same");
+  TGraph *pFitDir2 = (TGraph*)pFitDir->Clone();
+  if (IS_BELLY_FIBRE) pFitDir2->SetMarkerStyle(28); // open cross to indicate Gaussian fit is not used
+  pFitDir2->DrawGraph(1,&fitD_rotX,&fitD_rotY,"P same");
   if(pcircD1) pcircD1->Draw("P same");
   if(pcircD2) pcircD2->Draw("P same");
   txtD->Draw();  
-  
+  if (IS_BELLY_FIBRE) txtB->Draw();  
+
   // ----------
   // View from reflected light spot (fitted)
   pad4->cd()->SetGrid();
