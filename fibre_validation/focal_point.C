@@ -38,7 +38,7 @@
 #include "../Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
+const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
 const int USE_RATDB = 1;    // whether to use RATDB to get fibre positions (1=yes)
 const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
@@ -154,20 +154,31 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     printf("OK. Extracting data for fibre %s.\n",fibre.c_str());
   }
 
+  // Find out if direct light from fibre is affected by belly plates
+  ifstream belly("BELLY_FIBRES.list");
+  bool IS_BELLY_FIBRE = false;
+  string thisfibre;
+  while (belly.good()) {
+    getline(belly,thisfibre);
+    if(!belly.good()) break;
+    if(thisfibre==fibre) IS_BELLY_FIBRE = true;
+  }
+  
   // Initialise RAT
   RAT::DU::DSReader dsreader(fname);
   const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   const int NPMTS = pmtinfo.GetCount();
 
+  TVector3 fibrepos, fibredir, lightpos;
   if (USE_RATDB) {
     // Get fibre info (from RATDB) 
     RAT::DB *db = RAT::DB::Get();
     //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
     RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
-    TVector3 fibrepos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
-    TVector3 fibredir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
-    TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
+    fibrepos.SetXYZ(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position
+    fibredir.SetXYZ(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction
+    lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre
     cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
   } else {
     // Get fibre information (without using RATDB) 
@@ -184,9 +195,9 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
     }
     if(ff!=fibre) { cerr << "Failed to find information for fibre " << fibre << endl; exit(1); }
     //cout << Form("%s %f %f %f %f %f %f %s\n",ff.c_str(),fx,fy,fz,fu,fv,fw,fn.c_str()) << endl;
-    TVector3 fibrepos(10*fx,10*fy,10*fz); // position of fibre [mm]
-    TVector3 fibredir(fu,fv,fw); // direction of fibre
-    TVector3 lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre 
+    fibrepos.SetXYZ(10*fx,10*fy,10*fz); // position of fibre [mm]
+    fibredir.SetXYZ(fu,fv,fw); // direction of fibre
+    lightpos = fibrepos + 2*fibrepos.Mag()*fibredir; // projected light spot centre 
     cout << "DocDB: fibre " << fibre << ", pos " << printVector(fibrepos) << ", dir " << printVector(fibredir) << endl;
   }
 
@@ -457,7 +468,7 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   double sigmaAngDir = asin(1e3*parDir[3]/pmtrad)*180./pi;
   double sigmaAngRef = asin(1e3*parRef[3]/pmtrad)*180./pi;
   
-  // Output values (new)
+  // Output values (Gaussian fit)
   dirfit->SetXYZ(fitDir.X(), fitDir.Y(), fitDir.Z());
   dirfit->RotateY(rot_Z1);
   dirfit->RotateZ(rot_X1);
@@ -466,13 +477,15 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   reffit->RotateZ(rot_X2);
   double DIRANG = lightpos.Angle(*dirfit);   // angle between expected and fitted light spot
   double REFANG = fibrepos.Angle(*reffit);   // angle between fibre position and fitted light spot
-  /*
-  // Output values (old)
-  double DIRANG = lightpos.Angle(direct);    // angle between expected and weighted light spot
-  double REFANG = fibrepos.Angle(reflected); // angle between fibre position and weighted light spot
-  dirfit->SetXYZ(direct.X(), direct.Y(), direct.Z());
-  reffit->SetXYZ(reflected.X(), reflected.Y(), reflected.Z());
-  */
+  
+  if (IS_BELLY_FIBRE) {
+    cout << "Direct light will be affected by belly plates. Using weighted method instead of Gaussian fit." << endl;
+    // Output values (weighted average)
+    DIRANG = lightpos.Angle(direct);    // angle between expected and weighted light spot
+    REFANG = fibrepos.Angle(reflected); // angle between fibre position and weighted light spot
+    //dirfit->SetXYZ(direct.X(), direct.Y(), direct.Z());
+    //reffit->SetXYZ(reflected.X(), reflected.Y(), reflected.Z());
+  }
   
   
   // ********************************************************************
@@ -480,8 +493,14 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   // ********************************************************************
   // Get contours around fitted light spots in (phi,theta)
   TVector3 *dotsD[NDOTS], *dotsR[NDOTS];
-  DrawCircle(*dirfit, sigmaAngDir, dotsD, NDOTS);
-  DrawCircle(*reffit, sigmaAngRef, dotsR, NDOTS);
+  if (IS_BELLY_FIBRE) {    // use weighted average result
+    // TODO - still use the Gaussian standard deviation from the above fit?
+    DrawCircle(direct, sigmaAngDir, dotsD, NDOTS);
+    DrawCircle(reflected, sigmaAngRef, dotsR, NDOTS);
+  } else {                 // use 2D Gaussian fit result
+    DrawCircle(*dirfit, sigmaAngDir, dotsD, NDOTS);
+    DrawCircle(*reffit, sigmaAngRef, dotsR, NDOTS);
+  }
   double pcontDx[NDOTS], pcontDy[NDOTS];
   double pcontRx[NDOTS], pcontRy[NDOTS];
   for (int d=0; d<NDOTS; d++) {
@@ -510,6 +529,10 @@ void focal_point(string fibre, int channel, int run, int ipw, int photons, float
   int weightMarker = 2;
   int fitMarker = 34;
   int trueMarker = 24;
+  if (IS_BELLY_FIBRE) {
+    fitMarker = 28;	// open cross to indicate fit is performed but not used
+    weightMarker = 34;	// full cross for weighted position (= result)
+  }
   
   // Create markers for relevant points (icosahedral view)
   int nope;
