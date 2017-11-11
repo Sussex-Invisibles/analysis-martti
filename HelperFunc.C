@@ -71,13 +71,14 @@ void printProgress(int it, int n) {
   cout << "[";
   int pos = barWidth * prog;
   for (int i=0; i<barWidth; ++i) {
-    if (i < pos)                cout << "=";
-    else if (pos+1 == barWidth) cout << "=";
-    else if (i == pos)          cout << ">";
-    else                        cout << " ";
+    if (i < pos)                cout << "=";  // processed
+    else if (pos+1 == barWidth) cout << "=";  // reached 100%
+    else if (i == pos)          cout << ">";  // processing
+    else                        cout << " ";  // not yet processed
   }
-  cout << "] " << (int)round(100.*prog) << "%\r" << flush;
-  if (fabs(prog-1.) < 1e-6) cout << endl;
+  int perc = (int)round(100.*prog);
+  cout << "] " << perc << "%\r" << flush;
+  if (perc==100) cout << endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -193,10 +194,10 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 
   for (int s=0; s<NCOL+2; s++) {
     int col;
-    if      (s==0) col=1;  // hot PMTs
-    else if (s==1) col=16; // off PMTs
+    if      (s==0) col=1;  // hot PMTs (black)
+    else if (s==1) col=16; // off PMTs (grey)
     else           col=(int)(50.+(s-1)*(50./NCOL));
-    if (col>100) printf("*** WARNING: col=%d\n",col);
+    if (col>100) printf("*** WARNING: col=%d\n",col); // should never happen
     if (ndot[s]==0) {dots[s]=NULL; continue;}
     dots[s] = new TGraph(ndot[s],dotx[s],doty[s]);
     dots[s]->SetMarkerStyle(7);
@@ -356,7 +357,7 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   
   // Average over all scaled sigmas
   double sigma = (fabs(sxp-sx)+fabs(sxm-sx)+fabs(syp-sy)+fabs(sym-sy))/4.;
-  printf("Scaled to sphere:\np1 = %.3lf\np2 = %.3lf\np3 = %.3lf\n",sx,sy,sigma);
+  //printf("Fit result scaled to sphere:\tp1 = %.3lf\tp2 = %.3lf\tp3 = %.3lf\n",sx,sy,sigma);
   
   // Set fit results
   params[0] = amp;    // amplitude
