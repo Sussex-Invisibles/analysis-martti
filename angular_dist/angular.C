@@ -149,7 +149,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   }
 
   string outstr = Form("output/angular_%s.root",fibre.c_str());
-  TFile *outfile = NULL;
+  TFile *rootfile = NULL;
   TH1D *hpeak=NULL, *hpeakerr=NULL;
   TH1D *hmean=NULL, *hmeanerr=NULL;
   TH1D *hwdth=NULL, *hwdtherr=NULL;
@@ -158,21 +158,21 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   TGraph2DErrors *pmtfits=NULL;
   TGraphErrors *gpmts=NULL;
   if (scanned_file) {
-    outfile = new TFile(outstr.c_str(),"READ");
-    hprofile = (TH2D*)outfile->Get("hprofile"); // Time vs angle
-    pmtfits = (TGraph2DErrors*)outfile->Get("pmtfits"); // Fitted prompt peaks (3D)
-    gpmts = (TGraphErrors*)outfile->Get("gpmts"); // Fitted prompt peaks (time vs angle)
-    hpeak = (TH1D*)outfile->Get("hpeak");       // Binned intensities
-    hpeakerr = (TH1D*)outfile->Get("hpeakerr"); // Binned errors on intensities
-    hmean = (TH1D*)outfile->Get("hmean");       // Binned mean times
-    hmeanerr = (TH1D*)outfile->Get("hmeanerr"); // Binned errors on mean times
-    hwdth = (TH1D*)outfile->Get("hwdth");       // Binned mean signal widths
-    hwdtherr = (TH1D*)outfile->Get("hwdtherr"); // Binned errors on signal widths
-    hpmtseg = (TH1D*)outfile->Get("hpmtseg");   // PMTs in angular bin
-    hpmtgood = (TH1D*)outfile->Get("hpmtgood"); // Good PMTs in angular bin
+    rootfile = new TFile(outstr.c_str(),"READ");
+    hprofile = (TH2D*)rootfile->Get("hprofile"); // Time vs angle
+    pmtfits = (TGraph2DErrors*)rootfile->Get("pmtfits"); // Fitted prompt peaks (3D)
+    gpmts = (TGraphErrors*)rootfile->Get("gpmts"); // Fitted prompt peaks (time vs angle)
+    hpeak = (TH1D*)rootfile->Get("hpeak");       // Binned intensities
+    hpeakerr = (TH1D*)rootfile->Get("hpeakerr"); // Binned errors on intensities
+    hmean = (TH1D*)rootfile->Get("hmean");       // Binned mean times
+    hmeanerr = (TH1D*)rootfile->Get("hmeanerr"); // Binned errors on mean times
+    hwdth = (TH1D*)rootfile->Get("hwdth");       // Binned mean signal widths
+    hwdtherr = (TH1D*)rootfile->Get("hwdtherr"); // Binned errors on signal widths
+    hpmtseg = (TH1D*)rootfile->Get("hpmtseg");   // PMTs in angular bin
+    hpmtgood = (TH1D*)rootfile->Get("hpmtgood"); // Good PMTs in angular bin
     cout << "Read from file " << outstr << endl;
   } else {
-    outfile = new TFile(outstr.c_str(),"RECREATE");
+    rootfile = new TFile(outstr.c_str(),"RECREATE");
 
     // Initialise RAT
     RAT::DU::DSReader dsreader(fname);
@@ -455,7 +455,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     // Write all objects to file (histograms included automatically, graphs not)
     pmtfits->Write("pmtfits");
     gpmts->Write("gpmts");
-    outfile->Write();
+    rootfile->Write();
     cout << "Wrote output to file " << outstr << endl;
   }
 
@@ -716,8 +716,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   c0->Close();
   
   // Close files and free memory
-  outfile->Close();
-  if (outfile) delete outfile;
+  rootfile->Close();
+  if (rootfile) delete rootfile;
   if (leg) delete leg;
   if (c0) delete c0;
   
