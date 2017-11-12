@@ -1,5 +1,5 @@
 #!/bin/bash
 while [ ! -f .executed ]; do
-  run focal_point
+  run fibre_validation
   sleep 10
 done
