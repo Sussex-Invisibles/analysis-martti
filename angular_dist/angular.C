@@ -46,7 +46,7 @@ int angular(string, int, TF1*, bool, bool);
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 102315;// 101410;
+  const int TEST = (RUN_CLUSTER) ? 0 : 102157;
 
   // Initialise input file
   string input = "../pca_runs/TELLIE_PCA.txt";
@@ -358,11 +358,13 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
       npmts++;
     }
     
+    // Mean and RMS of entire graph
+    double meanhittime = gpmts->GetMean(2);
+    double rmshittime = gpmts->GetRMS(2);
+    
     // Investigate PMTs with unusual offsets w.r.t. mean hit time
     string outlogstr = Form("logs/unusual_timing_%d.log", run);
     FILE *outlog = fopen(outlogstr.c_str(),"w");
-    double meanhittime = gpmts->GetMean(2);
-    double rmshittime = gpmts->GetRMS(2);
     fprintf(outlog,"# Mean %.1lf ns, RMS %.1lf ns. PMTs with unusually high offsets (>3*RMS):\n",meanhittime,rmshittime);
     fprintf(outlog,"# PmtId Offset[ns]\n");
     for (int iPMT=0; iPMT<NPMTS; iPMT++) {
@@ -497,27 +499,69 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   }
   
   // Fit angular systematic: y = a - b + b/cos(x)
-  TCanvas *c = new TCanvas("c","",800,600);
+  TCanvas *c1 = new TCanvas("c1","",800,600);
   fitResult->SetParameter(0, gpmts->GetMean(2));  // value at zero angle
   fitResult->SetParameter(1, 0);                  // assume flat line a priori
-  gpmts->Fit("fitResult","R,q");                  // force range, quiet mode  
-  c->Close(); delete c;
+  gpmts->Fit("fitResult","R,q");                  // force range, quiet mode
+  c1->Close(); delete c1;
   
-  // Fill histograms with time residuals and pulls
+  // Fill histograms with time residual
   TH1D *hresid = new TH1D("hresid","",30,-3,3);
-  TH1D *hpulls = new TH1D("hpulls","",40,-20,20);
+  //TH1D *hpulls = new TH1D("hpulls","",40,-20,20);
   double y,ey,y0;
   for (int i=0; i<gpmts->GetN(); i++) {
     gpmts->GetPoint(i,x,y);
-    ey = gpmts->GetErrorY(i);
+    //ey = gpmts->GetErrorY(i);
     y0 = fitResult->Eval(x);
     hresid->Fill(y-y0);
-    hpulls->Fill((y-y0)/ey);
+    //hpulls->Fill((y-y0)/ey);
   }
+  c1 = new TCanvas("c1","",800,600);
   TF1 *fitresid = new TF1("fitresid","gaus",-3,3);
   fitresid->SetParameters(hresid->GetMaximum(),hresid->GetMean(),hresid->GetRMS());
   hresid->Fit("fitresid","R,q");
   double sigma_resid = fitresid->GetParameter(2);
+  c1->Close(); delete c1;
+  
+  // Find out if direct light from fibre is affected by belly plates
+  ifstream belly("../fibre_validation/BELLY_FIBRES.list");
+  bool IS_BELLY_FIBRE = false;
+  string thisfibre;
+  while (belly.good()) {
+    getline(belly,thisfibre);
+    if(!belly.good()) break;
+    if(thisfibre==fibre) IS_BELLY_FIBRE = true;
+  }
+  
+  // Retrieve rotated detector view from fibre validation document
+  const int NCOL=20;
+  TFile *extfile=NULL;
+  TH2D *hfineD=NULL;
+  //TGraph2D *gDir2D=NULL;
+  TGraph *gDir[NCOL+2]={NULL};
+  TGraph *pFibDir=NULL, *pWgtDir=NULL, *pFitDir=NULL;
+  TVector3 *fitDir=NULL, *maxima=NULL;
+  int nearmax=-1;
+  fpath = Form("%s/Software/SNOP/work/analysis/fibre_validation/output",getenv("HOME"));
+  fname = Form("%s/PCA_%s.root",fpath.c_str(),fibre.c_str());
+  ifstream ext(fname.c_str());
+  if (ext.good()) {
+    extfile = new TFile(fname.c_str(),"READ");
+    hfineD = (TH2D*)extfile->Get("hfineD");
+    //gDir2D = (TGraph2D*)extfile->Get("gDir2D");
+    for(int s=0; s<NCOL+2; s++) {
+      string ss = Form("[%d]",s);
+      gDir[s] = (TGraph*)extfile->Get(("gDir"+ss).c_str());
+    }
+    pFibDir = (TGraph*)extfile->Get("pFibDir");
+    pWgtDir = (TGraph*)extfile->Get("pWgtDir");
+    pFitDir = (TGraph*)extfile->Get("pFitDir");
+    fitDir = (TVector3*)extfile->Get("fitDir");
+    maxima = (TVector3*)extfile->Get("maxima");
+    nearmax = maxima->X();
+  } else {
+    cout << "*** WARNING: File containing 2D graphs not found!" << endl;
+  }
   
   // ******************
   //  PLOTTING SECTION
@@ -543,12 +587,12 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   TCanvas *c0 = new TCanvas("","",1200,1400);
   TPad *pad0 = new TPad("pad0","",0.01,0.58,0.48,0.99);
   TPad *pad1 = new TPad("pad1","",0.52,0.58,1.00,0.99);
-  TPad *pad2 = new TPad("pad2","",0.01,0.29,0.33,0.57);
-  TPad *pad3 = new TPad("pad3","",0.34,0.29,0.66,0.57);
-  TPad *pad4 = new TPad("pad4","",0.67,0.29,0.99,0.57);
-  TPad *pad5 = new TPad("pad5","",0.01,0.01,0.33,0.29);
-  TPad *pad6 = new TPad("pad6","",0.34,0.01,0.66,0.29);
-  TPad *pad7 = new TPad("pad7","",0.67,0.01,0.99,0.29);
+  TPad *pad2 = new TPad("pad2","",0.01,0.295,0.33,0.57);
+  TPad *pad3 = new TPad("pad3","",0.34,0.295,0.66,0.57);
+  TPad *pad4 = new TPad("pad4","",0.67,0.295,0.99,0.57);
+  TPad *pad5 = new TPad("pad5","",0.01,0.01,0.33,0.285);
+  TPad *pad6 = new TPad("pad6","",0.34,0.01,0.66,0.285);
+  TPad *pad7 = new TPad("pad7","",0.67,0.01,0.99,0.285);
   pad0->Draw();
   pad1->Draw();
   pad2->Draw();
@@ -698,6 +742,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hresid->GetYaxis()->SetRangeUser(0,500);
   
   // *****
+  /*
   // Pull variable
   pad7->cd()->SetGrid();
   hpulls->SetTitle("PMT pull variable;Pull [ ];#PMTs/bin");
@@ -706,6 +751,48 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hpulls->GetXaxis()->SetTitleOffset(1.2);
   hpulls->GetYaxis()->SetTitleOffset(1.5);
   hpulls->GetYaxis()->SetRangeUser(0,200);
+  */
+  // View from direct light spot (fitted)
+  pad7->cd()->SetGrid();
+  if (ext.good()) {
+    /*
+    TH3F *hempty = new TH3F("hempty","",10,-10,10,10,-10,10,10,0,1000+1);
+    hempty->Draw("");             // empty histogram for plot range
+    pad7->SetTheta(90-0.001);      // view from above
+    pad7->SetPhi(0+0.001);         // no x-y rotation
+    gDir2D->Draw("pcol,same");
+    */
+    hfineD->SetTitle("Direct light spot;X' [m];Y' [m]");
+    hfineD->GetXaxis()->SetTitleOffset(1.3);
+    hfineD->GetYaxis()->SetTitleOffset(1.4);
+    hfineD->Draw("scat");
+    hfineD->SetStats(0);
+    for(int s=0;s<NCOL+2;s++) {
+      if(!gDir[s]) continue;
+      if(gDir[s]->GetN()==0) continue;
+      gDir[s]->SetMarkerStyle(6);
+      gDir[s]->Draw("P same");
+    }
+    pFibDir->Draw("P same");
+    pWgtDir->Draw("P same");
+    TGraph *pFitDir2 = (TGraph*)pFitDir->Clone();
+    double fitD_rotX = fitDir->X()/1e3;
+    double fitD_rotY = fitDir->Y()/1e3;
+    if (IS_BELLY_FIBRE) pFitDir2->SetMarkerStyle(28); // open cross to indicate Gaussian fit is not used
+    pFitDir2->DrawGraph(1,&fitD_rotX,&fitD_rotY,"P same");
+    // Indicate possible belly plate effect
+    TLatex *txtB = new TLatex(-9.25,9.5,"BELLY PLATE");
+    txtB->SetTextAlign(13);
+    txtB->SetTextFont(102);
+    txtB->SetTextSize(0.04);
+    if (IS_BELLY_FIBRE) txtB->Draw();
+    // Indicate colour scale
+    TLatex *txtD = new TLatex(9.5,9.5,Form("NHit/PMT #leq %d",nearmax));
+    txtD->SetTextAlign(33);
+    txtD->SetTextFont(82);
+    txtD->SetTextSize(0.04);
+    txtD->Draw();  
+  }
   
   // *****
   // Save canvas and close
