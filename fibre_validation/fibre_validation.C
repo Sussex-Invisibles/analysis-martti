@@ -1,44 +1,14 @@
 // ---------------------------------------------------------
-// Goal:            Figure out which TELLIE fibres hit a given crate
-// Author:          Martti Nirkko, 26/04/2017
-// Compile & run:   clear && g++ -g -o fibre_validation.exe fibre_validation.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./fibre_validation.exe
+// Goal:          Validate fibre installation positions/directions listed in RATDB
+// Author:        Martti Nirkko, 14/11/2017
+// Compile & run: clear && g++ -g -o fibre_validation.exe fibre_validation.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./fibre_validation.exe
 // ---------------------------------------------------------
 
-// C++ stuff
-#include <fstream>
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-
-// ROOT stuff
-#include "TROOT.h"
-#include "TCanvas.h"
-#include "TFile.h"
-#include "TF2.h"
-#include "TH2.h"
-#include "TLegend.h"
-#include "TLatex.h"
-#include "TMarker.h"
-#include "TMath.h"
-#include "TPad.h"
-#include "TPaveStats.h"
-#include "TStyle.h"
-#include "TSystem.h"
-
-// RAT stuff
-#include "RAT/DU/DSReader.hh"
-#include "RAT/DU/PMTInfo.hh"
-#include "RAT/DU/Utility.hh"
-#include "RAT/DS/Run.hh"
-#include "RAT/DS/Entry.hh"
-#include "RAT/DS/MC.hh"
-
-// Helper functions
+// Helper functions (includes everything else)
 #include "../HelperFunc.C"
-#include "../Xianguo.C"
 
 // Global constants
-const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
+const int RUN_CLUSTER = 0;  // whether running on cluster (0=local)
 const int USE_RATDB = 1;    // whether to use RATDB to get fibre positions (1=yes)
 const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
@@ -82,9 +52,12 @@ int main(int argc, char** argv) {
     getline(in,line);      // header
   }
   int nfiles=0;
-  FILE *fitresult = fopen("TELLIE_FITRESULTS.txt","w");
-  fprintf(fitresult,"#Run Fibre Direct_light(xyz) Reflected_light(xyz)\n");
-  fprintf(fitresult,"#------------------------------------------------\n");
+  FILE *fitresult = NULL;
+  if (!TEST) {    // don't overwrite file unless running over all fibres
+    fitresult = fopen("TELLIE_FITRESULTS.txt","w");
+    fprintf(fitresult,"#Run Fibre Direct_light(xyz) Reflected_light(xyz)\n");
+    fprintf(fitresult,"#------------------------------------------------\n");
+  }
   while (true) {
     in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
     if (!in.good()) break;
@@ -92,12 +65,12 @@ int main(int argc, char** argv) {
     if (VERBOSE) printf("%6s %2d %6d %5d %6d %5d %5d %.2f\n", fibre.c_str(), channel, run, ipw, photons, pin, rms, nhit);
     fibre_validation(fibre, channel, run, ipw, photons, nhit, dirfit, reffit, (bool)IS_MC, (bool)TEST);
     if (dirfit->Mag()==0) continue;
-    fprintf(fitresult, "%6d %6s %.3f %.3f %.3f %.3f %.3f %.3f\n", run, fibre.c_str(), dirfit->X(), dirfit->Y(), dirfit->Z(), reffit->X(), reffit->Y(), reffit->Z());
+    if (!TEST) fprintf(fitresult, "%6d %6s %.3f %.3f %.3f %.3f %.3f %.3f\n", run, fibre.c_str(), dirfit->X(), dirfit->Y(), dirfit->Z(), reffit->X(), reffit->Y(), reffit->Z());
     cout << "- Direct light fit    (x,y,z) [mm] = " << printVector(*dirfit) << endl;
     cout << "- Reflected light fit (x,y,z) [mm] = " << printVector(*reffit) << endl;
     nfiles++;
   }
-  fclose(fitresult);
+  if (!TEST) fclose(fitresult);
   printf("Ran over %d files.\n",nfiles);
   if (nfiles==0) { 
     cerr<<"*** ERROR *** No input files found, or nothing to do!"<<endl;
@@ -171,7 +144,8 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   
   // If file was scanned at least once, read number of PMT hits from text file
   int totalnhit=0, directnhit=0, reflectednhit=0, count=0, NPMTS=0;
-  int *pmthitcount=NULL, *pmtlightcone=NULL;
+  int *pmtlightcone=NULL; // is PMT in direct/reflected light cone (1/2), or not (0)
+  float *occupancy=NULL; // occupancy
   if (scanned_file>0) {
     int checkrun;
     string dummy;
@@ -185,14 +159,14 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     gg >> dummy >> NPMTS;
     if(!gg.good()) { printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),NPMTS); return; }
     printf("*** INFO *** Run %d has %d EXTA events with %d total NHits on %d PMTs.\n",checkrun,count,totalnhit,NPMTS);
-    pmthitcount = new int[NPMTS];
+    occupancy = new float[NPMTS];
     pmtlightcone = new int[NPMTS];
-    memset( pmthitcount, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+    memset( occupancy, 0., NPMTS*sizeof(float) ); // NPMTS only known at runtime
     memset( pmtlightcone, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
     int pmtid, pmthits, onspot;
     while (gg.good()) {
       gg >> pmtid >> pmthits >> onspot;
-      pmthitcount[pmtid]=pmthits;
+      occupancy[pmtid]=pmthits;
       pmtlightcone[pmtid]=onspot;
       if(onspot==1) directnhit += pmthits;
       else if(onspot==2) reflectednhit += pmthits;
@@ -203,14 +177,14 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   TFile *rootfile = NULL;
   TH2D *hicos=NULL, *hcoarse=NULL;
   TH2D *hfineD=NULL, *hfineR=NULL;
-  TH1I *hhits=NULL, *hhitslo=NULL, *hhitshi=NULL;
+  TH1F *hoccup=NULL, *hoccuplo=NULL, *hoccuphi=NULL;
   TGraph2D *gDir2D=NULL, *gRef2D=NULL;
   TGraph *icos[NCOL+2]={NULL}, *gDir[NCOL+2]={NULL}, *gRef[NCOL+2]={NULL};  // array of graphs (for 2D view)
   TGraph *pcontD=NULL, *pcontR=NULL;
   TGraph *pFibPos=NULL, *pFibDir=NULL, *pWgtDir=NULL, *pWgtRef=NULL;
   TGraph *pFitDir=NULL, *pFitRef=NULL;
   TGraph *pcircD1=NULL, *pcircD2=NULL, *pcircR1=NULL, *pcircR2=NULL;
-  int nearmax=-1, farmax=-1, HOTLIMIT=-1;
+  float nearmax=-1, farmax=-1, HOTLIMIT=-1;
   double DIRANG=-1, REFANG=-1;
   TVector2 *angles=NULL;
   TVector3 *maxima=NULL, *fitDir=NULL, *fitRef=NULL, *fitResD=NULL, *fitResR=NULL;
@@ -232,9 +206,9 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     hicos = (TH2D*)rootfile->Get("hicos");
     hfineD = (TH2D*)rootfile->Get("hfineD");
     hfineR = (TH2D*)rootfile->Get("hfineR");
-    hhits = (TH1I*)rootfile->Get("hhits");
-    hhitslo = (TH1I*)rootfile->Get("hhitslo");
-    hhitshi = (TH1I*)rootfile->Get("hhitshi");
+    hoccup = (TH1F*)rootfile->Get("hoccup");
+    hoccuplo = (TH1F*)rootfile->Get("hoccuplo");
+    hoccuphi = (TH1F*)rootfile->Get("hoccuphi");
     gDir2D = (TGraph2D*)rootfile->Get("gDir2D");
     gRef2D = (TGraph2D*)rootfile->Get("gRef2D");
     for(int s=0; s<NCOL+2; s++) {
@@ -308,9 +282,9 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       // ********************************************************************
       // Sum PMT hit counts for entire run
       // ********************************************************************
-      pmthitcount = new int[NPMTS];
+      occupancy = new float[NPMTS];
       pmtlightcone = new int[NPMTS];
-      memset( pmthitcount, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+      memset( occupancy, 0., NPMTS*sizeof(float) ); // NPMTS only known at runtime
       memset( pmtlightcone, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
       // Loop over all entries in file
       cout << "Looping over entries..." << endl;
@@ -344,7 +318,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
             if (!chs.IsTubeOnline(pmtID)) continue;                   // test CHS
             if (pmt.GetCrossTalkFlag()) continue;                     // remove crosstalk
             if (pmt.GetStatus().GetULong64_t(0) != 0) continue;       // test PCA
-            pmthitcount[pmtID]++;
+            occupancy[pmtID]++;
             //eventnhit++;
           } // pmt loop
           //if(nhitscleaned!=eventnhit) printf("*** WARNING *** - cleaned nhits %d != %d CalPMT nhits!\n",nhitscleaned,eventnhit);
@@ -363,27 +337,32 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
         int in_spot = 0;
         if (pmtpos.Angle(lightpos) < DIR_CONE/180.*pi) in_spot = 1;
         else if (pmtpos.Angle(fibrepos) < REF_CONE/180.*pi) in_spot = 2;
-        fprintf(outFile, "%d %d %d\n", id, pmthitcount[id], in_spot);
+        fprintf(outFile, "%d %d %d\n", id, (int)occupancy[id], in_spot);
       }
       fclose(outFile);
       
       scanned_file = 1;
     
     } // PMT hit counts extracted
+    
+    // Convert hit counts to occupancy
+    for(int id=0; id<NPMTS; id++) {
+      occupancy[id] /= count;
+    }
 
     // Initialise histograms
     hicos = new TH2D("hicos","PMT positions",200,0,1,200,0,1); // icosahedral
     hcoarse = new TH2D("hcoarse","PMT positions",20,-1,1.001,10,-1.001,0); // units of pi
     hfineD = new TH2D("hfineD","PMT positions",1000,-10,10,1000,-10,10); // fine grained
     hfineR = new TH2D("hfineR","PMT positions",1000,-10,10,1000,-10,10); // fine grained
-    hhits = new TH1I("hhits","PMT hit count",50,0,3e5);
-    BinLog(hhits->GetXaxis(),0.3);
+    hoccup = new TH1F("hoccup","PMT hit count",60,0,1); // occupancy
+    BinLog(hoccup->GetXaxis(),1e-6); // minimum for log axis
   
     // Find threshold for "screamers"
-    GetHotLimit(pmthitcount, NPMTS, HOTLIMIT);
+    GetHotLimit(occupancy, NPMTS, HOTLIMIT);
     for(int id=0; id<NPMTS; id++) {
-      if(pmthitcount[id]==0) hhits->Fill(0.5); // visible on log scale
-      else hhits->Fill(pmthitcount[id]);
+      if(occupancy[id]==0) hoccup->Fill(2e-6); // visible on log scale
+      else hoccup->Fill(occupancy[id]);
     }
    
     // ********************************************************************
@@ -407,19 +386,38 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       pmtpos = pmtinfo.GetPosition(id);
       if (pmtpos.Mag()==0) continue; // not a valid PMT
       if (pmtinfo.GetType(id) != 1) continue; // not a normal PMT
+      
+      // Obtain PSUP face
       int face; // side of icosahedron containing PMT
       icospos = func::IcosProject(pmtpos,face);
       pmtface[id] = face; // face of PMT (1-20)
       facecenter[face-1] += pmtpos;
       nfacepmts[face-1]++;
-      //for(int j=0; j<pmthitcount[id]; j++) hicos->Fill(icospos.X(),icospos.Y());
-      int step = (int)TMath::Ceil(pmthitcount[id]/(1.*HOTLIMIT/NCOL))+1;
-      if (pmthitcount[id] > HOTLIMIT) step=0; // hot PMT 
+      //for(int j=0; j<occupancy[id]; j++) hicos->Fill(icospos.X(),icospos.Y());
+      
+      // Get correct bin for colour scale
+      /*
+      // linear colour scale
+      int step = (int)TMath::Ceil(occupancy[id]/(1.*HOTLIMIT/NCOL))+1;
+      if (occupancy[id] > HOTLIMIT) step=0; // hot PMT
+      */
+      // logarithmic colour scale
+      int step;
+      const float COLDLIMIT = 3e-4; // TODO - get from function!
+      if (occupancy[id] > HOTLIMIT) step=0; // hot PMT
+      else if (occupancy[id] == 0)  step=1; // off PMT
+      else if (occupancy[id] < COLDLIMIT)  step=2; // cold PMT
+      else step = (int)TMath::Ceil((log10(occupancy[id])-log10(COLDLIMIT)) / ((log10(HOTLIMIT)-log10(COLDLIMIT))/NCOL)) + 1;
+      //if (step>1) printf("PMT #%d has occupancy %6.2f%% ==> step=%d\n",id,100.*occupancy[id],step);
+      
+      // Put PMT in correct graph
       icosX[step][icosN[step]] = icospos.X();
       icosY[step][icosN[step]] = icospos.Y();
       icosN[step]++;
       if (step<2) continue; // hot or off PMT
-      faceweight[face-1] += pmtpos*pmthitcount[id];
+      
+      // Calculate PSUP face heat
+      faceweight[face-1] += pmtpos*occupancy[id];
       nfacegoodpmts[face-1]++;
     }
     int maxface=-1;
@@ -460,7 +458,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     // ********************************************************************
     // First iteration: Fill coarse histogram with PMT hit positions
     // ********************************************************************
-    int hitpmts=0, init=0;
+    float hitsum=0;
     double pmtrad = 0;
     TVector3 pmtsum(0,0,0);
     cout << "Filling coarse histogram..." << endl;
@@ -468,16 +466,16 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       pmtpos = pmtinfo.GetPosition(id);
       if (pmtpos.Mag()==0) continue;            // not a valid PMT
       if (pmtinfo.GetType(id) != 1) continue;   // not a normal PMT
-      if (pmthitcount[id] == 0) continue;       // off PMTs
-      if (pmthitcount[id] > HOTLIMIT) continue; // hot PMTs
-      for (int j=0; j<pmthitcount[id]; j++) {
+      if (occupancy[id] == 0) continue;       // off PMTs
+      if (occupancy[id] > HOTLIMIT) continue; // hot PMTs
+      for (int j=0; j<occupancy[id]; j++) {
         hcoarse->Fill(pmtpos.Phi()/pi, -pmtpos.Theta()/pi);  // negative theta (neck on top)
       }
-      pmtrad += pmtpos.Mag()*pmthitcount[id];
-      pmtsum += pmtpos*pmthitcount[id];
-      hitpmts += pmthitcount[id];
+      pmtrad += pmtpos.Mag()*occupancy[id];
+      pmtsum += pmtpos*occupancy[id];
+      hitsum += occupancy[id];
     }
-    pmtrad /= hitpmts;
+    pmtrad /= hitsum;
     if(fabs(lightpos.Mag()/pmtrad-1.) > 0.01) {  // tolerate 1%
       cout << "*** WARNING *** Projected light position deviates from PSUP sphere!" << endl;
       return;
@@ -495,9 +493,9 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     // ********************************************************************
     TVector3 direct(0.,0.,0.);
     TVector3 reflected(0.,0.,0.);
-    int weight, empty1, empty2;
-    GetMaxColVal(guess_dir, pmthitcount, NPMTS, nearmax, empty1, pmtinfo);
-    GetMaxColVal(guess_ref, pmthitcount, NPMTS, farmax, empty2, pmtinfo);
+    float weight, empty1, empty2;
+    GetMaxColVal(guess_dir, occupancy, NPMTS, nearmax, empty1, pmtinfo);
+    GetMaxColVal(guess_ref, occupancy, NPMTS, farmax, empty2, pmtinfo);
     
     if(nearmax==0) cout << "*** WARNING *** No good PMTs in direct light cone!" << endl;
     if(farmax==0) cout << "*** WARNING *** No good PMTs in reflected light cone!" << endl;
@@ -508,19 +506,19 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       pmtpos = pmtinfo.GetPosition(id);
       if (pmtpos.Mag()==0) continue;                  // not a valid PMT position
       if (pmtinfo.GetType(id) != 1) continue;         // not a normal PMT
-      weight = pmthitcount[id];
+      weight = occupancy[id];
       if (weight == 0) continue;                      // off PMTs
       if (weight > HOTLIMIT) continue;                // hot PMTs
       if (pmtpos.Angle(guess_dir) < pi*DIR_CONE/180.) // within cone of direct light spot
-        direct += pmtpos*(1.*weight/hitpmts);
+        direct += pmtpos*(1.*weight/hitsum);
       if (pmtpos.Angle(guess_ref) < pi*REF_CONE/180.) // within cone of reflected light spot
-        reflected += pmtpos*(1.*weight/hitpmts);
+        reflected += pmtpos*(1.*weight/hitsum);
     }
     if (direct.Mag() == 0) {
       cout << "*** WARNING *** No good PMTs in direct light cone! Setting to z-axis." << endl;
       direct.SetXYZ(0,0,1);
     }
-    if (reflected.Mag() == 0) { 
+    if (reflected.Mag() == 0) {
       cout << "*** WARNING *** No good PMTs in reflected light cone! Setting to z-axis." << endl;
       reflected.SetXYZ(0,0,1);
     }
@@ -530,8 +528,8 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     // Fill graphs with new view, centered on weighted light spot
     gDir2D = new TGraph2D();    // 2D graph (for 3D view and fit)
     gRef2D = new TGraph2D();
-    FillHemisphere(direct, pmthitcount, NPMTS, gDir, gDir2D, NCOL, nearmax, pmtinfo);
-    FillHemisphere(reflected, pmthitcount, NPMTS, gRef, gRef2D, NCOL, farmax, pmtinfo);
+    FillHemisphere(direct, occupancy, NPMTS, gDir, gDir2D, NCOL, nearmax, pmtinfo);
+    FillHemisphere(reflected, occupancy, NPMTS, gRef, gRef2D, NCOL, farmax, pmtinfo);
     
     // Get rotation angles for rotating view over weighted light spots
     double rot_Z1, rot_X1, rot_Z2, rot_X2;
@@ -815,6 +813,12 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     v[l]->Draw();
   }
 
+  // Indicate logarithmic scale
+  TLatex *txtL = new TLatex(0.01,0.9,"LOG SCALE");
+  txtL->SetTextAlign(13);
+  txtL->SetTextFont(102);
+  txtL->SetTextSize(0.045);
+
   // Indicate possible belly plate effect
   TLatex *txtB = new TLatex(-9.25,9.5,"BELLY PLATE");
   txtB->SetTextAlign(13);
@@ -822,11 +826,11 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   txtB->SetTextSize(0.04);
   
   // Indicate colour scale
-  TLatex *txtD = new TLatex(9.5,9.5,Form("NHit/PMT #leq %d",nearmax));
+  TLatex *txtD = new TLatex(9.5,9.5,Form("Occup. #leq %.2f%%",100.*nearmax));
   txtD->SetTextAlign(33);
   txtD->SetTextFont(82);
   txtD->SetTextSize(0.04);
-  TLatex *txtR = new TLatex(9.5,9.5,Form("NHit/PMT #leq %d",farmax));
+  TLatex *txtR = new TLatex(9.5,9.5,Form("Occup. #leq %.2f%%",100.*farmax));
   txtR->SetTextAlign(33);
   txtR->SetTextFont(82);
   txtR->SetTextSize(0.04);
@@ -836,29 +840,29 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   pad1->cd()->SetGrid();
   pad1->SetLogx();
   pad1->SetLogy();
-  hhits->SetMinimum(0.5);
-  hhits->SetMaximum(5e3);
-  hhits->SetTitle("PMT hit count;NHit/PMT;NPMTs");
-  hhits->SetLineWidth(2);
-  hhits->GetXaxis()->SetTitleOffset(1.3);
-  //hhits->GetYaxis()->SetTitleOffset(1.3);
-  hhits->Draw();
+  hoccup->SetMinimum(0.5);
+  hoccup->SetMaximum(5e3);
+  hoccup->SetTitle("PMT occupancy;Occupancy;NPMTs");
+  hoccup->SetLineWidth(2);
+  hoccup->GetXaxis()->SetTitleOffset(1.3);
+  //hoccup->GetYaxis()->SetTitleOffset(1.3);
+  hoccup->Draw();
   
   // Draw off and hot PMT bins in their respective colour
-  hhitslo = (TH1I*)hhits->Clone("hhitslo");
-  hhitslo->SetFillColor(16);
-  hhitslo->GetXaxis()->SetRangeUser(0.4,0.8);
-  hhitslo->Draw("same");
-  hhitshi = (TH1I*)hhits->Clone("hhitshi");
-  hhitshi->SetFillColor(1);
+  hoccuplo = (TH1F*)hoccup->Clone("hoccuplo");
+  hoccuplo->SetFillColor(16);
+  hoccuplo->GetXaxis()->SetRangeUser(1e-6,3e-6);
+  hoccuplo->Draw("same");
+  hoccuphi = (TH1F*)hoccup->Clone("hoccuphi");
+  hoccuphi->SetFillColor(1);
   double hotlimedge;
-  for (int b=0; b<hhitshi->GetNbinsX(); b++) {
-    if(hhitshi->GetBinCenter(b)<HOTLIMIT) continue;
-    hotlimedge = hhitshi->GetBinCenter(b);
+  for (int b=0; b<hoccuphi->GetNbinsX(); b++) {
+    if(hoccuphi->GetBinCenter(b)<HOTLIMIT) continue;
+    hotlimedge = hoccuphi->GetBinCenter(b);
     break;
   }
-  hhitshi->GetXaxis()->SetRangeUser(hotlimedge,2e5);
-  hhitshi->Draw("same");
+  hoccuphi->GetXaxis()->SetRangeUser(hotlimedge,1);
+  hoccuphi->Draw("same");
   
   // Draw line indicating "hot PMT" limit
   TLine *lhot = new TLine(HOTLIMIT,0,HOTLIMIT,5e3);
@@ -869,7 +873,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   // ----------
   // Icosahedral projection of detector display
   pad2->cd()->SetGrid();
-  hicos->SetTitle("Detector display (PMT hit sum)");
+  //hicos->SetTitle("Detector display (PMT hit sum)");
   //hicos->Draw();
   for(int s=0;s<NCOL+2;s++) { 
     if(!icos[s]) continue;
@@ -881,6 +885,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   pFitRef->Draw("P same");
   pcontD->Draw("P same");
   pcontR->Draw("P same");
+  txtL->Draw();
   
   // ----------
   // View from direct light spot (fitted)
@@ -898,7 +903,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   pFibDir->Draw("P same");
   pWgtDir->Draw("P same");
   TGraph *pFitDir2 = (TGraph*)pFitDir->Clone();
-  if (IS_BELLY_FIBRE) pFitDir2->SetMarkerStyle(28); // open cross to indicate Gaussian fit is not used
+  if (IS_BELLY_FIBRE) pFitDir2->SetMarkerStyle(28); // open cross = Gaussian fit not used
   pFitDir2->DrawGraph(1,&fitD_rotX,&fitD_rotY,"P same");
   if(pcircD1) pcircD1->Draw("P same");
   if(pcircD2) pcircD2->Draw("P same");
@@ -923,7 +928,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   pFitRef->DrawGraph(1,&fitR_rotX,&fitR_rotY,"P same");
   if(pcircR1) pcircR1->Draw("P same");
   if(pcircR2) pcircR2->Draw("P same");
-  txtR->Draw();  
+  txtR->Draw();
   
   // ----------
   // Save canvas and close
@@ -939,9 +944,9 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   if(hcoarse) delete hcoarse;
   if(hfineD) delete hfineD;
   if(hfineR) delete hfineR;
-  if(hhits) delete hhits;
-  if(hhitslo) delete hhitslo;
-  if(hhitshi) delete hhitshi;
+  if(hoccup) delete hoccup;
+  if(hoccuplo) delete hoccuplo;
+  if(hoccuphi) delete hoccuphi;
   //if(gDir2D) delete gDir2D;
   //if(gRef2D) delete gRef2D;
   if (icos) { for(int s=0; s<NCOL+2; s++) delete icos[s]; }

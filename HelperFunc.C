@@ -2,8 +2,17 @@
 // Content: Helper functions uses for analysing TELLIE data
 // Author:  Martti Nirkko, University of Sussex (2017)
 // ---------------------------------------------------------
+
+// C++ stuff
+#include <fstream>
+#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+
+// ROOT stuff
 #include <TCanvas.h>
 #include <TF2.h>
+#include <TFile.h>
 #include <TGaxis.h>
 #include <TGraph2D.h>
 #include <TGraph2DErrors.h>
@@ -17,7 +26,17 @@
 #include <TVector2.h>
 #include <TVector3.h>
 
+// RAT stuff
+#include "RAT/DU/DSReader.hh"
+#include "RAT/DU/PMTInfo.hh"
+#include "RAT/DU/Utility.hh"
+#include "RAT/DS/Run.hh"
+#include "RAT/DS/Entry.hh"
+#include "RAT/DS/MC.hh"
 #include <RAT/PhysicsUtil.hh>
+
+// Helpful functions
+#include "Xianguo.C"
 
 // Include frequently used functions from 'std' (entire namespace is bad practice)
 using std::cerr;
@@ -47,9 +66,9 @@ const double ENERGY   = RAT::util::WavelengthToEnergy(LAMBDA); // photon energy 
 string printVector(const TVector3&);
 void printProgress(int, int);
 void GetRotationAngles(const TVector3&, double&, double&);
-void GetHotLimit(int*, int&);
-void GetMaxColVal(const TVector3&, int*, int, int&, int&, const RAT::DU::PMTInfo&);
-void FillHemisphere(const TVector3&, int*, int, TGraph**, TGraph2D*, int, int, const RAT::DU::PMTInfo&);
+void GetHotLimit(float*, int, float&);
+void GetMaxColVal(const TVector3&, float*, int, float&, float&, const RAT::DU::PMTInfo&);
+void FillHemisphere(const TVector3&, float*, int, TGraph**, TGraph2D*, float, float, const RAT::DU::PMTInfo&);
 void DrawCircle(const TVector3&, double, TVector3**, int);
 void FitPromptPeaks(TH2D*, int, float*, float*, TGraph2DErrors*);
 void FitLightSpot(TGraph2D*, double, double, double*);
@@ -98,55 +117,63 @@ void GetRotationAngles(const TVector3& vec, double &rot_Z, double &rot_X) {
 
 // -----------------------------------------------------------------------------
 /// Get intensity limit (hits/PMT) above which PMT is considered a screamer
-void GetHotLimit(int* pmthitcount, int NPMTS, int &maxnhit) {
-  const int NBINS = 100;
-  int MAX_NHIT = *std::max_element(pmthitcount,pmthitcount+NPMTS);   // hottest PMT
-  TH1F *hCount = new TH1F("hCount","",NBINS,0.,log10(MAX_NHIT+1.));
+void GetHotLimit(float* occupancy, int NPMTS, float &HOTLIMIT) {
+  const int NBINS = 60;
+  float MAX_NHIT = *std::max_element(occupancy,occupancy+NPMTS);   // hottest PMT
+  TH1F *hOccup = new TH1F("hOccup","",NBINS,0.,1.); // 0-100% occupancy
+  BinLog(hOccup->GetXaxis(),1e-6); // minimum for log scale
   for(int id=0; id<NPMTS; id++) {
-    if (pmthitcount[id]==0) continue; 
-    hCount->Fill(log10(pmthitcount[id]));
+    if (occupancy[id]==0) continue;
+    hOccup->Fill(occupancy[id]);
   }
-  int i = hCount->GetMaximumBin(); // start at max. bin
-  while (hCount->GetBinContent(i) > 1) i++;
-  maxnhit = (int)round(pow(10.,hCount->GetBinLowEdge(i)));
-  if (hCount) delete hCount;
+  int i = hOccup->GetMaximumBin(); // start at max. bin
+  //cout << "Starting at bin=" << i << " with occupancy " << hOccup->GetBinCenter(i) << " and nevents " << hOccup->GetBinContent(i) << endl;
+  while (hOccup->GetBinContent(i) > 1) i++;
+  HOTLIMIT = hOccup->GetBinLowEdge(i);
+  //cout << "Stopping at bin=" << i << " with occupancy " << hOccup->GetBinCenter(i) << " and nevents " << hOccup->GetBinContent(i) << endl;
+  if (hOccup) delete hOccup;
 }
 
 // -----------------------------------------------------------------------------
 /// Get maximum nhit values within both hemispheres, excluding hot PMTs
-void GetMaxColVal(const TVector3& center, int* pmthitcount, int NPMTS, int &nearval, int &farval, const RAT::DU::PMTInfo& pmtinfo) {
-  const int NBINS = 1e3;
-  int hotlimit;
-  GetHotLimit(pmthitcount, NPMTS, hotlimit);
-  TH1F *hNear = new TH1F("hNear","",NBINS,0,hotlimit);
-  TH1F *hFar  = new TH1F("hFar","",NBINS,0,hotlimit);
+void GetMaxColVal(const TVector3& center, float* occupancy, int NPMTS, float &nearval, float &farval, const RAT::DU::PMTInfo& pmtinfo) {
+  const int NBINS = 600;
+  float HOTLIMIT;
+  GetHotLimit(occupancy, NPMTS, HOTLIMIT);
+  TH1F *hNear = new TH1F("hNear","",NBINS,0,1);
+  TH1F *hFar  = new TH1F("hFar","",NBINS,0,1);
+  BinLog(hNear->GetXaxis(),1e-6);
+  BinLog(hFar->GetXaxis(),1e-6);
   TVector3 pmtpos, newpos;
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
     if (pmtpos.Mag()==0) continue;              // not a valid PMT position
     if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT
-    if (pmthitcount[id] > hotlimit) continue;   // hot PMT
+    if (occupancy[id] > HOTLIMIT) continue;     // hot PMT
     if (center.Angle(pmtpos) <= pi/15.)         // narrow cone around central point
-      hNear->Fill(pmthitcount[id]);
+      hNear->Fill(occupancy[id]);
     else if (center.Angle(pmtpos) >= pi*14/15.) // same around opposite side
-      hFar->Fill(pmthitcount[id]);
+      hFar->Fill(occupancy[id]);
   }
   int j=1, k=1;
+  //cout << "Starting at bin=" << j << " with occupancy=" << hNear->GetBinCenter(j) << " and nevents=" << hNear->GetBinContent(j) << ", integral is " << hNear->Integral(1,j)/hNear->Integral(1,NBINS) << endl;
   while (hNear->Integral(1,j)/hNear->Integral(1,NBINS) < 0.99) j++;
   while (hFar->Integral(1,k)/hFar->Integral(1,NBINS) < 0.99) k++;
+  //cout << "Stopping at bin=" << j << " with occupancy=" << hNear->GetBinCenter(j) << " and nevents=" << hNear->GetBinContent(j) << ", integral is " << hNear->Integral(1,j)/hNear->Integral(1,NBINS) << endl;
   nearval = hNear->GetXaxis()->GetBinCenter(j);
   farval = hFar->GetXaxis()->GetBinCenter(k);
+  cout << "Nearval is " << nearval << endl;
   if(hNear) delete hNear;
   if(hFar) delete hFar;
 }
 
 // -----------------------------------------------------------------------------
 /// Create detector view from above central point
-void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph** dots, TGraph2D* graph, int NCOL, int MAXVAL, const RAT::DU::PMTInfo& pmtinfo) {
+void FillHemisphere(const TVector3& center, float* occupancy, int NPMTS, TGraph** dots, TGraph2D* graph, int NCOL, float MAXVAL, const RAT::DU::PMTInfo& pmtinfo) {
   
   // Get maximum value for color scale
-  int HOTLIMIT;
-  GetHotLimit(pmthitcount, NPMTS, HOTLIMIT);
+  float HOTLIMIT;
+  GetHotLimit(occupancy, NPMTS, HOTLIMIT);
    
   int ndot[NCOL+2];
   double dotx[NCOL+2][NPMTS], doty[NCOL+2][NPMTS];
@@ -173,22 +200,35 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
     newpos.RotateZ(-rot_X);
     newpos.RotateY(-rot_Z);
 
-    // Fill array of 1D graphs (TODO - bad practice)
-    int step = (int)TMath::Ceil(pmthitcount[id]/(1.*MAXVAL/NCOL))+1;
-    if (pmthitcount[id] >= MAXVAL) step = NCOL+1;   // cap color range
-    if (pmthitcount[id] >= HOTLIMIT) step = 0;      // hot PMT
+    // Get correct bin for colour scale
+    // linear colour scale
+    int step = (int)TMath::Ceil(occupancy[id]/(1.*MAXVAL/NCOL))+1;
+    if (occupancy[id] >= MAXVAL) step = NCOL+1;   // cap color range
+    if (occupancy[id] >= HOTLIMIT) step = 0;      // hot PMT
+    /*
+    // logarithmic colour scale
+    int step;
+    const float COLDLIMIT = 3e-4;
+    if (occupancy[id] > HOTLIMIT) step=0; // hot PMT
+    else if (occupancy[id] == 0)  step=1; // off PMT
+    else if (occupancy[id] < COLDLIMIT)  step=2; // cold PMT
+    else if (occupancy[id] > MAXVAL) step=NCOL+1; // cap range
+    else step = (int)TMath::Ceil((log10(occupancy[id])-log10(COLDLIMIT)) / ((log10(MAXVAL)-log10(COLDLIMIT))/NCOL)) + 1;
+    */
+    
+    // Fill array of 1D graphs (bad practice) - TODO: replace this
     dotx[step][ndot[step]]=newpos.X()/1e3;
     doty[step][ndot[step]]=newpos.Y()/1e3;
     ndot[step]++;
     
     // Fill 2D graph (more effective?)
     if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT (remove OWLEs)
-    if (pmthitcount[id] == 0) continue;         // off PMT
-    if (pmthitcount[id] > HOTLIMIT) continue;   // hot PMT
+    if (occupancy[id] == 0) continue;           // off PMT
+    if (occupancy[id] > HOTLIMIT) continue;     // hot PMT
     if (newpos.Z() <= 0) continue;              // not in hemisphere (safety check)
     double xpt = newpos.X()/1e3;//*cos(pi/4)/cos(newpos.Theta());
     double ypt = newpos.Y()/1e3;//*cos(pi/4)/cos(newpos.Theta());
-    graph->SetPoint(counter, xpt, ypt, pmthitcount[id]);
+    graph->SetPoint(counter, xpt, ypt, occupancy[id]);
     counter++;
   }
 
@@ -211,7 +251,7 @@ void FillHemisphere(const TVector3& center, int* pmthitcount, int NPMTS, TGraph*
 /// Input:  run number, time-vs-pmtID histogram, number of PMTs, PMT occupancy,
 ///         PMT angle w.r.t. fibre, array for overall fit parameters
 /// Output: 3D graph containing fit results for each PMT
-void FitPromptPeaks(TH2D *htime, int NPMTS, float *pmthits, float *pmtangs, TGraph2DErrors *result) {
+void FitPromptPeaks(TH2D *htime, int NPMTS, float *occupancy, float *pmtangs, TGraph2DErrors *result) {
   
   double x[NPMTS], y[NPMTS], z[NPMTS], ex[NPMTS], ey[NPMTS], ez[NPMTS];
   memset( x,  0, NPMTS*sizeof(double) );
@@ -229,8 +269,8 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *pmthits, float *pmtangs, TGra
     if (iPMT % (int)round(NPMTS/100.) == 0) printProgress(iPMT, NPMTS);
     
     // Reject PMTs outside ROI
-    if (pmthits[iPMT]<0.01) continue;  // only consider PMTs with >1% occupancy
-    if (pmtangs[iPMT]>24) continue;    // only consider PMTs within twice the nominal aperture (12 deg)
+    if (occupancy[iPMT]<0.01) continue; // only consider PMTs with >=1% occupancy
+    if (pmtangs[iPMT]>24.0) continue;   // only consider PMTs within 2x nominal aperture (12 deg)
     TH1D *temp = htime->ProjectionY("temp",iPMT+1,iPMT+1,""); // histogram bins in [1,N]
 
     // Define prompt peak range (>20% of max. intensity)
