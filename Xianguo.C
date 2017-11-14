@@ -37,13 +37,14 @@ void BinLog(TAxis *axis, const Double_t non0start)
   if (xmin<EPSILON){
     k0start = kTRUE;
     if(non0start<EPSILON){
-      printf("NeutrinoTools::BinLog bad non0start %f\n", non0start); exit(1);
+      printf("*** ERROR - BinLog bad non0start = %f\n", non0start); exit(1);
     }
   }
   
   Double_t *new_bins = new Double_t[bins + 1];
-
-  const Double_t factor = k0start? (TMath::Power(xmax/non0start, 1./(bins-1))) : (TMath::Power(xmax/xmin, 1./bins)) ;
+  
+  const Double_t factor = k0start ? (TMath::Power(xmax/non0start, 1./(bins-1))) 
+                                  : (TMath::Power(xmax/xmin,      1./bins));
 
   new_bins[0] = xmin;
   new_bins[1] = k0start ? non0start : (new_bins[0]*factor);
