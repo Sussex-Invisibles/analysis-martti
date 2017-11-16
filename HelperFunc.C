@@ -129,10 +129,10 @@ void GetLimits(float* occupancy, int NPMTS, float &HOTLIMIT, float &COLDLIMIT) {
   int i = hOccup->GetMaximumBin(); // start at max. bin
   int j = i;
   //cout << "Starting at bin=" << i << " with occupancy " << hOccup->GetBinCenter(i) << " and nevents " << hOccup->GetBinContent(i) << endl;
-  while (hOccup->GetBinContent(i) > 10) i++;
-  while (hOccup->GetBinContent(j) > 10) j--;
-  HOTLIMIT = hOccup->GetBinLowEdge(i+1); // upper edge of bin i
-  COLDLIMIT = hOccup->GetBinLowEdge(j);
+  while (hOccup->GetBinContent(i) >= 10) i++;
+  while (hOccup->GetBinContent(j) >= 10) j--;
+  HOTLIMIT = hOccup->GetBinLowEdge(i);
+  COLDLIMIT = hOccup->GetBinLowEdge(j+1);
   //cout << "Stopping at bin=" << i << " with occupancy " << hOccup->GetBinCenter(i) << " and nevents " << hOccup->GetBinContent(i) << endl;
   if (hOccup) delete hOccup;
 }

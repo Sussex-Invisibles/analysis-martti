@@ -25,7 +25,7 @@ void fibre_validation(string, int, int, int, int, float, TVector3*, TVector3*, b
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 102157;
+  const int TEST = (RUN_CLUSTER) ? 0 : 102264;
   
   // Fit results for direct and reflected light
   TVector3 *dirfit = new TVector3(0,0,0);
@@ -405,9 +405,9 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       */
       // logarithmic colour scale
       int step;
-      if (occupancy[id] > HOTLIMIT) step=0; // hot PMT
-      else if (occupancy[id] == 0)  step=1; // off PMT
-      else if (occupancy[id] < COLDLIMIT)  step=2; // cold PMT
+      if (occupancy[id] > HOTLIMIT) step=NCOL+1;   // hot PMT
+      else if (occupancy[id] == 0)  step=0;        // off PMT
+      else if (occupancy[id] < COLDLIMIT)  step=1; // cold PMT
       else step = (int)TMath::Ceil((log10(occupancy[id])-log10(COLDLIMIT)) / ((log10(HOTLIMIT)-log10(COLDLIMIT))/NCOL)) + 1;
       //if (step>1) printf("PMT #%d has occupancy %6.2f%% ==> step=%d\n",id,100.*occupancy[id],step);
       
@@ -415,7 +415,8 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       icosX[step][icosN[step]] = icospos.X();
       icosY[step][icosN[step]] = icospos.Y();
       icosN[step]++;
-      if (step<2) continue; // hot or off PMT
+      if (step<2) continue; // cold or off PMT
+      if (step>NCOL) continue; // hot PMT
       
       // Calculate PSUP face heat
       faceweight[face-1] += pmtpos*occupancy[id];
@@ -452,8 +453,9 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       icos[s]->SetMarkerStyle(7);
       icos[s]->SetMarkerColor(col);
     }
-    if (icos[0]) icos[0]->SetMarkerColor(1);  // hot PMTs
-    if (icos[1]) icos[1]->SetMarkerColor(16); // off PMTs
+    if (icos[0]) icos[0]->SetMarkerColor(16);   // off PMTs
+    if (icos[1]) icos[1]->SetMarkerColor(50);   // cold PMTs
+    if (icos[21]) icos[21]->SetMarkerColor(1);  // hot PMTs
     
     
     // ********************************************************************
@@ -849,6 +851,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   hoccup->SetMaximum(5e3);
   hoccup->SetTitle("PMT occupancy;Occupancy;NPMTs");
   hoccup->SetLineWidth(2);
+  hoccup->SetLineColor(1);
   hoccup->GetXaxis()->SetTitleOffset(1.3);
   //hoccup->GetYaxis()->SetTitleOffset(1.3);
   hoccup->Draw();
