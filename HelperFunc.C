@@ -66,7 +66,7 @@ const double ENERGY   = RAT::util::WavelengthToEnergy(LAMBDA); // photon energy 
 string printVector(const TVector3&);
 void printProgress(int, int);
 void GetRotationAngles(const TVector3&, double&, double&);
-void GetHotLimit(float*, int, float&);
+void GetLimits(float*, int, float&, float&);
 void GetMaxColVal(const TVector3&, float*, int, float&, float&, const RAT::DU::PMTInfo&);
 void FillHemisphere(const TVector3&, float*, int, TGraph**, TGraph2D*, float, float, const RAT::DU::PMTInfo&);
 void DrawCircle(const TVector3&, double, TVector3**, int);
@@ -117,7 +117,7 @@ void GetRotationAngles(const TVector3& vec, double &rot_Z, double &rot_X) {
 
 // -----------------------------------------------------------------------------
 /// Get intensity limit (hits/PMT) above which PMT is considered a screamer
-void GetHotLimit(float* occupancy, int NPMTS, float &HOTLIMIT) {
+void GetLimits(float* occupancy, int NPMTS, float &HOTLIMIT, float &COLDLIMIT) {
   const int NBINS = 60;
   float MAX_NHIT = *std::max_element(occupancy,occupancy+NPMTS);   // hottest PMT
   TH1F *hOccup = new TH1F("hOccup","",NBINS,0.,1.); // 0-100% occupancy
@@ -127,9 +127,12 @@ void GetHotLimit(float* occupancy, int NPMTS, float &HOTLIMIT) {
     hOccup->Fill(occupancy[id]);
   }
   int i = hOccup->GetMaximumBin(); // start at max. bin
+  int j = i;
   //cout << "Starting at bin=" << i << " with occupancy " << hOccup->GetBinCenter(i) << " and nevents " << hOccup->GetBinContent(i) << endl;
-  while (hOccup->GetBinContent(i) > 1) i++;
-  HOTLIMIT = hOccup->GetBinLowEdge(i);
+  while (hOccup->GetBinContent(i) > 10) i++;
+  while (hOccup->GetBinContent(j) > 10) j--;
+  HOTLIMIT = hOccup->GetBinLowEdge(i+1); // upper edge of bin i
+  COLDLIMIT = hOccup->GetBinLowEdge(j);
   //cout << "Stopping at bin=" << i << " with occupancy " << hOccup->GetBinCenter(i) << " and nevents " << hOccup->GetBinContent(i) << endl;
   if (hOccup) delete hOccup;
 }
@@ -138,8 +141,8 @@ void GetHotLimit(float* occupancy, int NPMTS, float &HOTLIMIT) {
 /// Get maximum nhit values within both hemispheres, excluding hot PMTs
 void GetMaxColVal(const TVector3& center, float* occupancy, int NPMTS, float &nearval, float &farval, const RAT::DU::PMTInfo& pmtinfo) {
   const int NBINS = 600;
-  float HOTLIMIT;
-  GetHotLimit(occupancy, NPMTS, HOTLIMIT);
+  float HOTLIMIT, COLDLIMIT;
+  GetLimits(occupancy, NPMTS, HOTLIMIT, COLDLIMIT);
   TH1F *hNear = new TH1F("hNear","",NBINS,0,1);
   TH1F *hFar  = new TH1F("hFar","",NBINS,0,1);
   BinLog(hNear->GetXaxis(),1e-6);
@@ -150,6 +153,7 @@ void GetMaxColVal(const TVector3& center, float* occupancy, int NPMTS, float &ne
     if (pmtpos.Mag()==0) continue;              // not a valid PMT position
     if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT
     if (occupancy[id] > HOTLIMIT) continue;     // hot PMT
+    if (occupancy[id] < COLDLIMIT) continue;    // cold PMT
     if (center.Angle(pmtpos) <= pi/15.)         // narrow cone around central point
       hNear->Fill(occupancy[id]);
     else if (center.Angle(pmtpos) >= pi*14/15.) // same around opposite side
@@ -172,8 +176,8 @@ void GetMaxColVal(const TVector3& center, float* occupancy, int NPMTS, float &ne
 void FillHemisphere(const TVector3& center, float* occupancy, int NPMTS, TGraph** dots, TGraph2D* graph, int NCOL, float MAXVAL, const RAT::DU::PMTInfo& pmtinfo) {
   
   // Get maximum value for color scale
-  float HOTLIMIT;
-  GetHotLimit(occupancy, NPMTS, HOTLIMIT);
+  float HOTLIMIT, COLDLIMIT;
+  GetLimits(occupancy, NPMTS, HOTLIMIT, COLDLIMIT);
    
   int ndot[NCOL+2];
   double dotx[NCOL+2][NPMTS], doty[NCOL+2][NPMTS];
@@ -203,8 +207,9 @@ void FillHemisphere(const TVector3& center, float* occupancy, int NPMTS, TGraph*
     // Get correct bin for colour scale
     // linear colour scale
     int step = (int)TMath::Ceil(occupancy[id]/(1.*MAXVAL/NCOL))+1;
-    if (occupancy[id] >= MAXVAL) step = NCOL+1;   // cap color range
-    if (occupancy[id] >= HOTLIMIT) step = 0;      // hot PMT
+    if (occupancy[id] > MAXVAL) step = NCOL+1;   // cap color range
+    if (occupancy[id] > HOTLIMIT) step = 0;      // hot PMT
+    if (occupancy[id] < COLDLIMIT) step = 2;     // cold PMT
     /*
     // logarithmic colour scale
     int step;
@@ -225,6 +230,7 @@ void FillHemisphere(const TVector3& center, float* occupancy, int NPMTS, TGraph*
     if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT (remove OWLEs)
     if (occupancy[id] == 0) continue;           // off PMT
     if (occupancy[id] > HOTLIMIT) continue;     // hot PMT
+    if (occupancy[id] < COLDLIMIT) continue;    // cold PMT
     if (newpos.Z() <= 0) continue;              // not in hemisphere (safety check)
     double xpt = newpos.X()/1e3;//*cos(pi/4)/cos(newpos.Theta());
     double ypt = newpos.Y()/1e3;//*cos(pi/4)/cos(newpos.Theta());

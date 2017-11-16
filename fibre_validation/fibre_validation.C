@@ -184,10 +184,10 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   TGraph *pFibPos=NULL, *pFibDir=NULL, *pWgtDir=NULL, *pWgtRef=NULL;
   TGraph *pFitDir=NULL, *pFitRef=NULL;
   TGraph *pcircD1=NULL, *pcircD2=NULL, *pcircR1=NULL, *pcircR2=NULL;
-  float nearmax=-1, farmax=-1, HOTLIMIT=-1;
+  float nearmax=-1, farmax=-1, HOTLIMIT=-1, COLDLIMIT=-1;
   double DIRANG=-1, REFANG=-1;
-  TVector2 *angles=NULL;
-  TVector3 *maxima=NULL, *fitDir=NULL, *fitRef=NULL, *fitResD=NULL, *fitResR=NULL;
+  TVector2 *angles=NULL, *maxima=NULL, *limits=NULL;
+  TVector3 *fitDir=NULL, *fitRef=NULL, *fitResD=NULL, *fitResR=NULL;
   
   // If file was scanned twice, read graphs from root file
   if (scanned_file==2) {
@@ -195,10 +195,12 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     angles = (TVector2*)rootfile->Get("angles");
     DIRANG = angles->X();
     REFANG = angles->Y();
-    maxima = (TVector3*)rootfile->Get("maxima");
+    maxima = (TVector2*)rootfile->Get("maxima");
     nearmax = maxima->X();
     farmax = maxima->Y();
-    HOTLIMIT = maxima->Z();
+    limits = (TVector2*)rootfile->Get("limits");
+    HOTLIMIT = limits->X();
+    COLDLIMIT = limits->Y();
     fitDir = (TVector3*)rootfile->Get("fitDir");  // rotated view
     fitRef = (TVector3*)rootfile->Get("fitRef");  // rotated view
     fitResD = (TVector3*)rootfile->Get("dirfit");  // detector coordinates
@@ -359,7 +361,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     BinLog(hoccup->GetXaxis(),1e-6); // minimum for log axis
   
     // Find threshold for "screamers"
-    GetHotLimit(occupancy, NPMTS, HOTLIMIT);
+    GetLimits(occupancy, NPMTS, HOTLIMIT, COLDLIMIT);
     for(int id=0; id<NPMTS; id++) {
       if(occupancy[id]==0) hoccup->Fill(2e-6); // visible on log scale
       else hoccup->Fill(occupancy[id]);
@@ -403,7 +405,6 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       */
       // logarithmic colour scale
       int step;
-      const float COLDLIMIT = 3e-4; // TODO - get from function!
       if (occupancy[id] > HOTLIMIT) step=0; // hot PMT
       else if (occupancy[id] == 0)  step=1; // off PMT
       else if (occupancy[id] < COLDLIMIT)  step=2; // cold PMT
@@ -466,8 +467,9 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       pmtpos = pmtinfo.GetPosition(id);
       if (pmtpos.Mag()==0) continue;            // not a valid PMT
       if (pmtinfo.GetType(id) != 1) continue;   // not a normal PMT
-      if (occupancy[id] == 0) continue;       // off PMTs
-      if (occupancy[id] > HOTLIMIT) continue; // hot PMTs
+      if (occupancy[id] == 0) continue;         // off PMTs
+      if (occupancy[id] > HOTLIMIT) continue;   // hot PMTs
+      if (occupancy[id] < COLDLIMIT) continue;  // cold PMTs
       for (int j=0; j<occupancy[id]; j++) {
         hcoarse->Fill(pmtpos.Phi()/pi, -pmtpos.Theta()/pi);  // negative theta (neck on top)
       }
@@ -509,6 +511,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       weight = occupancy[id];
       if (weight == 0) continue;                      // off PMTs
       if (weight > HOTLIMIT) continue;                // hot PMTs
+      if (weight < COLDLIMIT) continue;               // cold PMTs
       if (pmtpos.Angle(guess_dir) < pi*DIR_CONE/180.) // within cone of direct light spot
         direct += pmtpos*(1.*weight/hitsum);
       if (pmtpos.Angle(guess_ref) < pi*REF_CONE/180.) // within cone of reflected light spot
@@ -711,8 +714,10 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     // Write all objects to file (histograms included automatically, graphs not)
     angles = new TVector2(DIRANG,REFANG);
     angles->Write("angles");
-    maxima = new TVector3(nearmax,farmax,HOTLIMIT);
+    maxima = new TVector2(nearmax,farmax);
     maxima->Write("maxima");
+    limits = new TVector2(HOTLIMIT,COLDLIMIT);
+    limits->Write("limits");
     fitDir->Write("fitDir");
     fitRef->Write("fitRef");
     dirfit->Write("dirfit");
@@ -869,6 +874,12 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   lhot->SetLineWidth(2);
   lhot->SetLineColor(2);
   lhot->Draw("same");
+  
+  // Draw line indicating "cold PMT" limit
+  TLine *lcold = new TLine(COLDLIMIT,0,COLDLIMIT,5e3);
+  lcold->SetLineWidth(2);
+  lcold->SetLineColor(4);
+  lcold->Draw("same");
   
   // ----------
   // Icosahedral projection of detector display
