@@ -240,8 +240,9 @@ void FillHemisphere(const TVector3& center, float* occupancy, int NPMTS, TGraph*
 
   for (int s=0; s<NCOL+2; s++) {
     int col;
-    if      (s==0) col=1;  // hot PMTs (black)
-    else if (s==1) col=16; // off PMTs (grey)
+    if      (s==0) col=16; // off PMTs
+    else if (s==1) col=50; // cold PMTs
+    else if (s==21) col=1; // hot PMTs
     else           col=(int)(50.+(s-1)*(50./NCOL));
     if (col>100) printf("*** WARNING: col=%d\n",col); // should never happen
     if (ndot[s]==0) {dots[s]=NULL; continue;}
