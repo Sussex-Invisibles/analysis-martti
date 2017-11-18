@@ -177,7 +177,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   TFile *rootfile = NULL;
   TH2D *hicos=NULL, *hcoarse=NULL;
   TH2D *hfineD=NULL, *hfineR=NULL;
-  TH1F *hoccup=NULL, *hoccuplo=NULL, *hoccuphi=NULL;
+  TH1F *hoccup=NULL, *hoccupoff=NULL, *hoccuplo=NULL, *hoccuphi=NULL;
   TGraph2D *gDir2D=NULL, *gRef2D=NULL;
   TGraph *icos[NCOL+2]={NULL}, *gDir[NCOL+2]={NULL}, *gRef[NCOL+2]={NULL};  // array of graphs (for 2D view)
   TGraph *pcontD=NULL, *pcontR=NULL;
@@ -209,6 +209,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     hfineD = (TH2D*)rootfile->Get("hfineD");
     hfineR = (TH2D*)rootfile->Get("hfineR");
     hoccup = (TH1F*)rootfile->Get("hoccup");
+    hoccupoff = (TH1F*)rootfile->Get("hoccupoff");
     hoccuplo = (TH1F*)rootfile->Get("hoccuplo");
     hoccuphi = (TH1F*)rootfile->Get("hoccuphi");
     gDir2D = (TGraph2D*)rootfile->Get("gDir2D");
@@ -398,17 +399,14 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       //for(int j=0; j<occupancy[id]; j++) hicos->Fill(icospos.X(),icospos.Y());
       
       // Get correct bin for colour scale
-      /*
-      // linear colour scale
-      int step = (int)TMath::Ceil(occupancy[id]/(1.*HOTLIMIT/NCOL))+1;
-      if (occupancy[id] > HOTLIMIT) step=0; // hot PMT
-      */
-      // logarithmic colour scale
       int step;
-      if (occupancy[id] > HOTLIMIT) step=NCOL+1;   // hot PMT
-      else if (occupancy[id] == 0)  step=0;        // off PMT
-      else if (occupancy[id] < COLDLIMIT)  step=1; // cold PMT
-      else step = (int)TMath::Ceil((log10(occupancy[id])-log10(COLDLIMIT)) / ((log10(HOTLIMIT)-log10(COLDLIMIT))/NCOL)) + 1;
+      if (occupancy[id] == 0) step=0;                  // off PMT
+      else if (occupancy[id] < COLDLIMIT)  step=1;     // cold PMT
+      else if (occupancy[id] > HOTLIMIT) step=NCOL+1;  // hot PMT
+      // linear colour scale
+      //else step = (int)TMath::Ceil(occupancy[id]/(1.*HOTLIMIT/NCOL))+1;
+      // logarithmic colour scale
+      else step = (int)TMath::Ceil((log10(occupancy[id])-log10(COLDLIMIT)) / ((log10(HOTLIMIT)-log10(COLDLIMIT))/(NCOL-1))) + 1;
       //if (step>1) printf("PMT #%d has occupancy %6.2f%% ==> step=%d\n",id,100.*occupancy[id],step);
       
       // Put PMT in correct graph
@@ -447,15 +445,16 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     
     // Make graphs for icosahedral projection
     for (int s=0; s<NCOL+2; s++) {
-      int col  = (int)(50.+s*(50./NCOL));
+      int col;
+      if      (s==0) col = 16; // off PMTs (grey)
+      else if (s==1) col = 51; // cold PMTs (purple)
+      else if (s==21) col = 1; // hot PMTs (black)
+      else col = (int)(50.+s*(50./NCOL)); // scale from 55-100 (s=2-20)
       if (icosN[s]==0) {icos[s]=NULL; continue;}
       icos[s] = new TGraph(icosN[s],icosX[s],icosY[s]);
       icos[s]->SetMarkerStyle(7);
       icos[s]->SetMarkerColor(col);
     }
-    if (icos[0]) icos[0]->SetMarkerColor(16);   // off PMTs
-    if (icos[1]) icos[1]->SetMarkerColor(50);   // cold PMTs
-    if (icos[21]) icos[21]->SetMarkerColor(1);  // hot PMTs
     
     
     // ********************************************************************
@@ -856,10 +855,20 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   //hoccup->GetYaxis()->SetTitleOffset(1.3);
   hoccup->Draw();
   
-  // Draw off and hot PMT bins in their respective colour
+  // Draw off, cold and hot PMT bins in their respective colour
+  hoccupoff = (TH1F*)hoccup->Clone("hoccupoff");
+  hoccupoff->SetFillColor(16);
+  hoccupoff->GetXaxis()->SetRangeUser(1e-6,3e-6);
+  hoccupoff->Draw("same");
   hoccuplo = (TH1F*)hoccup->Clone("hoccuplo");
-  hoccuplo->SetFillColor(16);
-  hoccuplo->GetXaxis()->SetRangeUser(1e-6,3e-6);
+  hoccuplo->SetFillColor(51);
+  double coldlimedge;
+  for (int b=hoccuplo->GetNbinsX(); b>0; b--) {
+    if(hoccuplo->GetBinCenter(b)>COLDLIMIT) continue;
+    coldlimedge = hoccuplo->GetBinCenter(b);
+    break;
+  }
+  hoccuplo->GetXaxis()->SetRangeUser(3e-6,coldlimedge);
   hoccuplo->Draw("same");
   hoccuphi = (TH1F*)hoccup->Clone("hoccuphi");
   hoccuphi->SetFillColor(1);
@@ -869,7 +878,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     hotlimedge = hoccuphi->GetBinCenter(b);
     break;
   }
-  hoccuphi->GetXaxis()->SetRangeUser(hotlimedge,1);
+  hoccuphi->GetXaxis()->SetRangeUser(hotlimedge,1.);
   hoccuphi->Draw("same");
   
   // Draw line indicating "hot PMT" limit
@@ -959,6 +968,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   if(hfineD) delete hfineD;
   if(hfineR) delete hfineR;
   if(hoccup) delete hoccup;
+  if(hoccupoff) delete hoccupoff;
   if(hoccuplo) delete hoccuplo;
   if(hoccuphi) delete hoccuphi;
   //if(gDir2D) delete gDir2D;

@@ -205,21 +205,15 @@ void FillHemisphere(const TVector3& center, float* occupancy, int NPMTS, TGraph*
     newpos.RotateY(-rot_Z);
 
     // Get correct bin for colour scale
-    // linear colour scale
-    int step = (int)TMath::Ceil(occupancy[id]/(1.*MAXVAL/NCOL))+1;
-    if (occupancy[id] > MAXVAL) step = NCOL+1;   // cap color range
-    if (occupancy[id] > HOTLIMIT) step = 0;      // hot PMT
-    if (occupancy[id] < COLDLIMIT) step = 2;     // cold PMT
-    /*
-    // logarithmic colour scale
     int step;
-    const float COLDLIMIT = 3e-4;
-    if (occupancy[id] > HOTLIMIT) step=0; // hot PMT
-    else if (occupancy[id] == 0)  step=1; // off PMT
-    else if (occupancy[id] < COLDLIMIT)  step=2; // cold PMT
-    else if (occupancy[id] > MAXVAL) step=NCOL+1; // cap range
-    else step = (int)TMath::Ceil((log10(occupancy[id])-log10(COLDLIMIT)) / ((log10(MAXVAL)-log10(COLDLIMIT))/NCOL)) + 1;
-    */
+    if (occupancy[id] == 0) step = 0;                 // off PMT
+    else if (occupancy[id] < COLDLIMIT) step = 1;     // cold PMT
+    else if (occupancy[id] > HOTLIMIT) step = NCOL+1; // hot PMT
+    else if (occupancy[id] > MAXVAL) step = NCOL;     // cap color range
+    // linear colour scale
+    else step = (int)TMath::Ceil(occupancy[id]/(1.*MAXVAL/(NCOL-1)))+1;
+    // logarithmic colour scale
+    //else step = (int)TMath::Ceil((log10(occupancy[id])-log10(COLDLIMIT)) / ((log10(MAXVAL)-log10(COLDLIMIT))/(NCOL-1))) + 1;
     
     // Fill array of 1D graphs (bad practice) - TODO: replace this
     dotx[step][ndot[step]]=newpos.X()/1e3;
@@ -227,11 +221,11 @@ void FillHemisphere(const TVector3& center, float* occupancy, int NPMTS, TGraph*
     ndot[step]++;
     
     // Fill 2D graph (more effective?)
-    if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT (remove OWLEs)
-    if (occupancy[id] == 0) continue;           // off PMT
-    if (occupancy[id] > HOTLIMIT) continue;     // hot PMT
-    if (occupancy[id] < COLDLIMIT) continue;    // cold PMT
-    if (newpos.Z() <= 0) continue;              // not in hemisphere (safety check)
+    if (pmtinfo.GetType(id) != 1) continue;        // not a normal PMT (remove OWLEs)
+    else if (occupancy[id] == 0) continue;         // off PMT
+    else if (occupancy[id] < COLDLIMIT) continue;  // cold PMT
+    else if (occupancy[id] > HOTLIMIT) continue;   // hot PMT
+    else if (newpos.Z() <= 0) continue;            // not in hemisphere (safety check)
     double xpt = newpos.X()/1e3;//*cos(pi/4)/cos(newpos.Theta());
     double ypt = newpos.Y()/1e3;//*cos(pi/4)/cos(newpos.Theta());
     graph->SetPoint(counter, xpt, ypt, occupancy[id]);
@@ -240,11 +234,10 @@ void FillHemisphere(const TVector3& center, float* occupancy, int NPMTS, TGraph*
 
   for (int s=0; s<NCOL+2; s++) {
     int col;
-    if      (s==0) col=16; // off PMTs
-    else if (s==1) col=50; // cold PMTs
-    else if (s==21) col=1; // hot PMTs
-    else           col=(int)(50.+(s-1)*(50./NCOL));
-    if (col>100) printf("*** WARNING: col=%d\n",col); // should never happen
+    if      (s==0)  col=16; // off PMTs (grey)
+    else if (s==1)  col=51; // cold PMTs (violet)
+    else if (s==21) col=1;  // hot PMTs (black)
+    else            col=(int)(50.+s*(50./NCOL)); // scale from 55-100 (s=2-20)
     if (ndot[s]==0) {dots[s]=NULL; continue;}
     dots[s] = new TGraph(ndot[s],dotx[s],doty[s]);
     dots[s]->SetMarkerStyle(7);
