@@ -21,7 +21,6 @@ const double REF_CONE = 20; // opening angle to search for reflected light (usin
 void fibre_validation(string, int, int, int, int, float, TVector3*, TVector3*, bool, bool);
 
 // Main program
-//using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
@@ -550,13 +549,15 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     cout << "Performing 2D Gaussian fits..." << endl;
     FitLightSpot(gDir2D,pmtrad/1e3,DIR_CONE,parDir); // units: dist [m], ang [deg]
     FitLightSpot(gRef2D,pmtrad/1e3,REF_CONE,parRef);
-    cout << "FIT RESULTS:" << endl;
-    cout << "- Direct light";
-    for (int p=0; p<NPARS; p++) printf(" %.3lf", parDir[p]);
-    cout << endl;
-    cout << "- Reflected light";
-    for (int p=0; p<NPARS; p++) printf(" %.3lf", parRef[p]);
-    cout << endl;
+    if (VERBOSE) {
+      cout << "FIT RESULTS:" << endl;
+      cout << "- Direct light";
+      for (int p=0; p<NPARS; p++) printf(" %.3lf", parDir[p]);
+      cout << endl;
+      cout << "- Reflected light";
+      for (int p=0; p<NPARS; p++) printf(" %.3lf", parRef[p]);
+      cout << endl;
+    }
     // Translate to point on PSUP sphere
     fitDir = new TVector3(1e3*parDir[1],1e3*parDir[2],sqrt(pmtrad*pmtrad-1e6*parDir[1]*parDir[1]-1e6*parDir[2]*parDir[2]));
     fitRef = new TVector3(1e3*parRef[1],1e3*parRef[2],sqrt(pmtrad*pmtrad-1e6*parRef[1]*parRef[1]-1e6*parRef[2]*parRef[2]));
