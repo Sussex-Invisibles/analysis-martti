@@ -127,7 +127,7 @@ void GetLimits(float* occupancy, int NPMTS, float &HOTLIMIT, float &COLDLIMIT) {
     hOccup->Fill(occupancy[id]);
   }
   int i = hOccup->GetMaximumBin(); // start at max. bin
-  int j = i;
+  int j = hOccup->GetMaximumBin();
   //cout << "Starting at bin=" << i << " with occupancy " << hOccup->GetBinCenter(i) << " and nevents " << hOccup->GetBinContent(i) << endl;
   while (hOccup->GetBinContent(i) >= 10) i++;
   while (hOccup->GetBinContent(j) >= 10) j--;
@@ -140,7 +140,7 @@ void GetLimits(float* occupancy, int NPMTS, float &HOTLIMIT, float &COLDLIMIT) {
 // -----------------------------------------------------------------------------
 /// Get maximum nhit values within both hemispheres, excluding hot PMTs
 void GetMaxColVal(const TVector3& center, float* occupancy, int NPMTS, float &nearval, float &farval, const RAT::DU::PMTInfo& pmtinfo) {
-  const int NBINS = 600;
+  const int NBINS = 60;
   float HOTLIMIT, COLDLIMIT;
   GetLimits(occupancy, NPMTS, HOTLIMIT, COLDLIMIT);
   TH1F *hNear = new TH1F("hNear","",NBINS,0,1);
@@ -150,22 +150,23 @@ void GetMaxColVal(const TVector3& center, float* occupancy, int NPMTS, float &ne
   TVector3 pmtpos, newpos;
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
-    if (pmtpos.Mag()==0) continue;              // not a valid PMT position
-    if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT
-    if (occupancy[id] > HOTLIMIT) continue;     // hot PMT
-    if (occupancy[id] < COLDLIMIT) continue;    // cold PMT
-    if (center.Angle(pmtpos) <= pi/15.)         // narrow cone around central point
+    if (pmtpos.Mag()==0) continue;                // not a valid PMT position
+    if (pmtinfo.GetType(id) != 1) continue;       // not a normal PMT
+    if (occupancy[id] > HOTLIMIT) continue;       // hot PMT
+    if (occupancy[id] < COLDLIMIT) continue;      // cold PMT
+    if (center.Angle(pmtpos)*180./pi <= 24)       // narrow cone around central point
       hNear->Fill(occupancy[id]);
-    else if (center.Angle(pmtpos) >= pi*14/15.) // same around opposite side
+    else if (center.Angle(pmtpos)*180./pi >= 156) // same around opposite side
       hFar->Fill(occupancy[id]);
   }
-  int j=1, k=1;
-  //cout << "Starting at bin=" << j << " with occupancy=" << hNear->GetBinCenter(j) << " and nevents=" << hNear->GetBinContent(j) << ", integral is " << hNear->Integral(1,j)/hNear->Integral(1,NBINS) << endl;
-  while (hNear->Integral(1,j)/hNear->Integral(1,NBINS) < 0.99) j++;
-  while (hFar->Integral(1,k)/hFar->Integral(1,NBINS) < 0.99) k++;
-  //cout << "Stopping at bin=" << j << " with occupancy=" << hNear->GetBinCenter(j) << " and nevents=" << hNear->GetBinContent(j) << ", integral is " << hNear->Integral(1,j)/hNear->Integral(1,NBINS) << endl;
-  nearval = hNear->GetXaxis()->GetBinCenter(j);
-  farval = hFar->GetXaxis()->GetBinCenter(k);
+  int i=hNear->GetMaximumBin();
+  int j=hFar->GetMaximumBin();
+  //while (hNear->Integral(1,j)/hNear->Integral(1,NBINS) < 0.99) j++;
+  //while (hFar->Integral(1,k)/hFar->Integral(1,NBINS) < 0.99) k++;
+  while (hNear->GetBinContent(i) >= 1) i++;
+  while (hFar->GetBinContent(j) >= 1) j++;
+  nearval = hNear->GetXaxis()->GetBinLowEdge(i);
+  farval = hFar->GetXaxis()->GetBinLowEdge(j);
   cout << "Nearval is " << nearval << endl;
   if(hNear) delete hNear;
   if(hFar) delete hFar;
