@@ -360,7 +360,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     hfineR = new TH2D("hfineR","PMT positions",1000,-10,10,1000,-10,10); // fine grained
     hoccup = new TH1F("hoccup","PMT hit count",60,0,1); // occupancy
     BinLog(hoccup->GetXaxis(),1e-6); // minimum for log axis
-  
+    
     // Find threshold for "screamers"
     GetLimits(occupancy, NPMTS, HOTLIMIT, COLDLIMIT);
     for(int id=0; id<NPMTS; id++) {
@@ -373,7 +373,7 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     // ********************************************************************
     // Use icosahedral projection functions from HelperFunc.C
     using namespace func;
-    int icosN[NCOL+2]={0};
+    int icosN[NCOL+2]={0};  // off PMTs (0), N colours (1-NCOL), hot PMTs (NCOL+1)
     int pmtface[NPMTS];
     double icosX[NCOL+2][NPMTS], icosY[NCOL+2][NPMTS];
     memset( icosX, 0, (NCOL+2)*NPMTS*sizeof(double) ); // NPMTS only known at runtime
