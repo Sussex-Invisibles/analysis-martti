@@ -216,17 +216,18 @@ void FillHemisphere(const TVector3& center, float* occupancy, int NPMTS, TGraph*
     // logarithmic colour scale
     //else step = (int)TMath::Ceil((log10(occupancy[id])-log10(COLDLIMIT)) / ((log10(MAXVAL)-log10(COLDLIMIT))/(NCOL-1))) + 1;
     
-    // Fill array of 1D graphs (bad practice) - TODO: replace this
+    // Fill array of 1D graphs (bad practice) - TODO: replace this (currently plotted)
     dotx[step][ndot[step]]=newpos.X()/1e3;
     doty[step][ndot[step]]=newpos.Y()/1e3;
     ndot[step]++;
     
-    // Fill 2D graph (more effective?)
+    // Fill 2D graph - TODO: more effective? (currently used for fit)
+    if (newpos.Z() <= 0) continue;                 // not in hemisphere (safety check)
     if (pmtinfo.GetType(id) != 1) continue;        // not a normal PMT (remove OWLEs)
     else if (occupancy[id] == 0) continue;         // off PMT
     else if (occupancy[id] < COLDLIMIT) continue;  // cold PMT
     else if (occupancy[id] > HOTLIMIT) continue;   // hot PMT
-    else if (newpos.Z() <= 0) continue;            // not in hemisphere (safety check)
+    else if (occupancy[id] > MAXVAL) occupancy[id]=MAXVAL; // cap range
     double xpt = newpos.X()/1e3;//*cos(pi/4)/cos(newpos.Theta());
     double ypt = newpos.Y()/1e3;//*cos(pi/4)/cos(newpos.Theta());
     graph->SetPoint(counter, xpt, ypt, occupancy[id]);
@@ -392,7 +393,6 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
     if (ang/pi*180. > cone) continue;
     double scale = 1./cos(ang);
     graf->SetPoint(pts,scale*xpts[n],scale*ypts[n],zpts[n]);
-    if (maxval<zpts[n]) maxval=zpts[n];
     pts++;
   }
   
@@ -401,9 +401,9 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   double aperture = radius*tan(cone/2. / 180.*pi);  // half input angle <=> 12 deg aperture
   fit->SetParameters(0.8*maxval,0.,0.,aperture);    // a priori: 80% max. intensity, centered, nominal aperture
   fit->SetParLimits(0,0.2*maxval,maxval);           // amplitude range [20%, 100%] of max. intensity
-  fit->SetParLimits(1,-aperture,aperture);          // x-pos range [-12, +12] degrees from centre
-  fit->SetParLimits(2,-aperture,aperture);          // y-pos range [-12, +12] degrees from centre
-  fit->SetParLimits(3,0.5*aperture,2.0*aperture);   // sigma range [50%, 200%] of nominal aperture
+  fit->SetParLimits(1,-aperture,aperture);          // x-pos range [-12, +12] degrees from weighted centre
+  fit->SetParLimits(2,-aperture,aperture);          // y-pos range [-12, +12] degrees from weighted centre
+  fit->SetParLimits(3,0.5*aperture,1.5*aperture);   // sigma range [-50%, +50%] of nominal aperture
   graf->Fit("gaus2d","R,q");                        // fit gaussian (force range, quiet mode)
   
   // Raw fit parameters
