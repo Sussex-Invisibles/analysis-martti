@@ -1,43 +1,18 @@
 // ---------------------------------------------------------
-// Goal:            Plot angular response of TELLIE fibres
-// Author:          Martti Nirkko, University of Sussex (Oct 2017)
+// Goal:            Evaluate angular systematic of TELLIE
+// Author:          Martti Nirkko, 21/11/2017
 // Compile & run:   clear && g++ -o angular.exe angular.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./angular.exe
 // ---------------------------------------------------------
 
-// C++ stuff
-#include <fstream>
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-
-// ROOT stuff
-#include <TFile.h>
-#include <TLegend.h>
-#include <TPaveStats.h>
-#include <TStyle.h>
-#include <TSystem.h>
-#include <TVirtualFitter.h>
-
-// RAT stuff
-#include <RAT/DS/Entry.hh>
-#include <RAT/DS/MC.hh>
-#include <RAT/DS/Run.hh>
-#include <RAT/DU/DSReader.hh>
-#include <RAT/DU/GroupVelocity.hh>
-#include <RAT/DU/LightPathCalculator.hh>
-#include <RAT/DU/PMTInfo.hh>
-#include <RAT/DU/Utility.hh>
-
-// Helper functions
+// Helper functions (includes everything else)
 #include "../HelperFunc.C"
-#include "../Xianguo.C"
 
 // Run time parameters
-const int RUN_CLUSTER = 1;    // whether running on cluster (0=local)
-const int USE_RATDB = 1;      // whether to use RATDB to get fibre positions
-const int VERBOSE = 1;        // verbosity flag
-const int IS_MC = 0;          // Monte-Carlo flag 
-const double LOCALITY = 10.0; // accepted tolerance [mm] for LightPathCalculator
+const int RUN_CLUSTER = 1;      // whether running on cluster (0=local)
+const int USE_RATDB = 1;        // whether to use RATDB to get fibre positions
+const int VERBOSE = 1;          // verbosity flag
+const int IS_MC = 0;            // Monte-Carlo flag 
+const double LOCALITY = 10.0;   // accepted tolerance [mm] for LightPathCalculator
 
 // Initialise functions
 int angular(string, int, TF1*, bool, bool);
@@ -237,7 +212,12 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
       if (fitpos.Mag()!=0) break;
     }
     TVector3 fitdir = (fitpos-fibrePos).Unit();
-    cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightPos)*180./pi << " deg deviation" << endl;
+    if (fitpos.Mag()==0) {
+      cerr << "*** ERROR - Could not load fit position!" << endl;
+      exit(1);
+    } else {
+      cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightPos)*180./pi << " deg deviation" << endl;
+    }
     
     // Initialise histograms
     hpmtseg = new TH1D("hpmtseg",fibre.c_str(),NBINS,0,MAXANG);
@@ -541,7 +521,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   TGraph *gDir[NCOL+2]={NULL};
   TGraph *pFibDir=NULL, *pWgtDir=NULL, *pFitDir=NULL;
   TVector3 *fitDir=NULL, *maxima=NULL;
-  int nearmax=-1;
+  float nearmax=-1;
   fpath = Form("%s/Software/SNOP/work/analysis/fibre_validation/output",getenv("HOME"));
   fname = Form("%s/PCA_%s.root",fpath.c_str(),fibre.c_str());
   ifstream ext(fname.c_str());
@@ -787,11 +767,11 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     txtB->SetTextSize(0.04);
     if (IS_BELLY_FIBRE) txtB->Draw();
     // Indicate colour scale
-    TLatex *txtD = new TLatex(9.5,9.5,Form("NHit/PMT #leq %d",nearmax));
+    TLatex *txtD = new TLatex(9.5,9.5,Form("Occup. #leq %.2f%%",100.*nearmax));
     txtD->SetTextAlign(33);
     txtD->SetTextFont(82);
     txtD->SetTextSize(0.04);
-    txtD->Draw();  
+    txtD->Draw();
   }
   
   // *****
