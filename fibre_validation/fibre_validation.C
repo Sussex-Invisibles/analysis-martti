@@ -25,7 +25,7 @@ void fibre_validation(string, int, int, int, int, float, TVector3*, TVector3*, b
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 102264;
+  const int TEST = (RUN_CLUSTER) ? 0 : 102157;
   
   // Fit results for direct and reflected light
   TVector3 *dirfit = new TVector3(0,0,0);
