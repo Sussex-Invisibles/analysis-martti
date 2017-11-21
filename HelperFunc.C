@@ -416,8 +416,9 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
     graf->SetMarkerStyle(8);
     graf->Draw("pcol,same");
     fit->Draw("surf,same");
-    string name = Form("fit_%d.png",(int)cone);
-    c->Print(name.c_str());
+    string name = Form("fit_%d",(int)cone);
+    c->Print((name+".png").c_str());
+    c->Print((name+".pdf").c_str());
     c->Close();
     if (hempty) delete hempty;
     if (c) delete c;
