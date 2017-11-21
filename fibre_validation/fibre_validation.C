@@ -67,6 +67,7 @@ int main(int argc, char** argv) {
     if (!TEST) fprintf(fitresult, "%6d %6s %.3f %.3f %.3f %.3f %.3f %.3f\n", run, fibre.c_str(), dirfit->X(), dirfit->Y(), dirfit->Z(), reffit->X(), reffit->Y(), reffit->Z());
     cout << "- Direct light fit    (x,y,z) [mm] = " << printVector(*dirfit) << endl;
     cout << "- Reflected light fit (x,y,z) [mm] = " << printVector(*reffit) << endl;
+    cout << endl << "* * * * * * * * * * * * * * * * * * * * " << endl << endl;
     nfiles++;
   }
   if (!TEST) fclose(fitresult);
