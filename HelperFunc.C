@@ -46,7 +46,7 @@ using std::flush;
 
 // -----------------------------------------------------------------------------
 // Run time parameters
-const int MORE_OUTPUT = 0;                  // additional plots for testing
+const int MORE_OUTPUT = 1;                  // additional plots for testing
 
 // Global constants
 const double pi = TMath::Pi();
@@ -286,7 +286,7 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *occupancy, float *pmtangs, TG
     temp->Fit("fitPMT","R,q");
     c0->Close();
     
-    // Investigate individual PMTs
+  // Plot fit results for individual PMT (for proof of concept)
     int thisbin = (int)pmtangs[iPMT];
     if (MORE_OUTPUT && plotted_pmt[thisbin]==0) {
       TCanvas *c = new TCanvas("c","",800,600);
@@ -341,7 +341,6 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
     if (rpt>radius) continue;
     double ang = asin(rpt/radius);
     if (ang/pi*180. > cone) continue;
-    double scale = 1./cos(ang);
     if (maxval<zpts[n]) maxval=zpts[n];
   }
   
@@ -349,7 +348,7 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   TGraph2D *graf = new TGraph2D();
   int pts=0;
   for (int n=0; n<npts; n++) {
-    if(zpts[n] < maxval/5.) continue;
+    if(zpts[n] < maxval*0.2) continue;
     double rpt = sqrt(xpts[n]*xpts[n] + ypts[n]*ypts[n]);
     if (rpt>radius) continue;
     double ang = asin(rpt/radius);
@@ -362,13 +361,13 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   
   // Fit 2D Gaussian surface to selected points
   TF2 *fit = new TF2("gaus2d","[0]*TMath::Gaus(x,[1],[3])*TMath::Gaus(y,[2],[3])",-10,10,-10,10);
-  double aperture_radius = radius*tan(cone/2 / 180.*pi);  // half input angle ~> 12 deg aperture
-  fit->SetParameters(0.8*maxval,0.,0.,aperture_radius);
-  fit->SetParLimits(0,0.2*maxval,maxval);
-  fit->SetParLimits(1,-aperture_radius/2,aperture_radius/2);
-  fit->SetParLimits(2,-aperture_radius/2,aperture_radius/2);
-  fit->SetParLimits(3,0.5*aperture_radius,1.5*aperture_radius);
-  graf->Fit("gaus2d","q"); // quiet mode
+  double aperture = radius*tan(cone/2. / 180.*pi);  // half input angle <=> 12 deg aperture
+  fit->SetParameters(0.8*maxval,0.,0.,aperture);    // a priori: 80% max. intensity, centered, nominal aperture
+  fit->SetParLimits(0,0.2*maxval,maxval);           // amplitude range [20%, 100%] of max. intensity
+  fit->SetParLimits(1,-aperture,aperture);          // x-pos range [-12, +12] degrees from centre
+  fit->SetParLimits(2,-aperture,aperture);          // y-pos range [-12, +12] degrees from centre
+  fit->SetParLimits(3,0.5*aperture,2.0*aperture);   // sigma range [50%, 200%] of nominal aperture
+  graf->Fit("gaus2d","R,q");                        // fit gaussian (force range, quiet mode)
   
   // Raw fit parameters
   double amp = fit->GetParameter(0);
@@ -405,12 +404,12 @@ void FitLightSpot(TGraph2D* graph, double radius, double cone, double* params) {
   params[2] = sy;     // mu_y
   params[3] = sigma;  // sigma
   
-  // Plot fit results (for testing purposes only)
+  // Plot fit results (for proof of concept)
   if (MORE_OUTPUT) {
     gStyle->SetOptStat(0);
     TCanvas *c = new TCanvas("","",800,800);
     c->SetGrid();
-    TH3F *hempty = new TH3F("hempty","",10,-10,10,10,-10,10,10,0,maxval+1);
+    TH3F *hempty = new TH3F("hempty","",10,-10,10,10,-10,10,10,0,maxval+1e-6);
     hempty->Draw("");             // empty histogram for plot range
     //c->SetTheta(90-0.001);      // view from above
     //c->SetPhi(0+0.001);         // no x-y rotation
