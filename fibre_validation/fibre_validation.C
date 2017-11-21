@@ -21,11 +21,10 @@ const double REF_CONE = 20; // opening angle to search for reflected light (usin
 void fibre_validation(string, int, int, int, int, float, TVector3*, TVector3*, bool, bool);
 
 // Main program
-//using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 102264;
+  const int TEST = (RUN_CLUSTER) ? 0 : 102157;
   
   // Fit results for direct and reflected light
   TVector3 *dirfit = new TVector3(0,0,0);
@@ -68,6 +67,7 @@ int main(int argc, char** argv) {
     if (!TEST) fprintf(fitresult, "%6d %6s %.3f %.3f %.3f %.3f %.3f %.3f\n", run, fibre.c_str(), dirfit->X(), dirfit->Y(), dirfit->Z(), reffit->X(), reffit->Y(), reffit->Z());
     cout << "- Direct light fit    (x,y,z) [mm] = " << printVector(*dirfit) << endl;
     cout << "- Reflected light fit (x,y,z) [mm] = " << printVector(*reffit) << endl;
+    cout << endl << "* * * * * * * * * * * * * * * * * * * * " << endl << endl;
     nfiles++;
   }
   if (!TEST) fclose(fitresult);
@@ -550,13 +550,15 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     cout << "Performing 2D Gaussian fits..." << endl;
     FitLightSpot(gDir2D,pmtrad/1e3,DIR_CONE,parDir); // units: dist [m], ang [deg]
     FitLightSpot(gRef2D,pmtrad/1e3,REF_CONE,parRef);
-    cout << "FIT RESULTS:" << endl;
-    cout << "- Direct light";
-    for (int p=0; p<NPARS; p++) printf(" %.3lf", parDir[p]);
-    cout << endl;
-    cout << "- Reflected light";
-    for (int p=0; p<NPARS; p++) printf(" %.3lf", parRef[p]);
-    cout << endl;
+    if (VERBOSE) {
+      cout << "FIT RESULTS:" << endl;
+      cout << "- Direct light";
+      for (int p=0; p<NPARS; p++) printf(" %.3lf", parDir[p]);
+      cout << endl;
+      cout << "- Reflected light";
+      for (int p=0; p<NPARS; p++) printf(" %.3lf", parRef[p]);
+      cout << endl;
+    }
     // Translate to point on PSUP sphere
     fitDir = new TVector3(1e3*parDir[1],1e3*parDir[2],sqrt(pmtrad*pmtrad-1e6*parDir[1]*parDir[1]-1e6*parDir[2]*parDir[2]));
     fitRef = new TVector3(1e3*parRef[1],1e3*parRef[2],sqrt(pmtrad*pmtrad-1e6*parRef[1]*parRef[1]-1e6*parRef[2]*parRef[2]));
