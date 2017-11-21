@@ -1,51 +1,21 @@
 // ---------------------------------------------------------
-// Goal:            Figure out which TELLIE fibres hit a given crate
-// Author:          Martti Nirkko, 26/04/2017
+// Goal:            Plot PMT coverage for full PCA dataset
+// Author:          Martti Nirkko, 21/11/2017
 // Compile & run:   clear && g++ -g -o occupancy.exe occupancy.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./occupancy.exe
 // ---------------------------------------------------------
 
-// C++ stuff
-#include <fstream>
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-
-// ROOT stuff
-#include "TROOT.h"
-#include "TCanvas.h"
-#include "TFile.h"
-#include "TF2.h"
-#include "TH3.h"
-#include "TLegend.h"
-#include "TLatex.h"
-#include "TMarker.h"
-#include "TMath.h"
-#include "TPad.h"
-#include "TPaveStats.h"
-#include "TStyle.h"
-#include "TSystem.h"
-
-// RAT stuff
-#include "RAT/DU/DSReader.hh"
-#include "RAT/DU/PMTInfo.hh"
-#include "RAT/DU/Utility.hh"
-#include "RAT/DS/Run.hh"
-#include "RAT/DS/Entry.hh"
-#include "RAT/DS/MC.hh"
-
-// Helper functions
+// Helper functions, header files etc.
 #include "../HelperFunc.C"
-#include "../Xianguo.C"
 
 // Global constants
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
-const int IS_MC = 0;        // Monte-Carlo flag 
+const int IS_MC = 0;        // Monte-Carlo flag
+const int MAXCOVERAGE = 10; // maximal coverage for colour scale
 
 // Initialise functions
 void occupancy(string, int, int*, int, bool, bool);
 void GetProjection(TGraph2D*, TGraph2D*, int*, const int, const RAT::DU::PMTInfo&);
 using namespace std;
-
 
 // Main program
 int main(int argc, char** argv) {
@@ -69,11 +39,11 @@ int main(int argc, char** argv) {
   RAT::DU::DSReader dsreader(example);
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   const int NPMTS = pmtinfo.GetCount();
-  printf("Initialised DSReader & PMTInfo.\n");
+  printf("Initialised DSReader & PMTInfo (%d PMTs).\n",NPMTS);
   
   int cvrg[NPMTS];
   memset( cvrg, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
-  for (int id=0; id<NPMTS; id++) cvrg[id]=-99999;
+  for (int id=0; id<NPMTS; id++) cvrg[id]=-999;
   
   int nfiles=0; 
   while (true) {
@@ -90,29 +60,14 @@ int main(int argc, char** argv) {
   TGraph2D *coverage = new TGraph2D();
   TGraph2D *offpmts = new TGraph2D();
   GetProjection(coverage, offpmts, cvrg, NPMTS, pmtinfo);
-  printf("Graph has %d good PMTs and %d bad PMTs.\n", coverage->GetN(), offpmts->GetN());
+  printf("Graph has %d good PMTs and %d bad PMTs. Coverage was capped to %d.\n", coverage->GetN(), offpmts->GetN(), MAXCOVERAGE);
   
-  // ********************************************************************
   // Plotting section
-  // ********************************************************************
   TCanvas *c0 = new TCanvas("","",1600,800);
   gStyle->SetOptStat(0);
   gStyle->SetLabelOffset(999,"XY");
   gStyle->SetCanvasBorderSize(0);
   gStyle->SetFrameBorderSize(0);
-  
-  /*
-  TPad *pad0 = new TPad("pad0","Text",0.01,0.75,0.50,0.99);
-  TPad *pad1 = new TPad("pad1","Hist",0.50,0.75,1.00,0.99);
-  TPad *pad2 = new TPad("pad2","Icos",0.05,0.41,0.95,0.74);
-  TPad *pad3 = new TPad("pad3","Hist",0.01,0.01,0.50,0.40);
-  TPad *pad4 = new TPad("pad4","Hist",0.50,0.01,1.00,0.40);
-  pad0->Draw();
-  pad1->Draw();
-  pad2->Draw();
-  pad3->Draw();
-  pad4->Draw();
-  */
   
   // Configure pad
   c0->SetGrid();
@@ -123,15 +78,16 @@ int main(int argc, char** argv) {
   c0->SetBorderSize(0);
   
   // Draw empty 3D histogram as boundary for 2D graphs
-  TH3F *hicos = new TH3F("hicos","",10,0,1,10,0,1,10,0,10); // flat map
+  TH3F *hicos = new TH3F("hicos","",10,0,1,10,0,1,10,0,MAXCOVERAGE); // flat map
   hicos->Draw("a,fb,bb");     // suppress axis, front box, back box
   c0->SetTheta(90-0.001);     // view from above
   c0->SetPhi(0+0.001);        // no x-y rotation
   
   // Draw active PMT coverage
   coverage->SetMarkerStyle(7);
-  //coverage->SetMinimum(0);                      // TODO - takes >10min (!?)
-  //coverage->GetZaxis()->SetRangeUser(0,10);     // TODO - doesn't work
+  coverage->SetMinimum(0);                            // TODO - takes >10min (!?)
+  coverage->SetMaximum(MAXCOVERAGE);                  // TODO - takes >10min (!?)
+  //coverage->GetZaxis()->SetLimits(0,MAXCOVERAGE);     // TODO - doesn't work
   coverage->Draw("pcolz,a,fb,bb,same");
   
   // Draw inactive PMTs (grey)
@@ -153,13 +109,9 @@ int main(int argc, char** argv) {
   return 0;
 }
 
-// Returns the fitted light position for a given fibre/run
+/// Get the PMT occupancies for a given fibre/run, and fill the coverage array
 void occupancy(string fibre, int run, int* cvrg, int NPMTS, bool isMC=false, bool TEST=false) {
 
-  // ********************************************************************
-  // Initialisation
-  // ********************************************************************
-  
   // Check files for given run
   if(!TEST) printf("-----\n");
   printf("Checking files for run %d... ", run);
@@ -172,14 +124,13 @@ void occupancy(string fibre, int run, int* cvrg, int NPMTS, bool isMC=false, boo
     return;
   }
   
-  // ********************************************************************
-  // Sum PMT hit counts for entire run
-  // ********************************************************************
-  int pmthitcount[NPMTS], pmtlightcone[NPMTS];
-  memset( pmthitcount, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+  // 
+  float occupancy[NPMTS];
+  int pmtlightcone[NPMTS];
+  memset( occupancy, 0., NPMTS*sizeof(float) ); // NPMTS only known at runtime
   memset( pmtlightcone, 0, NPMTS*sizeof(int) ); // NPMTS only known at runtime
+  int checkrun, count, totalnhit, npmts;
   int pmtid, pmthits, onspot;
-  int checkrun, count, totalnhit;
   string dummy;
   g >> dummy >> checkrun;
   if(!g.good()) printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),checkrun);
@@ -188,33 +139,35 @@ void occupancy(string fibre, int run, int* cvrg, int NPMTS, bool isMC=false, boo
   if(!g.good()) { printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),count); return; }
   g >> dummy >> totalnhit;
   if(!g.good()) { printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),totalnhit); return; }
+  g >> dummy >> npmts;
+  if(!g.good()) { printf("*** ERROR *** Bad input - str=%s int=%d\n",dummy.c_str(),npmts); return; }
   // Print run info here
-  printf("*** INFO *** Run %d has %d EXTA events with %d total NHits.\n",checkrun,count,totalnhit);
   float avgnhit = (float)totalnhit/count;  
-    
+  printf("*** INFO *** Run %d has %d EXTA events with an average %.2f nhits.\n",checkrun,count,avgnhit);
+  
+  // Get occupancy of each PMT
   while (g.good()) {
     g >> pmtid >> pmthits >> onspot;
     if(!g.good()) break;
-    pmthitcount[pmtid]=pmthits;
+    occupancy[pmtid]=(float)pmthits/count;
     pmtlightcone[pmtid]=onspot;
   }
   
-  // Find threshold for "screamers"
-  int HOTLIMIT;
-  GetHotLimit(pmthitcount, NPMTS, HOTLIMIT);
-  printf("Found screamer threshold: %d\n", HOTLIMIT);
+  // Find thresholds for hot/cold PMTs
+  float HOTLIMIT, COLDLIMIT;
+  GetLimits(occupancy, NPMTS, HOTLIMIT, COLDLIMIT);
+  printf("Found occupancy limits: [ %f, %f ]\n", COLDLIMIT, HOTLIMIT);
   
-  // ********************************************************************
-  // Increase counter for PMTs with more than 5000 nhit for this run
-  // ********************************************************************
+  // Increase counter for PMTs with more than 1% occupancy
   for(int id=0; id<NPMTS; id++) {
-    if (cvrg[id]<0) cvrg[id]=0;                     // valid PMT ID, reset counter
-    if (pmtlightcone[id] != 1) continue;            // not in direct light cone
-    if (pmthitcount[id] == 0) continue;             // off PMT
-    if (pmthitcount[id] > HOTLIMIT) continue;       // hot PMT
-    if (pmthitcount[id] >= count/100.) cvrg[id]++;  // good coverage for this fibre
+    if (cvrg[id]<0) cvrg[id]=0;                   // PMT ID is valid, reset counter
+    if (pmtlightcone[id] != 1) continue;          // not in direct light cone
+    if (occupancy[id] == 0) continue;             // broken/disabled tube
+    if (occupancy[id] < COLDLIMIT) continue;      // low occupancy tube
+    if (occupancy[id] > HOTLIMIT) continue;       // high occupancy tube
+    if (occupancy[id] >= 0.01) cvrg[id]++;        // PMT is "covered" by fibre
   }
- 
+  
 }
 
 void GetProjection(TGraph2D *coverage, TGraph2D* offpmts, int* cvrg, const int NPMTS, const RAT::DU::PMTInfo& pmtinfo) {
@@ -225,30 +178,25 @@ void GetProjection(TGraph2D *coverage, TGraph2D* offpmts, int* cvrg, const int N
   TVector3 pmtpos;
   printf("Generating icosahedral projection... ");
   int goodpmts=0, badpmts=0;
-  //double offx[NPMTS], offy[NPMTS];
   for(int id=0; id<NPMTS; id++) {
     pmtpos = pmtinfo.GetPosition(id);
-    if (pmtpos.Mag()==0) continue;              // not a valid PMT
-    if (pmtinfo.GetType(id) != 1) continue;     // not a normal PMT
-    int face;                                   // side of PSUP icosahedron
-    icospos = func::IcosProject(pmtpos,face);   // PMT position on flatmap
-    if(cvrg[id] <= 0) {                         // inactive PMT
-      offpmts->SetPoint(badpmts,icospos.X(),icospos.Y(),0.001); // non-zero Z important!
-      //offx[badpmts] = icospos.X();
-      //offy[badpmts] = icospos.Y();
-      //printf("Bad PMT #%d at ( %.3f | %.3f )\t",id,icospos.X(),icospos.Y());
-      //printf(" position ( %.3f | %.3f | %.3f )\n",id,pmtpos.X(),pmtpos.Y(),pmtpos.Z());
+    if (pmtpos.Mag()==0) continue;                // not a valid PMT
+    if (pmtinfo.GetType(id) != 1) continue;       // not a normal PMT
+    int face;                                     // side of PSUP icosahedron
+    icospos = func::IcosProject(pmtpos,face);     // PMT position on flatmap
+    if(cvrg[id] <= 0) {                           // inactive PMT
+      offpmts->SetPoint(badpmts,icospos.X(),icospos.Y(),0.001); // must be non-zero!
       badpmts++;
     } else {
-      if(cvrg[id] > 10) {                       // cap coverage to fixed value
-        printf("*** WARNING *** PMT #%d has coverage %d - setting to 10.\n",id,cvrg[id]);
-        cvrg[id]=10;
+      if(cvrg[id] > MAXCOVERAGE) {                // high coverage
+        cvrg[id] = MAXCOVERAGE;
+      } else if (cvrg[id] < 3) {                  // low coverage
+        printf("*** WARNING *** PMT #%d is covered by only %d good fibres.\n",id,cvrg[id]);
       }
       coverage->SetPoint(goodpmts,icospos.X(),icospos.Y(),cvrg[id]);
       goodpmts++;
     }
-  }
-  //offpmts = new TGraph(badpmts,offx,offy);
+  } // pmt loop
   printf("done.\n");
   
 }
