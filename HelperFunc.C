@@ -46,7 +46,7 @@ using std::flush;
 
 // -----------------------------------------------------------------------------
 // Run time parameters
-const int MORE_OUTPUT = 1;                  // additional plots for testing
+const int MORE_OUTPUT = 0;                  // additional plots for testing
 
 // Global constants
 const double pi = TMath::Pi();
@@ -261,9 +261,14 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *occupancy, float *pmtangs, TG
   memset( ey, 0, NPMTS*sizeof(double) );
   memset( ez, 0, NPMTS*sizeof(double) );
 
-  int plotted_pmt[24] = {0};  
-
-  TCanvas *c0 = NULL;
+  int saved_pmt[24] = {0};
+  string histname[24] = {""};
+  string histtitle[24] = {""};
+  string fitname[24] = {""};
+  TF1 *plotted_fit[24] = {NULL};
+  TH1D *plotted_hist[24] = {NULL};
+  TCanvas *c1 = NULL;
+  
   cout << "Fitting PMT prompt peaks..." << endl;
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
     if (iPMT % (int)round(NPMTS/100.) == 0) printProgress(iPMT, NPMTS);
@@ -280,30 +285,12 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *occupancy, float *pmtangs, TG
     while(temp->GetBinContent(hibin) > 0.2*temp->GetMaximum()) hibin++;
     
     // Fit 1D Gaussian to each slice to get prompt hit time
-    c0 = new TCanvas("c0","",800,600);  // suppress default Canvas creation
+    c1 = new TCanvas("c1","NULL",800,600);  // suppress default Canvas creation
     TF1 *fitPMT = new TF1("fitPMT", "gaus", temp->GetBinLowEdge(lobin), temp->GetBinLowEdge(hibin+1));
     fitPMT->SetParameters(temp->GetMaximum(), temp->GetBinCenter(htime->GetMaximumBin()), temp->GetRMS());
-    temp->Fit("fitPMT","R,q");
-    c0->Close();
-    
-  // Plot fit results for individual PMT (for proof of concept)
-    int thisbin = (int)pmtangs[iPMT];
-    if (MORE_OUTPUT && plotted_pmt[thisbin]==0) {
-      TCanvas *c = new TCanvas("c","",800,600);
-      c->SetGrid();
-      temp->SetStats(1);
-      temp->Draw("same");
-      temp->Fit("fitPMT","R,q");
-      temp->SetTitle("Single PMT hit distribution;Hit time offset [ns];Number of events");
-      temp->GetXaxis()->SetRangeUser(-40,60);
-      temp->GetYaxis()->SetRangeUser(0,1000);
-      string sglstr = Form("images/angular_singlePMT_%02d",thisbin);
-      c->Print((sglstr+".png").c_str());
-      c->Print((sglstr+".pdf").c_str());
-      c->Close();
-      if (c) delete c;
-      plotted_pmt[thisbin] = 1;
-    }
+    temp->Fit("fitPMT","R,q");  // force range, quiet mode
+    c1->Close();
+    c1 = NULL;
     
     // Fill fitted hit times vs. angle into graph
     x[iPMT]  = fitPMT->GetParameter(0);
@@ -313,11 +300,60 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *occupancy, float *pmtangs, TG
     ey[iPMT] = fitPMT->GetParError(1);
     ez[iPMT] = fitPMT->GetParError(2);
     
-    delete fitPMT;
-    delete temp;
+    // Save fit results for individual PMT (for proof of concept)
+    int thisbin = (int)floor(pmtangs[iPMT]);
+    if (MORE_OUTPUT && saved_pmt[thisbin]==0) {
+      // Histogram for this bin
+      histname[thisbin] = Form("hangle_%d",thisbin);
+      histtitle[thisbin] = Form("PMT #%d (%d deg)",iPMT,thisbin);
+      plotted_hist[thisbin] = (TH1D*)temp->Clone();
+      plotted_hist[thisbin]->SetDirectory(0); // required to avoid segfault (?)
+      plotted_hist[thisbin]->SetName(histname[thisbin].c_str());
+      // Fit result for this bin
+      fitname[thisbin] = Form("hfit_%d",thisbin);
+      plotted_fit[thisbin] = (TF1*)fitPMT->Clone();
+      plotted_fit[thisbin]->SetName(fitname[thisbin].c_str());
+      saved_pmt[thisbin] = 1;
+    }
+    
+    if (fitPMT) delete fitPMT;
+    if (temp) delete temp;
+    fitPMT = NULL;
+    temp = NULL;
     
   } // PMT loop
   
+  if (c1) delete c1;
+  
+  // Plot fit results for individual PMT (for proof of concept)
+  TCanvas *c0 = NULL;
+  if (MORE_OUTPUT) {
+    TCanvas *c0 = new TCanvas("c0","Single PMT fits",3000,2000);
+    c0->Divide(6,4);
+    for (int thisbin=0; thisbin<24; thisbin++) {
+      if (saved_pmt[thisbin]==0 || plotted_hist[thisbin]==NULL) continue;
+      //cout << "PMT at angle " << thisbin << " deg has " << plotted_hist[thisbin]->GetEntries() << " entries around " << plotted_hist[thisbin]->GetMean() << endl;
+      c0->cd(thisbin+1)->SetGrid();
+      //c0->cd(thisbin+1)->SetLogy();
+      plotted_hist[thisbin]->SetStats(1);
+      plotted_hist[thisbin]->Draw();
+      plotted_hist[thisbin]->Fit(fitname[thisbin].c_str(),"R,q");
+      plotted_hist[thisbin]->SetTitle(histtitle[thisbin].c_str());
+      plotted_hist[thisbin]->GetXaxis()->SetTitle("Hit time offset [ns]");
+      plotted_hist[thisbin]->GetYaxis()->SetTitle("Number of events");
+      plotted_hist[thisbin]->GetXaxis()->SetRangeUser(170,220);
+      plotted_hist[thisbin]->GetYaxis()->SetRangeUser(0,900); // linear scale
+      //plotted_hist[thisbin]->GetYaxis()->SetRangeUser(0.5,900); // log scale
+      //plotted_hist[thisbin]->GetXaxis()->SetRangeUser(y[iPMT]-5*z[iPMT],y[iPMT]+5*z[iPMT]);
+      //plotted_hist[thisbin]->GetYaxis()->SetRangeUser(1.5e-3*x[iPMT],1.5*x[iPMT]);
+      plotted_hist[thisbin]->GetXaxis()->SetTitleOffset(1.3);
+      plotted_hist[thisbin]->GetYaxis()->SetTitleOffset(1.6);
+    }
+    string sglstr = Form("angular_singlePMTs");
+    c0->Print((sglstr+".png").c_str());
+    c0->Print((sglstr+".pdf").c_str());
+    c0->Close();
+  }
   if (c0) delete c0;
   
   // Return 2D graph with fit results (by reconstructing object at given address)
