@@ -167,7 +167,7 @@ void GetMaxColVal(const TVector3& center, float* occupancy, int NPMTS, float &ne
   while (hFar->GetBinContent(j) >= 1) j++;
   nearval = hNear->GetXaxis()->GetBinLowEdge(i);
   farval = hFar->GetXaxis()->GetBinLowEdge(j);
-  cout << "Nearval is " << nearval << endl;
+  cout << "Nearval is " << nearval << endl; // TODO - replace this function with hard limits? e.g. nearval=NHit/8, farval=NHit/40
   if(hNear) delete hNear;
   if(hFar) delete hFar;
 }

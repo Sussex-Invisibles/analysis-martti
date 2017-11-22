@@ -535,6 +535,10 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
     FillHemisphere(direct, occupancy, NPMTS, gDir, gDir2D, NCOL, nearmax, pmtinfo);
     FillHemisphere(reflected, occupancy, NPMTS, gRef, gRef2D, NCOL, farmax, pmtinfo);
     
+    // TODO - use Gaussian fit amplitude as maximum for colour scale
+    //nearmax = (float)totalnhit/count/8.;
+    //farmax = (float)totalnhit/count/40.;
+    
     // Get rotation angles for rotating view over weighted light spots
     double rot_Z1, rot_X1, rot_Z2, rot_X2;
     GetRotationAngles(direct, rot_Z1, rot_X1);
