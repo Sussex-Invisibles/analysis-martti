@@ -9,13 +9,13 @@
 
 // Run time parameters
 const int RUN_CLUSTER = 1;      // whether running on cluster (0=local)
-const int USE_RATDB = 0;        // whether to use RATDB to get fibre positions
+const int USE_RATDB = 1;        // whether to use RATDB to get fibre positions
 const int VERBOSE = 1;          // verbosity flag
 const int IS_MC = 0;            // Monte-Carlo flag 
 const int NBINS = 24;           // number of bins
 
 // Initialise functions
-int summary(string, int, float&, float&, bool, bool);
+int summary(string, int, float&, float&, bool, bool, RAT::DB*);
 
 // Main program
 int main(int argc, char** argv) {
@@ -38,6 +38,8 @@ int main(int argc, char** argv) {
   float nhit;
   TH1F *hDir = new TH1F("hDir","",NBINS,0,12);
   TH1F *hRef = new TH1F("hRef","",NBINS,0,12);
+  RAT::DB *db = RAT::DB::Get();
+  db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
   
   // Loop over all files in list
   int nfiles=0;
@@ -50,7 +52,7 @@ int main(int argc, char** argv) {
     
     // Get fit results for fibre
     float dirAng, refAng;
-    int errors = summary(fibre, run, dirAng, refAng, IS_MC, TEST);
+    int errors = summary(fibre, run, dirAng, refAng, IS_MC, TEST, db);
     if (errors) {
       cerr<<"*** WARNING *** Run "<<run<<" was not processed correctly."<<endl;
     } else {
@@ -94,15 +96,13 @@ int main(int argc, char** argv) {
 }
 
 // Define macro
-int summary(string fibre, int run, float& dirAng, float& refAng, bool isMC=false, bool TEST=false) {
+int summary(string fibre, int run, float& dirAng, float& refAng, bool isMC=false, bool TEST=false, RAT::DB* db=NULL) {
   
   TVector3 fibrePos(0,0,0);
   TVector3 fibreDir(0,0,0);
   TVector3 lightPos(0,0,0);
   if (USE_RATDB) {
-    // Get fibre info (from RATDB) 
-    RAT::DB *db = RAT::DB::Get();
-    //db->LoadDefaults();	  // Already done when calling DU::Utility::Get()
+    // Get fibre info (from RATDB)
     RAT::DBLinkPtr entry = db->GetLink("FIBRE",fibre);
     fibrePos.SetXYZ(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position of fibre [mm]
     fibreDir.SetXYZ(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction of fibre
@@ -157,11 +157,14 @@ int summary(string fibre, int run, float& dirAng, float& refAng, bool isMC=false
   } else {
     cout << "Loaded fit position: " << printVector(fitDirPos) << " mm, " << fitDirPos.Angle(lightPos)*180./pi << " deg deviation" << endl;
   }
-  cout << "Deviation seen from fibre: " << fitdir.Angle(fibreDir)*180./pi << " degrees (CHECK: 2.0 == " << fitDirPos.Angle(lightPos)/fitdir.Angle(fibreDir) << ")." << endl << endl;
+  cout << "Deviation seen from fibre: " << fitdir.Angle(fibreDir)*180./pi << " degrees (CHECK: 2.0 == " << fitDirPos.Angle(lightPos)/fitdir.Angle(fibreDir) << ")." << endl;
   
   // Output
   dirAng = fitDirPos.Angle(lightPos)*180./pi;
   refAng = fitRefPos.Angle(fibrePos)*180./pi;
+  cout << "Direct light deviates by " << dirAng << endl;
+  cout << "Reflected light deviates by " << refAng << endl;
+  cout << endl;
   return 0;
 }
 
