@@ -162,7 +162,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     
     TVector3 fibrePos(0,0,0);
     TVector3 fibreDir(0,0,0);
-    TVector3 lightPos(0,0,0);
+    TVector3 lightPos(0,0,0);  // TODO - use LightPathCalculator to get the expected light spot!
     if (USE_RATDB) {
       // Get fibre info (from RATDB) 
       RAT::DB *db = RAT::DB::Get();
@@ -211,14 +211,17 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
       fitpos.SetXYZ(dirx,diry,dirz);
       if (fitpos.Mag()!=0) break;
     }
-    TVector3 fitdir = (fitpos-fibrePos).Unit();
+    TVector3 fitdir = (fitpos-fibrePos).Unit(); // TODO - use LightPathCalculator to get the fitted fibre direction!
+    cout << "Fit direction (straight) : " << printVector(fitdir) << endl;
+    //TVector3 fitdirlpc = lpc.VectorToSphereEdge(fibrePos, fibreDir, 8700, true); // function is private...
+    //cout << "Fit direction (LightPath): " << printVector(fitdirlpc) << endl;
     if (fitpos.Mag()==0) {
       cerr << "*** ERROR - Could not load fit position!" << endl;
       exit(1);
     } else {
       cout << "Loaded fit position: " << printVector(fitpos) << " mm, " << fitpos.Angle(lightPos)*180./pi << " deg deviation" << endl;
     }
-    
+ 
     // Initialise histograms
     hpmtseg = new TH1D("hpmtseg",fibre.c_str(),NBINS,0,MAXANG);
     hpmtgood = new TH1D("hpmtgood",fibre.c_str(),NBINS,0,MAXANG);
