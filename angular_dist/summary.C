@@ -4,36 +4,8 @@
 // Compile & run:   clear && g++ -o summary.exe summary.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./summary.exe
 // ---------------------------------------------------------
 
-// C++ stuff
-#include <fstream>
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-
-// ROOT stuff
-#include "TROOT.h"
-#include "TSystem.h"
-#include "TFile.h"
-#include "TH1.h"
-#include "TH2.h"
-#include "TCanvas.h"
-#include "TMath.h"
-#include "TPad.h"
-#include "TPaveStats.h"
-#include "TStyle.h"
-#include "TLegend.h"
-
-// RAT stuff
-#include "RAT/DU/DSReader.hh"
-#include "RAT/DU/PMTInfo.hh"
-#include "RAT/DU/Utility.hh"
-#include "RAT/DS/Run.hh"
-#include "RAT/DS/Entry.hh"
-#include "RAT/DS/MC.hh"
-
 // Helper functions
 #include "../HelperFunc.C"
-#include "../Xianguo.C"
 
 // Global constants
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
@@ -44,7 +16,6 @@ const int IS_MC = 0;        // Monte-Carlo flag
 TH1D* get_histo(string, int, bool, bool);
 
 // Main program
-using namespace std;
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
