@@ -1,10 +1,14 @@
 *.exe
+*.mac
 *.out
 *.pdf
 *.png
 *.root
 */.compiled
 */.executed
+ambe_mc/cluster
+ambe_mc/test1
+ambe_mc/test2
 angular_dist/logs
 angular_dist/output
 fibre_validation/output
