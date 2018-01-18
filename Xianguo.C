@@ -19,7 +19,7 @@
 
 const Double_t EPSILON = 1e-10;
 
-Double_t * GetAxisArray(TAxis * aa);
+Double_t* GetAxisArray(const TAxis* aa);
 void FitSlicesY(const TH2D *hh, TH1D *&hnor, TH1D *&hmpv, TH1D *&hwid, TH1D *&hres, TH1D *&hchi, const TString formula, const Double_t thres, TList *ll=0x0);
 void BinLog(TAxis *axis, const Double_t non0start=-999.);
 
@@ -195,7 +195,7 @@ void FitSlicesY(const TH2D *hh, TH1D *&hnor, TH1D *&hmpv, TH1D *&hwid, TH1D *&hr
 }
 
 // *****************************************************************************
-Double_t * GetAxisArray(TAxis * aa)
+Double_t* GetAxisArray(const TAxis* aa)
 // *****************************************************************************
 {
   const Int_t nbin=aa->GetNbins();
