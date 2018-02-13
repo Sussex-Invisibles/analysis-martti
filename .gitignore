@@ -7,10 +7,11 @@
 */.compiled
 */.executed
 ambe_mc/cluster
-ambe_mc/test1
-ambe_mc/test2
+ambe_mc/debug*
+ambe_mc/test*
 angular_dist/logs
 angular_dist/output
+angular_dist/*2017.txt
 fibre_validation/output
 tellie_jobs/logs
 tellie_jobs/macros
