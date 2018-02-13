@@ -345,7 +345,7 @@ int main(int argc, char** argv) {
   c->cd(1)->SetLeftMargin(0.12);
   c->cd(1)->SetRightMargin(0.14); // same pad width as right pad
   c->cd(1)->DrawFrame(0,-100,100,400,"Position of neutron captures;r [mm];z [mm]");
-  hnCapPosZ->SetMarkerStyle(6);
+  hnCapPosZ->SetMarkerStyle(1);
   hnCapPosZ->Draw("scat same");
   // Source geometry
   g1->Draw("L same");
@@ -355,19 +355,21 @@ int main(int argc, char** argv) {
   g5->Draw("L same");
   // Normalised by volume
   c->cd(2)->SetGrid();
+  c->cd(2)->SetLogz();
   c->cd(2)->SetLeftMargin(0.12);
   c->cd(2)->SetRightMargin(0.14); // colz
   c->cd(2)->DrawFrame(0,-100,100,400,"Neutron captures by volume [mm^{#minus3}];r [mm];z [mm]");
   // Normalise neutron capture histograms (radial dependence)
   for (int i=0; i<=hnCapPos->GetNbinsX(); i++) {
+    double dx = hnCapPos->GetXaxis()->GetBinWidth(i);
     double rad = hnCapPos->GetXaxis()->GetBinCenter(i);
     for (int j=0; j<=hnCapPos->GetNbinsY(); j++) {
+      double dy = hnCapPos->GetYaxis()->GetBinWidth(j);
       double val = hnCapPos->GetBinContent(i,j);
-      hnCapPos->SetBinContent(i,j,val/(2.*pi*rad));
+      hnCapPos->SetBinContent(i,j,val/(2.*pi*rad*dx*dy));
     }
   }
-  TH2D *hnCapPos2 = (TH2D*)hnCapPos->Clone();
-  hnCapPos2->Rebin2D(2,2);
+  TH2D *hnCapPos2 = (TH2D*)hnCapPos->Rebin2D(3,3,"hnCapPos2");
   hnCapPos2->Draw("colz same");
   // Source geometry
   g1->Draw("L same");
@@ -396,6 +398,7 @@ int main(int argc, char** argv) {
   g5->Draw("L same");
   // Normalised by volume
   c->cd(2)->SetGrid();
+  c->cd(2)->SetLogz();
   c->cd(2)->SetLeftMargin(0.12);
   c->cd(2)->SetRightMargin(0.14); // colz
   c->cd(2)->DrawFrame(0,-30,40,170,"Neutron captures by volume [mm^{#minus3}];r [mm];z [mm]");
