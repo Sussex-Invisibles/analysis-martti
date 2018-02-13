@@ -11,13 +11,13 @@ using std::setprecision;
 using std::fixed;
 
 // Global parameters
-const int TEST = 0;
-const int VERBOSE = 0;
-const int isMC = 1;
-const int NBINS = 120;
-const double EMAX = 12;
-const int OLD_GEOM = 1;
-const double Z_OFFSET = -17.5; // mm offset of the AmBe source
+const int TEST = 0;                    // test flag
+const int VERBOSE = 0;                 // verbosity flag
+const int isMC = 1;                    // Monte-Carlo flag
+const int NBINS = 120;                 // number of bins for most histograms
+const double EMAX = 12;                // maximal energy for histograms
+const int OLD_GEOM = 1;                // old geometry (filled stem instead of rod)
+const double Z_OFFSET = -17.5;         // mm offset of the AmBe source
 
 // Turn points into a graph
 void FillGraphs(TGraph *g, int n, double *x, double *y, double *z, int col) {
@@ -27,18 +27,27 @@ void FillGraphs(TGraph *g, int n, double *x, double *y, double *z, int col) {
     g->SetPoint(i+1,x[i],z[i]+Z_OFFSET);
     g->SetPoint(n+i+1,y[n-i-1],z[n-i-1]+Z_OFFSET);
   }
-  g->SetLineWidth(2);
+  g->SetLineWidth(1);
   g->SetLineColor(col);
 };
 
 // Main program
 int main(int argc, char** argv) {
   
+  // Material used as neutron absorber
+  string MATERIAL = "Nickel_OLD";
+  if (TEST) MATERIAL = "Test";
+
   // Input/Output files
-  string inroot;
-  if (TEST) inroot = "test7/AmBe_*.root";
-  else      inroot = "nickel/output/AmBe_*.root";
-  std::ofstream out("testMC.out");
+  string fpath = ((TEST) ? "test7" : MATERIAL);
+  string inroot = fpath;
+  if (!TEST) inroot = inroot + "/output";
+  inroot = inroot + "/AmBe_*.root";
+
+  string outlog = fpath;
+  if (!TEST) outlog = outlog + "/results";
+  outlog = outlog + "/output.log";
+  std::ofstream out(outlog.c_str());
  
   // Plotting options 
   gStyle->SetOptStat(0);
@@ -46,29 +55,31 @@ int main(int argc, char** argv) {
   gStyle->SetHistLineWidth(2);
   
   // Initialise stuff
-  TFile *outroot=NULL;
+  TFile *outfile=NULL;
   TH1D *hGam=NULL, *hNeu=NULL, *hPro=NULL, *hOth=NULL;
   TH1D *hGamAV=NULL, *hGamAVn=NULL, *hGamFrac=NULL, *hGamFracn=NULL;
-  TH2D *hGamTime=NULL, *hnCapPos=NULL;
+  TH2D *hGamTime=NULL, *hnCapPos=NULL, *hnCapPosZ=NULL;
   
-  string outfile = "testMC.root";
-  if (!TEST) outfile = "nickel/results/histograms.root";
-  std::ifstream chk(outfile.c_str());
+  string outroot = fpath;
+  if (!TEST) outroot = outroot + "/results";
+  outroot = outroot + "/histograms.root";
+  std::ifstream chk(outroot.c_str());
   bool processed = chk.good();
   if (processed) {  // if already processed, read output file
-    outroot = new TFile(outfile.c_str(),"READ");
-    hGam = (TH1D*)outroot->Get("hGam");
-    hNeu = (TH1D*)outroot->Get("hNeu");
-    hPro = (TH1D*)outroot->Get("hPro");
-    hOth = (TH1D*)outroot->Get("hOth");
-    hGamAV = (TH1D*)outroot->Get("hGamAV");
-    hGamAVn = (TH1D*)outroot->Get("hGamAVn");
-    hGamFrac = (TH1D*)outroot->Get("hGamFrac");
-    hGamFracn = (TH1D*)outroot->Get("hGamFracn");
-    hGamTime = (TH2D*)outroot->Get("hGamTime");
-    hnCapPos = (TH2D*)outroot->Get("hnCapPos");
+    outfile = new TFile(outroot.c_str(),"READ");
+    hGam      = (TH1D*)outfile->Get("hGam");
+    hNeu      = (TH1D*)outfile->Get("hNeu");
+    hPro      = (TH1D*)outfile->Get("hPro");
+    hOth      = (TH1D*)outfile->Get("hOth");
+    hGamAV    = (TH1D*)outfile->Get("hGamAV");
+    hGamAVn   = (TH1D*)outfile->Get("hGamAVn");
+    hGamFrac  = (TH1D*)outfile->Get("hGamFrac");
+    hGamFracn = (TH1D*)outfile->Get("hGamFracn");
+    hGamTime  = (TH2D*)outfile->Get("hGamTime");
+    hnCapPos  = (TH2D*)outfile->Get("hnCapPos");
+    hnCapPosZ = (TH2D*)outfile->Get("hnCapPosZ");
   } else {          // if not processed, read input file & generate output
-    outroot = new TFile(outfile.c_str(),"NEW");
+    outfile = new TFile(outroot.c_str(),"NEW");
     
     // Initialise RAT
     RAT::DU::DSReader dsreader(inroot);
@@ -76,17 +87,18 @@ int main(int argc, char** argv) {
     const int NPMTS = pmtinfo.GetCount();
 
     // Initialise histograms
-    hGam = new TH1D("hGam","Gamma",NBINS,0,EMAX);
-    hNeu = new TH1D("hNeu","Neutron",NBINS,0,EMAX);
-    hPro = new TH1D("hPro","Proton",NBINS,0,EMAX);
-    hOth = new TH1D("hOth","Other",NBINS,0,EMAX);
-    hGamAV = new TH1D("hGamAV","Gamma (AV)",NBINS,0,EMAX);
-    hGamAVn = new TH1D("hGamAVn","Gamma (AV) from nCapture",NBINS,0,EMAX);
-    hGamFrac = new TH1D("hGamFrac","Gamma (AV frac.)",NBINS,0,EMAX);
+    hGam      = new TH1D("hGam","Gamma",NBINS,0,EMAX);
+    hNeu      = new TH1D("hNeu","Neutron",NBINS,0,EMAX);
+    hPro      = new TH1D("hPro","Proton",NBINS,0,EMAX);
+    hOth      = new TH1D("hOth","Other",NBINS,0,EMAX);
+    hGamAV    = new TH1D("hGamAV","Gamma (AV)",NBINS,0,EMAX);
+    hGamAVn   = new TH1D("hGamAVn","Gamma (AV) from nCapture",NBINS,0,EMAX);
+    hGamFrac  = new TH1D("hGamFrac","Gamma (AV frac.)",NBINS,0,EMAX);
     hGamFracn = new TH1D("hGamFracn","Gamma (AV frac.) from nCapture",NBINS,0,EMAX);
-    hGamTime = new TH2D("hGamTime","Gamma (AV) timing",NBINS,0,EMAX,NBINS,0,4e6);
+    hGamTime  = new TH2D("hGamTime","Gamma (AV) timing",NBINS,0,EMAX,NBINS,0,4e6);
+    hnCapPos  = new TH2D("hnCapPos","Neutron capture position",200,0,100,400,-500,500);
+    hnCapPosZ = new TH2D("hnCapPosZ","Neutron capture position",1000,0,100,2000,-500,500);
     BinLog(hGamTime->GetYaxis(), 0.04); // log axis for timing (0.04 ns - 4 ms)
-    hnCapPos = new TH2D("hnCapPos","Neutron capture position",1e3,0,1e3,2e3,-1e3,1e3);
     
     // Loop over all entries in file
     int nevents = 0, ntracks = 0;
@@ -175,6 +187,7 @@ int main(int argc, char** argv) {
           hGamAVn->Fill(eStep);
           TVector3 pos = trk.GetFirstMCTrackStep().GetPosition();
           hnCapPos->Fill(pos.Perp(),pos.Z());
+          hnCapPosZ->Fill(pos.Perp(),pos.Z());
           break;
         } // steps
       } // tracks
@@ -188,14 +201,17 @@ int main(int argc, char** argv) {
     out.close();
     
     // Save output file
-    outroot->Write();
+    outfile->Write();
   }
-  
+
   // Plotting section
-  string imgname = "testMC";
-  if (!TEST) imgname = "nickel/results/AmBe_plot";
+  string imgname = fpath;
+  if (!TEST) imgname = imgname + "/results";
+  imgname = imgname + "/AmBe_" + MATERIAL;
+  
+  // Energy of various particles 
   double maxval = std::max(hPro->GetMaximum(),hGam->GetMaximum());
-  TCanvas *c = new TCanvas("c","",800,600);
+  TCanvas *c = new TCanvas("c","",1000,600);
   c->SetLogy();
   c->SetGrid();
   TH1F *pad = c->DrawFrame(0,0.5,EMAX,1.5*maxval);
@@ -214,7 +230,8 @@ int main(int argc, char** argv) {
   c->Print((imgname+"_1.png").c_str());
   c->Close();
   
-  c = new TCanvas("c","",800,600);
+  // Gamma rays that reach inner AV (absolute)
+  c = new TCanvas("c","",1000,600);
   c->SetLogy();
   c->SetGrid();
   pad = c->DrawFrame(0,0.5,EMAX,1.5*maxval);
@@ -232,7 +249,8 @@ int main(int argc, char** argv) {
   c->Print((imgname+"_2.png").c_str());
   c->Close();
   
-  c = new TCanvas("c","",800,600);
+  // Gamma rays that reach inner AV (relative)
+  c = new TCanvas("c","",1000,600);
   c->SetLogy();
   c->SetGrid();
   pad = c->DrawFrame(0,0.01,EMAX,10.);
@@ -259,15 +277,16 @@ int main(int argc, char** argv) {
   c->Print((imgname+"_3.png").c_str());
   c->Close();
   
-  c = new TCanvas("c","",800,600);
+  // Gamma rays that reach inner AV (time vs energy)
+  c = new TCanvas("c","",1000,600);
   c->SetLogy();
   c->SetLogz();
   c->SetGrid();
   hGamTime->SetTitle("#gamma-rays entering inner AV;Photon energy [MeV];Global time [ns]");
   hGamTime->Draw("colz");
   c->Print((imgname+"_4.png").c_str());
-  c->Close();
-  
+  c->Close();  
+
   // Envelope volume (Air)
   double z0[] = { 0.4, 60.7, 60.7, 73.8, 73.8, 173.5, 369.3, 369.3, 378.5};
   double y0[] = { 0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,   0.0};
@@ -317,29 +336,40 @@ int main(int argc, char** argv) {
   int n5 = sizeof(x5)/sizeof(double);
   TGraph *g5 = new TGraph();
   FillGraphs(g5,n5,x5,y5,z5,6);
-  
-  // Draw geometry
-  c = new TCanvas("c","",800,600);
+ 
+  // Neutron capture positions (z vs r)
+  c = new TCanvas("c","",1000,600);
   c->Divide(2,1);
+  // Scatterplot
   c->cd(1)->SetGrid();
-  c->cd(1)->DrawFrame(0,-400,600,400,"Position of neutron capture;r [mm];z [mm]");
-  // Neutron captures
-  hnCapPos->SetMarkerStyle(6);
-  hnCapPos->Draw("scat same");
+  c->cd(1)->SetLeftMargin(0.12);
+  c->cd(1)->SetRightMargin(0.14); // same pad width as right pad
+  c->cd(1)->DrawFrame(0,-100,100,400,"Position of neutron captures;r [mm];z [mm]");
+  hnCapPosZ->SetMarkerStyle(6);
+  hnCapPosZ->Draw("scat same");
   // Source geometry
-  //g0->Draw("L same");
   g1->Draw("L same");
   g2->Draw("L same");
   g3->Draw("L same");
   g4->Draw("L same");
   g5->Draw("L same");
+  // Normalised by volume
   c->cd(2)->SetGrid();
-  c->cd(2)->DrawFrame(0,-30,25,170,"Position of neutron capture;r [mm];z [mm]");
-  // Neutron captures
-  hnCapPos->SetMarkerStyle(6);
-  hnCapPos->Draw("scat same");
+  c->cd(2)->SetLeftMargin(0.12);
+  c->cd(2)->SetRightMargin(0.14); // colz
+  c->cd(2)->DrawFrame(0,-100,100,400,"Neutron captures by volume [mm^{#minus3}];r [mm];z [mm]");
+  // Normalise neutron capture histograms (radial dependence)
+  for (int i=0; i<=hnCapPos->GetNbinsX(); i++) {
+    double rad = hnCapPos->GetXaxis()->GetBinCenter(i);
+    for (int j=0; j<=hnCapPos->GetNbinsY(); j++) {
+      double val = hnCapPos->GetBinContent(i,j);
+      hnCapPos->SetBinContent(i,j,val/(2.*pi*rad));
+    }
+  }
+  TH2D *hnCapPos2 = (TH2D*)hnCapPos->Clone();
+  hnCapPos2->Rebin2D(2,2);
+  hnCapPos2->Draw("colz same");
   // Source geometry
-  //g0->Draw("L same");
   g1->Draw("L same");
   g2->Draw("L same");
   g3->Draw("L same");
@@ -348,6 +378,39 @@ int main(int argc, char** argv) {
   c->Print((imgname+"_5.png").c_str());
   c->Close();
   
+  // Neutron capture positions (z vs r) - zoomed in on source
+  c = new TCanvas("c","",1000,600);
+  c->Divide(2,1);
+  // Scatterplot
+  c->cd(1)->SetGrid();
+  c->cd(1)->SetLeftMargin(0.12);
+  c->cd(1)->SetRightMargin(0.14); // same pad width as right pad
+  c->cd(1)->DrawFrame(0,-30,40,170,"Position of neutron captures;r [mm];z [mm]");
+  hnCapPosZ->SetMarkerStyle(6);
+  hnCapPosZ->Draw("scat same");
+  // Source geometry
+  g1->Draw("L same");
+  g2->Draw("L same");
+  g3->Draw("L same");
+  g4->Draw("L same");
+  g5->Draw("L same");
+  // Normalised by volume
+  c->cd(2)->SetGrid();
+  c->cd(2)->SetLeftMargin(0.12);
+  c->cd(2)->SetRightMargin(0.14); // colz
+  c->cd(2)->DrawFrame(0,-30,40,170,"Neutron captures by volume [mm^{#minus3}];r [mm];z [mm]");
+  // Neutron capture histograms already normalised
+  hnCapPos->Draw("colz same");
+  // Source geometry
+  g1->Draw("L same");
+  g2->Draw("L same");
+  g3->Draw("L same");
+  g4->Draw("L same");
+  g5->Draw("L same");
+  c->Print((imgname+"_5_zoom.png").c_str());
+  c->Close();
+  
+  // Free memory
   if (hPro) delete hPro;
   if (hNeu) delete hNeu;
   if (hGam) delete hGam;
@@ -356,6 +419,9 @@ int main(int argc, char** argv) {
   if (hGamAVn) delete hGamAVn;
   if (leg) delete leg;
   if (c) delete c;
+  
+  // Close files and exit
+  outfile->Close();
   return 0;
   
 }
