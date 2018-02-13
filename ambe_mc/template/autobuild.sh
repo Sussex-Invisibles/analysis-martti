@@ -75,8 +75,8 @@ python ${SRCDIR}/create_macros.py ${ENDDIR} ${1} ${2}
 echo "Submitting ${2} jobs..."
 cd $ENDDIR
 module load sge
-qsub -t 1-${2} AmBe_${1}.job
-echo "INFO: Simulating ${2}k events for AmBeSource with ${1} as neutron absorber."
+qsub -jc mps.medium -q mps.q -t 1-${2} AmBe_${1}.job
+echo "INFO: Simulating `expr 100 \* ${2}` events for AmBeSource with ${1} as neutron absorber."
 cd $SRCDIR
 
 # Unset environment variables
