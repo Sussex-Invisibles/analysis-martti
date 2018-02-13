@@ -1,0 +1,14 @@
+#$ -S /bin/bash
+#$ -cwd
+#$ -j y
+#$ -o DIRECTORY/logs/bash
+
+cd DIRECTORY
+echo "Running job script #${SGE_TASK_ID}"
+cd logs/rat_logs/
+source RAT_SOURCE_SCRIPT
+echo "Using RAT installation ${RATROOT}"
+rat DIRECTORY/macros/AmBe_TEMPLATE_${SGE_TASK_ID}.mac
+echo "Finished job script #${SGE_TASK_ID}"
+cd DIRECTORY
+
