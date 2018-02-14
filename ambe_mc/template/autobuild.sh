@@ -76,7 +76,7 @@ echo "Submitting ${2} jobs..."
 cd $ENDDIR
 module load sge
 qsub -jc mps.medium -q mps.q -t 1-${2} AmBe_${1}.job
-echo "INFO: Simulating `expr 100 \* ${2}` events for AmBeSource with ${1} as neutron absorber."
+echo "INFO: Simulating `expr 1000 \* ${2}` events for AmBeSource with ${1} as neutron absorber."
 cd $SRCDIR
 
 # Unset environment variables
