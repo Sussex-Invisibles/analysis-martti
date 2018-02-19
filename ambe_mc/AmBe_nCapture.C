@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
     c->SetLogy();
     c->SetGrid();
     TH1F *pad = c->DrawFrame(0,0.5,EMAX,1.5*maxval);
-    pad->SetTitle("AmBe simulation with Nickel absorber;Kinetic energy [MeV];MC tracks");
+    pad->SetTitle("AmBe simulation with neutron absorber;Kinetic energy [MeV];MC tracks");
     pad->Draw("");
     hPro->SetLineColor(3); hPro->Draw("same");
     hNeu->SetLineColor(4); hNeu->Draw("same");
