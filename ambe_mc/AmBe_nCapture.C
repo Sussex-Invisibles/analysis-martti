@@ -1,11 +1,16 @@
 // ---------------------------------------------------------
 // Goal:          Evaluate gamma peaks in simulated AmBe events
 // Author:        Martti Nirkko, 10/01/2018
-// Compile & run: clear && g++ -g -o testMC.exe testMC.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./testMC.exe
+// Compile & run: clear && g++ -g -o testMC.exe testMC.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux -lGeom && ./testMC.exe
 // ---------------------------------------------------------
 
 // Helper functions (includes everything else)
 #include "../HelperFunc.C"
+
+// ROOT functions to get elements
+#include <TGeoElement.h>
+#include <TGeoManager.h>
+
 using std::setw;
 using std::setprecision;
 using std::fixed;
@@ -31,8 +36,46 @@ void FillGraphs(TGraph *g, int n, double *x, double *y, double *z, int col) {
   g->SetLineColor(col);
 };
 
+// Get table of element names in ROOT
+std::vector<std::string> InitialiseElements() {
+  new TGeoManager("world", "the simplest geometry");
+  TGeoElementTable *table = gGeoManager->GetElementTable();
+  std::vector<std::string> elements;
+  for (int i=0; i<112; i++) {
+    elements.push_back(table->GetElement(i+1)->GetName());
+    if (elements[i].length()>1) elements[i][1] = std::tolower( elements[i][1] );
+    if (elements[i].length()>2) elements[i][2] = std::tolower( elements[i][2] );
+    //std::cout << i+1 << elements[i] << std::endl;
+  }
+  std::cout << "Initialised " << (int)elements.size() << " elements." << std::endl;
+  return elements;
+};
+
+// Get isotope name from PDG code
+std::string GetIsotope(int pdg, std::vector<std::string>& elements) {
+  std::string isotope = "NULL";
+  // Check that elements exist
+  if (elements.size()==0) {
+    std::cout << "ERROR - Table of elements not initialised!" << std::endl;
+    return isotope;
+  }
+  // PDG code must be of nucleus
+  if (fabs(pdg) < 1e9) {
+    std::cout << "ERROR - Can only convert nuclear isotopes!" << std::endl;
+    return isotope;
+  }
+  // Nuclear codes are given as 10-digit numbers ±10LZZZAAAI.
+  int Z = (pdg % 10000000) / 10000; // number of protons
+  int A = (pdg %    10000) /    10; // number of nucleons
+  isotope = Form("%s%d",elements[Z-1].c_str(),A); // Z-1 because of vector index
+  return isotope;
+};
+
 // Main program
 int main(int argc, char** argv) {
+
+  // Initialise elements
+  std::vector<std::string> elements = InitialiseElements();
   
   // Materials used as neutron absorber
   string MATERIALS[] = {"Chromium","Gadolinium","Iron","Lead","Nickel","Titanium","Zinc"};
@@ -170,7 +213,8 @@ int main(int argc, char** argv) {
           // (8.532 ± 0.008) MeV may represent the transition to the ground state in Ni-61; if so, it 
           // accounts for some 80 percent of captures in Ni-60. From considerations of intensity, five 
           // of the remaining nickel y-rays can be ascribed to transitions to excited states in Ni-59."
-          if (pdg != 22) continue;    // gamma
+          if (trk.GetFirstMCTrackStep().GetProcess() != "nCapture") continue; // particle from neutron capture
+          //if (pdg != 22) continue;    // gamma
           for (int iStep=0; iStep<trk.GetMCTrackStepCount(); iStep++) {
             const RAT::DS::MCTrackStep& stp = trk.GetMCTrackStep(iStep);
             double eStep = stp.GetKineticEnergy();
@@ -190,7 +234,22 @@ int main(int argc, char** argv) {
             hGamAV->Fill(eStep); // gamma energy when entering AV (visible energy)
             hGamTime->Fill(eStep,stp.GetGlobalTime());
             //if (trk.GetFirstMCTrackStep().GetStartVolume() != "AmBeAbsorber") continue; // particle produced on Nickel
-            if (trk.GetFirstMCTrackStep().GetProcess() != "nCapture") break; // gamma from neutron capture
+            
+			      // Additional output to test neutron capture isotopes
+			      cout << "Event " << setw(2) << iEntry << ", track " << setw(2) << iTrk;
+			      cout << " is " << setw(8) << trk.GetParticleName();
+            cout << " (" << setw(5) << setprecision(3) << fixed << eStep << " MeV)";
+            cout << " from " << stp.GetProcess() << " in " << stp.GetEndVolume();
+            cout << ", parent " << setw(7) << mc.GetMCTrack(trk.GetParentID()).GetParticleName();
+			      if (fabs(pdg) > 1e9) { // Nuclear codes are given as 10-digit numbers ±10LZZZAAAI.
+			        string iso = GetIsotope(pdg-10, elements);  // same nucleus with 1 less neutron
+			        cout << " captured on " << iso;
+			        // Names of particles lighter than nuclei can be obtained as follows:
+			        //if (nucpdg==1000010010) nucpdg = 2212; // identify H1 as proton
+			        //const TParticlePDG *part = pdgdb->GetParticle(nucpdg);
+			      }
+            cout << endl;
+            
             hGamAVn->Fill(eStep);
             TVector3 pos = trk.GetFirstMCTrackStep().GetPosition();
             hnCapPos->Fill(pos.Perp(),pos.Z());
