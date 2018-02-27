@@ -16,7 +16,7 @@ using std::setprecision;
 using std::fixed;
 
 // Global parameters
-const int TEST = 1;                    // test flag
+const int TEST = 0;                    // test flag
 const int VERBOSE = 0;                 // verbosity flag
 const int isMC = 1;                    // Monte-Carlo flag
 const int NBINS = 120;                 // number of bins for most histograms
@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
     
     // Initialise stuff
     TFile *outfile=NULL;
-    TH1D *hGam=NULL, *hNeu=NULL, *hPro=NULL, *hOth=NULL;
+    TH1D *hGam=NULL, *hEle=NULL, *hNeu=NULL, *hPro=NULL, *hOth=NULL;
     TH1D *hGamAV=NULL, *hGamAVn=NULL, *hGamFrac=NULL, *hGamFracn=NULL;
     TH2D *hGamTime=NULL, *hnCapPos=NULL, *hnCapPosZ=NULL;
     TH2I *hnCapIso=NULL;
@@ -118,6 +118,7 @@ int main(int argc, char** argv) {
     if (processed) {  // if already processed, read output file
       outfile = new TFile(outroot.c_str(),"READ");
       hGam      = (TH1D*)outfile->Get("hGam");
+      hEle      = (TH1D*)outfile->Get("hEle");
       hNeu      = (TH1D*)outfile->Get("hNeu");
       hPro      = (TH1D*)outfile->Get("hPro");
       hOth      = (TH1D*)outfile->Get("hOth");
@@ -140,6 +141,7 @@ int main(int argc, char** argv) {
 
       // Initialise histograms
       hGam      = new TH1D("hGam","Gamma",NBINS,0,EMAX);
+      hEle      = new TH1D("hEle","Electron",NBINS,0,EMAX);
       hNeu      = new TH1D("hNeu","Neutron",NBINS,0,EMAX);
       hPro      = new TH1D("hPro","Proton",NBINS,0,EMAX);
       hOth      = new TH1D("hOth","Other",NBINS,0,EMAX);
@@ -211,14 +213,16 @@ int main(int argc, char** argv) {
             hPro->Fill(eTrk);
           } else if (pdg == 2112) {  // neutron
             hNeu->Fill(eTrk);
+          } else if (pdg == 11) {    // electrons
+            hEle->Fill(eTrk);
           } else if (pdg ==   22) {  // gamma
             hGam->Fill(eTrk);
           } else {                   // other
             hOth->Fill(eTrk);
-            if (pdg == -11) {        // positron (don't care, already omitted electrons)
+            if (pdg == -11) {        // positrons (don't care)
               continue;
             }
-            if (fabs(pdg) == 12) {   // (anti-)nu_e (really don't care)
+            if (fabs(pdg) == 12) {   // neutrinos (really don't care)
               continue;
             }
             out << "*** INFO - Event " << setw(2) << iEntry << ",";
@@ -266,10 +270,11 @@ int main(int argc, char** argv) {
       } // entries
       out << "-----" << endl;
       out << "Found " << nevents << " MC events with " << ntracks << " tracks, consisting of:" << endl;
-      out << "- Protons:  " << setw(6) << (int)hPro->GetEntries() << " (" << hPro->GetEntries()/nevents << " / event)" << endl;
-      out << "- Neutrons: " << setw(6) << (int)hNeu->GetEntries() << " (" << hNeu->GetEntries()/nevents << " / event)" << endl;
-      out << "- Gammas:   " << setw(6) << (int)hGam->GetEntries() << " (" << hGam->GetEntries()/nevents << " / event)" << endl;
-      out << "- Other:    " << setw(6) << (int)hOth->GetEntries() << " (" << hOth->GetEntries()/nevents << " / event)" << endl;
+      out << "- Protons:   " << setw(6) << (int)hPro->GetEntries() << " (" << hPro->GetEntries()/nevents << " / event)" << endl;
+      out << "- Neutrons:  " << setw(6) << (int)hNeu->GetEntries() << " (" << hNeu->GetEntries()/nevents << " / event)" << endl;
+      out << "- Electrons: " << setw(6) << (int)hEle->GetEntries() << " (" << hEle->GetEntries()/nevents << " / event)" << endl;
+      out << "- Gammas:    " << setw(6) << (int)hGam->GetEntries() << " (" << hGam->GetEntries()/nevents << " / event)" << endl;
+      out << "- Other:     " << setw(6) << (int)hOth->GetEntries() << " (" << hOth->GetEntries()/nevents << " / event)" << endl;
       out.close();
       
       // Save output file
@@ -498,6 +503,7 @@ int main(int argc, char** argv) {
     // Free memory
     if (hPro) delete hPro;
     if (hNeu) delete hNeu;
+    if (hEle) delete hEle;
     if (hGam) delete hGam;
     if (hOth) delete hOth;
     if (hGamAV) delete hGamAV;
