@@ -79,8 +79,8 @@ int main(int argc, char** argv) {
   std::vector<std::string> elements = InitialiseElements();
   
   // Materials used as neutron absorber
-  string MATERIALS[] = {"Chromium","Gadolinium","Iron","Lead","Nickel","Titanium","Zinc"};
-  int ATOM_Z[] = {24,64,26,82,28,22,30};
+  string MATERIALS[] = {"ptfe","Chromium","Gadolinium","Iron","Lead","Nickel","Titanium","Zinc"};
+  int ATOM_Z[] = {9,24,64,26,82,28,22,30};
   //string MATERIAL = "Nickel_OLD";
   if (TEST) MATERIALS[0] = "Test";
   int NMAT = sizeof(MATERIALS)/sizeof(string);
