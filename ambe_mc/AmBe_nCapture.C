@@ -97,7 +97,6 @@ int main(int argc, char** argv) {
     string outlog = fpath;
     if (!TEST) outlog = outlog + "/results";
     outlog = outlog + "/output.log";
-    std::ofstream out(outlog.c_str());
    
     // Plotting options 
     gStyle->SetOptStat(0);
@@ -106,9 +105,10 @@ int main(int argc, char** argv) {
     
     // Initialise stuff
     TFile *outfile=NULL;
-    TH1D *hGam=NULL, *hNeu=NULL, *hPro=NULL, *hOth=NULL;
+    TH1D *hGam=NULL, *hEle=NULL, *hNeu=NULL, *hPro=NULL, *hOth=NULL;
     TH1D *hGamAV=NULL, *hGamAVn=NULL, *hGamFrac=NULL, *hGamFracn=NULL;
     TH2D *hGamTime=NULL, *hnCapPos=NULL, *hnCapPosZ=NULL;
+    TH2I *hnCapIso=NULL;
     
     string outroot = fpath;
     if (!TEST) outroot = outroot + "/results";
@@ -118,6 +118,7 @@ int main(int argc, char** argv) {
     if (processed) {  // if already processed, read output file
       outfile = new TFile(outroot.c_str(),"READ");
       hGam      = (TH1D*)outfile->Get("hGam");
+      hEle      = (TH1D*)outfile->Get("hEle");
       hNeu      = (TH1D*)outfile->Get("hNeu");
       hPro      = (TH1D*)outfile->Get("hPro");
       hOth      = (TH1D*)outfile->Get("hOth");
@@ -128,8 +129,10 @@ int main(int argc, char** argv) {
       hGamTime  = (TH2D*)outfile->Get("hGamTime");
       hnCapPos  = (TH2D*)outfile->Get("hnCapPos");
       hnCapPosZ = (TH2D*)outfile->Get("hnCapPosZ");
+      hnCapIso  = (TH2I*)outfile->Get("hnCapIso");
     } else {          // if not processed, read input file & generate output
       outfile = new TFile(outroot.c_str(),"NEW");
+      std::ofstream out(outlog.c_str());
       
       // Initialise RAT
       RAT::DU::DSReader dsreader(inroot);
@@ -138,6 +141,7 @@ int main(int argc, char** argv) {
 
       // Initialise histograms
       hGam      = new TH1D("hGam","Gamma",NBINS,0,EMAX);
+      hEle      = new TH1D("hEle","Electron",NBINS,0,EMAX);
       hNeu      = new TH1D("hNeu","Neutron",NBINS,0,EMAX);
       hPro      = new TH1D("hPro","Proton",NBINS,0,EMAX);
       hOth      = new TH1D("hOth","Other",NBINS,0,EMAX);
@@ -148,6 +152,7 @@ int main(int argc, char** argv) {
       hGamTime  = new TH2D("hGamTime","Gamma (AV) timing",NBINS,0,EMAX,NBINS,0,4e6);
       hnCapPos  = new TH2D("hnCapPos","Neutron capture position",200,0,100,400,-500,500);
       hnCapPosZ = new TH2D("hnCapPosZ","Neutron capture position",1000,0,100,2000,-500,500);
+      hnCapIso  = new TH2I("hnCapIso","Neutron capture isotope",100,0,100,100,0,100);
       BinLog(hGamTime->GetYaxis(), 0.04); // log axis for timing (0.04 ns - 4 ms)
       
       // Loop over all entries in file
@@ -185,19 +190,39 @@ int main(int argc, char** argv) {
           int pdg = trk.GetPDGCode();
           double eTrk = trk.GetFirstMCTrackStep().GetKineticEnergy();
           if (pdg > 1e9) {           // nucleus
-            continue;
+            // Test for neutron capture isotopes
+            if (trk.GetFirstMCTrackStep().GetProcess() == "nCapture") {
+	      if (fabs(pdg) > 1e9) { // Nuclear codes are given as 10-digit numbers ±10LZZZAAAI.
+                int Z = (pdg % 10000000) / 10000; // atomic number
+                int A = (pdg % 10000) / 10;       // number of nucleons
+                hnCapIso->Fill(A-1-Z,Z);          // parent nucleus that captured the neutron
+                if (VERBOSE) {
+                  out << "Event " << setw(2) << iEntry << ", track " << setw(2) << iTrk;
+                  out << " is " << setw(8) << trk.GetParticleName();
+                  out << " (" << setw(5) << setprecision(3) << fixed << eTrk << " MeV)";
+                  out << ", parent " << setw(7) << mc.GetMCTrack(trk.GetParentID()).GetParticleName();
+	          string iso = GetIsotope(pdg-10, elements);  // same nucleus with 1 less neutron
+	          out << " captured on " << iso << endl;
+	          // Names of particles lighter than nuclei can be obtained as follows:
+	          //if (nucpdg==1000010010) nucpdg = 2212; // identify H1 as proton
+	          //const TParticlePDG *part = pdgdb->GetParticle(nucpdg);
+                }
+              }
+            }
           } else if (pdg == 2212) {  // proton
             hPro->Fill(eTrk);
           } else if (pdg == 2112) {  // neutron
             hNeu->Fill(eTrk);
+          } else if (pdg == 11) {    // electrons
+            hEle->Fill(eTrk);
           } else if (pdg ==   22) {  // gamma
             hGam->Fill(eTrk);
           } else {                   // other
             hOth->Fill(eTrk);
-            if (pdg == -11) {        // positron (don't care, already omitted electrons)
+            if (pdg == -11) {        // positrons (don't care)
               continue;
             }
-            if (fabs(pdg) == 12) {   // (anti-)nu_e (really don't care)
+            if (fabs(pdg) == 12) {   // neutrinos (really don't care)
               continue;
             }
             out << "*** INFO - Event " << setw(2) << iEntry << ",";
@@ -213,8 +238,7 @@ int main(int argc, char** argv) {
           // (8.532 ± 0.008) MeV may represent the transition to the ground state in Ni-61; if so, it 
           // accounts for some 80 percent of captures in Ni-60. From considerations of intensity, five 
           // of the remaining nickel y-rays can be ascribed to transitions to excited states in Ni-59."
-          if (trk.GetFirstMCTrackStep().GetProcess() != "nCapture") continue; // particle from neutron capture
-          //if (pdg != 22) continue;    // gamma
+          if (pdg!=22) continue;
           for (int iStep=0; iStep<trk.GetMCTrackStepCount(); iStep++) {
             const RAT::DS::MCTrackStep& stp = trk.GetMCTrackStep(iStep);
             double eStep = stp.GetKineticEnergy();
@@ -230,40 +254,27 @@ int main(int argc, char** argv) {
               out << " (" << setw(6) << std::right << setprecision(1) << fixed << stp.GetLength() << " mm)";
               out << " process = " << stp.GetProcess() << endl;
             }
-            if (stp.GetEndVolume() != "inner_av") continue; // step ends in inner AV
+            if (stp.GetEndVolume() != "inner_av") continue; // get first step that ends in inner AV
             hGamAV->Fill(eStep); // gamma energy when entering AV (visible energy)
             hGamTime->Fill(eStep,stp.GetGlobalTime());
-            //if (trk.GetFirstMCTrackStep().GetStartVolume() != "AmBeAbsorber") continue; // particle produced on Nickel
-            
-			      // Additional output to test neutron capture isotopes
-			      cout << "Event " << setw(2) << iEntry << ", track " << setw(2) << iTrk;
-			      cout << " is " << setw(8) << trk.GetParticleName();
-            cout << " (" << setw(5) << setprecision(3) << fixed << eStep << " MeV)";
-            cout << " from " << stp.GetProcess() << " in " << stp.GetEndVolume();
-            cout << ", parent " << setw(7) << mc.GetMCTrack(trk.GetParentID()).GetParticleName();
-			      if (fabs(pdg) > 1e9) { // Nuclear codes are given as 10-digit numbers ±10LZZZAAAI.
-			        string iso = GetIsotope(pdg-10, elements);  // same nucleus with 1 less neutron
-			        cout << " captured on " << iso;
-			        // Names of particles lighter than nuclei can be obtained as follows:
-			        //if (nucpdg==1000010010) nucpdg = 2212; // identify H1 as proton
-			        //const TParticlePDG *part = pdgdb->GetParticle(nucpdg);
-			      }
-            cout << endl;
-            
-            hGamAVn->Fill(eStep);
-            TVector3 pos = trk.GetFirstMCTrackStep().GetPosition();
-            hnCapPos->Fill(pos.Perp(),pos.Z());
-            hnCapPosZ->Fill(pos.Perp(),pos.Z());
+            // Gammas originating from neutron capture
+            if (trk.GetFirstMCTrackStep().GetProcess() == "nCapture") {
+              hGamAVn->Fill(eStep);
+              TVector3 pos = trk.GetFirstMCTrackStep().GetPosition();
+              hnCapPos->Fill(pos.Perp(),pos.Z());
+              hnCapPosZ->Fill(pos.Perp(),pos.Z());
+            }
             break;
           } // steps
         } // tracks
       } // entries
       out << "-----" << endl;
       out << "Found " << nevents << " MC events with " << ntracks << " tracks, consisting of:" << endl;
-      out << "- Protons:  " << setw(6) << (int)hPro->GetEntries() << " (" << hPro->GetEntries()/nevents << " / event)" << endl;
-      out << "- Neutrons: " << setw(6) << (int)hNeu->GetEntries() << " (" << hNeu->GetEntries()/nevents << " / event)" << endl;
-      out << "- Gammas:   " << setw(6) << (int)hGam->GetEntries() << " (" << hGam->GetEntries()/nevents << " / event)" << endl;
-      out << "- Other:    " << setw(6) << (int)hOth->GetEntries() << " (" << hOth->GetEntries()/nevents << " / event)" << endl;
+      out << "- Protons:   " << setw(6) << (int)hPro->GetEntries() << " (" << hPro->GetEntries()/nevents << " / event)" << endl;
+      out << "- Neutrons:  " << setw(6) << (int)hNeu->GetEntries() << " (" << hNeu->GetEntries()/nevents << " / event)" << endl;
+      out << "- Electrons: " << setw(6) << (int)hEle->GetEntries() << " (" << hEle->GetEntries()/nevents << " / event)" << endl;
+      out << "- Gammas:    " << setw(6) << (int)hGam->GetEntries() << " (" << hGam->GetEntries()/nevents << " / event)" << endl;
+      out << "- Other:     " << setw(6) << (int)hOth->GetEntries() << " (" << hOth->GetEntries()/nevents << " / event)" << endl;
       out.close();
       
       // Save output file
@@ -478,10 +489,21 @@ int main(int argc, char** argv) {
     g5->Draw("L same");
     c->Print((imgname+"_5_zoom.png").c_str());
     c->Close();
+ 
+    // Neutron capture isotopes (A vs Z)
+    c = new TCanvas("c","",1000,800);
+    c->SetLogz();
+    c->SetGrid();
+    c->SetRightMargin(0.14);
+    hnCapIso->SetTitle("Neutron capture isotopes;N;Z");
+    hnCapIso->Draw("colz");
+    c->Print((imgname+"_6.png").c_str());
+    c->Close();
     
     // Free memory
     if (hPro) delete hPro;
     if (hNeu) delete hNeu;
+    if (hEle) delete hEle;
     if (hGam) delete hGam;
     if (hOth) delete hOth;
     if (hGamAV) delete hGamAV;
