@@ -7,7 +7,8 @@
 // Helper functions (includes everything else)
 #include "../HelperFunc.C"
 
-// ROOT functions to get elements
+// ROOT functions
+#include <TArrow.h>
 #include <TGeoElement.h>
 #include <TGeoManager.h>
 
@@ -78,7 +79,8 @@ int main(int argc, char** argv) {
   std::vector<std::string> elements = InitialiseElements();
   
   // Materials used as neutron absorber
-  string MATERIALS[] = {"Chromium","Gadolinium","Iron","Lead","Nickel","Titanium","Zinc"};
+  string MATERIALS[] = {"ptfe","Chromium","Gadolinium","Iron","Lead","Nickel","Titanium","Zinc"};
+  int ATOM_Z[] = {9,24,64,26,82,28,22,30};
   //string MATERIAL = "Nickel_OLD";
   if (TEST) MATERIALS[0] = "Test";
   int NMAT = sizeof(MATERIALS)/sizeof(string);
@@ -87,6 +89,7 @@ int main(int argc, char** argv) {
   
     if (TEST && mat>0) continue;
     string MATERIAL = MATERIALS[mat];
+    int ATOM = ATOM_Z[mat];
     
     // Input/Output files
     string fpath = ((TEST) ? "test7" : MATERIAL);
@@ -152,7 +155,7 @@ int main(int argc, char** argv) {
       hGamTime  = new TH2D("hGamTime","Gamma (AV) timing",NBINS,0,EMAX,NBINS,0,4e6);
       hnCapPos  = new TH2D("hnCapPos","Neutron capture position",200,0,100,400,-500,500);
       hnCapPosZ = new TH2D("hnCapPosZ","Neutron capture position",1000,0,100,2000,-500,500);
-      hnCapIso  = new TH2I("hnCapIso","Neutron capture isotope",100,0,100,100,0,100);
+      hnCapIso  = new TH2I("hnCapIso","Neutron capture isotope",180,0,180,120,0,120);
       BinLog(hGamTime->GetYaxis(), 0.04); // log axis for timing (0.04 ns - 4 ms)
       
       // Loop over all entries in file
@@ -305,6 +308,7 @@ int main(int argc, char** argv) {
     leg->AddEntry(hOth);
     leg->Draw();
     c->Print((imgname+"_1.png").c_str());
+    c->Print((imgname+"_1.pdf").c_str());
     c->Close();
     
     // Gamma rays that reach inner AV (absolute)
@@ -324,6 +328,7 @@ int main(int argc, char** argv) {
     leg->AddEntry(hGamAVn);
     leg->Draw();
     c->Print((imgname+"_2.png").c_str());
+    c->Print((imgname+"_2.pdf").c_str());
     c->Close();
     
     // Gamma rays that reach inner AV (relative)
@@ -352,6 +357,7 @@ int main(int argc, char** argv) {
     leg->AddEntry(hGamAVn);
     leg->Draw();
     c->Print((imgname+"_3.png").c_str());
+    c->Print((imgname+"_3.pdf").c_str());
     c->Close();
     
     // Gamma rays that reach inner AV (time vs energy)
@@ -362,6 +368,7 @@ int main(int argc, char** argv) {
     hGamTime->SetTitle("#gamma-rays entering inner AV;Photon energy [MeV];Global time [ns]");
     hGamTime->Draw("colz");
     c->Print((imgname+"_4.png").c_str());
+    c->Print((imgname+"_4.pdf").c_str());
     c->Close();  
 
     // Envelope volume (Air)
@@ -455,6 +462,7 @@ int main(int argc, char** argv) {
     g4->Draw("L same");
     g5->Draw("L same");
     c->Print((imgname+"_5.png").c_str());
+    c->Print((imgname+"_5.pdf").c_str());
     c->Close();
     
     // Neutron capture positions (z vs r) - zoomed in on source
@@ -488,6 +496,7 @@ int main(int argc, char** argv) {
     g4->Draw("L same");
     g5->Draw("L same");
     c->Print((imgname+"_5_zoom.png").c_str());
+    c->Print((imgname+"_5_zoom.pdf").c_str());
     c->Close();
  
     // Neutron capture isotopes (A vs Z)
@@ -495,9 +504,20 @@ int main(int argc, char** argv) {
     c->SetLogz();
     c->SetGrid();
     c->SetRightMargin(0.14);
-    hnCapIso->SetTitle("Neutron capture isotopes;N;Z");
-    hnCapIso->Draw("colz");
+    int maxx = (ATOM<80) ? 2.25*ATOM : 140;
+    int maxy = (ATOM<80) ? 1.50*ATOM :  90;
+    c->DrawFrame(0,0,maxx,maxy,"Neutron capture isotopes;N;Z");
+    hnCapIso->Draw("colz same");
+    hnCapIso->SetMaximum(1e5);
+    int minbin = hnCapIso->ProjectionX("_px",ATOM,ATOM+1)->FindFirstBinAbove(0);
+    TArrow *arr = new TArrow(minbin-maxx/10.,ATOM+0.5,minbin-maxx/30.,ATOM+0.5,0.02,"|>");
+    arr->SetAngle(40);
+    arr->SetLineWidth(2);
+    arr->SetLineColor(2);
+    arr->SetFillColor(2);
+    arr->Draw();
     c->Print((imgname+"_6.png").c_str());
+    c->Print((imgname+"_6.pdf").c_str());
     c->Close();
     
     // Free memory

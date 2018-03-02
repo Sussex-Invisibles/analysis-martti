@@ -75,7 +75,8 @@ python ${SRCDIR}/create_macros.py ${ENDDIR} ${1} ${2}
 echo "Submitting ${2} jobs..."
 cd $ENDDIR
 module load sge
-qsub -jc mps.medium -q mps.q -t 1-${2} AmBe_${1}.job
+qsub -jc mps.medium -q mps.q -l h_rt=12:00:00 -t 1-${2} AmBe_${1}.job
+
 echo "INFO: Simulating `expr 1000 \* ${2}` events for AmBeSource with ${1} as neutron absorber."
 cd $SRCDIR
 
