@@ -30,12 +30,11 @@ with open(fname) as f:
                 break
         # Get PIN readings for each subrun
         for sr in range(0,nsubruns):
+            pinval = subRunInfo[sr]['pin_value'].getInteger()
             try:
-                pinval = subRunInfo[sr]['pin_value'].getInteger()
                 pinrms = subRunInfo[sr]['pin_rms'].getReal()
             except:
-                pinval = 0
-                pinrms = 0.
+                pinrms = subRunInfo[sr]['pin_rms'].getInteger()
             output.write("%6d %3d %5d %6.2f\n" % (num, sr, pinval, pinrms))
     f.close()
 output.close()

@@ -47,7 +47,8 @@ int main(int argc, char** argv) {
     subrunpin[subrun] = pin;
     subrunrms[subrun] = rms;
     cout<<run<<","<<subrun<<","<<pin<<","<<rms<<endl;
-    g[nruns-1]->SetPoint(subrun,subrun,pin);
+    if (nruns==1) g[nruns-1]->SetPoint(subrun,subrun,pin);
+    else g[nruns-1]->SetPoint(subrun,subrun+0.5,pin);
     g[nruns-1]->SetPointError(subrun,0,rms);
     if (run == lastrun) continue; // only do this once per run
     lastrun = run;
@@ -85,9 +86,11 @@ int main(int argc, char** argv) {
   //g->SetTitle(title.c_str());
   g[0]->SetMarkerStyle(7);
   g[0]->SetMarkerColor(2);
+  g[0]->SetLineColor(2);
   g[0]->Draw("P same");
   g[1]->SetMarkerStyle(7);
   g[1]->SetMarkerColor(4);
+  g[1]->SetLineColor(4);
   g[1]->Draw("P same");
   zero->SetMarkerStyle(8);
   zero->SetMarkerColor(4);
