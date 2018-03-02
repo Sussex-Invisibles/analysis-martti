@@ -436,7 +436,7 @@ int main(int argc, char** argv) {
     g2->Draw("L same");
     g3->Draw("L same");
     g4->Draw("L same");
-    g5->Draw("L same");
+    if (MATERIAL!="ptfe") g5->Draw("L same");
     // Normalised by volume
     c->cd(2)->SetGrid();
     c->cd(2)->SetLogz();
@@ -460,7 +460,7 @@ int main(int argc, char** argv) {
     g2->Draw("L same");
     g3->Draw("L same");
     g4->Draw("L same");
-    g5->Draw("L same");
+    if (MATERIAL!="ptfe") g5->Draw("L same");
     c->Print((imgname+"_5.png").c_str());
     c->Print((imgname+"_5.pdf").c_str());
     c->Close();
@@ -480,7 +480,7 @@ int main(int argc, char** argv) {
     g2->Draw("L same");
     g3->Draw("L same");
     g4->Draw("L same");
-    g5->Draw("L same");
+    if (MATERIAL!="ptfe") g5->Draw("L same");
     // Normalised by volume
     c->cd(2)->SetGrid();
     c->cd(2)->SetLogz();
@@ -494,7 +494,7 @@ int main(int argc, char** argv) {
     g2->Draw("L same");
     g3->Draw("L same");
     g4->Draw("L same");
-    g5->Draw("L same");
+    if (MATERIAL!="ptfe") g5->Draw("L same");
     c->Print((imgname+"_5_zoom.png").c_str());
     c->Print((imgname+"_5_zoom.pdf").c_str());
     c->Close();
