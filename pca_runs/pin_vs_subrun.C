@@ -9,6 +9,7 @@
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
+  const int NSUBRUNS = 200; // Number of subruns
 
 // Initialise functions
 void get_subrun_nhit(int, int*, int*, bool, bool);
@@ -19,7 +20,6 @@ int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
   const int TEST = (RUN_CLUSTER) ? 0 : 1;
-  const int NSUBRUNS = 200;
 
   // Loop over all fibres in list
   string input = "PIN_readings_long.txt";
@@ -52,13 +52,13 @@ int main(int argc, char** argv) {
     if (run == lastrun) continue; // only do this once per run
     lastrun = run;
     cout<<"nruns="<<nruns<<", nsubruns="<<nsubruns<<endl;
-    //if (VERBOSE) printf("%6d %2d %5d %.2f\n", run, subrun, pin, rms);
-    //int subrunevs[NSUBRUNS], subrunhits[NSUBRUNS];
+    if (VERBOSE) printf("%6d %2d %5d %.2f\n", run, subrun, pin, rms);
+    int subrunevs[NSUBRUNS], subrunhits[NSUBRUNS];
     //get_subrun_nhit(run, subrunevs, subrunhits, (bool)IS_MC, (bool)TEST);
     for (int sr=0; sr<NSUBRUNS; sr++) {
-      //if(subrunevs[sr]==0) continue;
-      //avgnhit[sr] = (float)subrunhits[sr]/subrunevs[sr];
-      //if (VERBOSE) printf("Run %6d subrun %2d has %4d events with an average nhit of %5.2f.\n", run, sr, subrunevs[sr], avgnhit[sr]);
+      if(subrunevs[sr]==0) continue;
+      avgnhit[sr] = (float)subrunhits[sr]/subrunevs[sr];
+      if (VERBOSE) printf("Run %6d subrun %2d has %4d events with an average nhit of %5.2f.\n", run, sr, subrunevs[sr], avgnhit[sr]);
       nsubruns++;
     }
   }
@@ -116,12 +116,14 @@ void get_subrun_nhit(int run, int *srevts, int *srhits, bool isMC=false, bool TE
   
   // Check files for given run
   if(!TEST) printf("*****\n");
-  printf("Checking files for run %d... ", run);
-  string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Software/SNOP/data";
+  //printf("Checking files for run %d... ", run);
+  //string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Software/SNOP/data";
+  string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_TEST_RUNS" : "/home/nirkko/Software/SNOP/data";
   string fname = "";
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
-    fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+    //fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+    fname = Form("%s/SNOP_0000%d_00%d.l2.zdab",fpath.c_str(),run,pass);
     f.open(fname.c_str());
     if (f.good()) break;
   }
@@ -153,8 +155,8 @@ void get_subrun_nhit(int run, int *srevts, int *srhits, bool isMC=false, bool TE
   // ********************************************************************
   // Sum PMT hit counts for entire run
   // ********************************************************************
-    int subrunevtcount[40] = {0};
-    int subrunhitcount[40] = {0};
+    int subrunevtcount[NSUBRUNS] = {0};
+    int subrunhitcount[NSUBRUNS] = {0};
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
       const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
       int subrunid = ds.GetSubRunID();             // sub run this event belongs to
@@ -175,7 +177,7 @@ void get_subrun_nhit(int run, int *srevts, int *srhits, bool isMC=false, bool TE
       } // event loop
     } // entry loop
     
-    for (int sr=0; sr<40; sr++) {
+    for (int sr=0; sr<NSUBRUNS; sr++) {
       srevts[sr] = subrunevtcount[sr];
       srhits[sr] = subrunhitcount[sr];
     }
