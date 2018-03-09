@@ -5,6 +5,7 @@
 
 // C++ stuff
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -72,6 +73,7 @@ void FillHemisphere(const TVector3&, float*, int, TGraph**, TGraph2D*, float, fl
 void DrawCircle(const TVector3&, double, TVector3**, int);
 void FitPromptPeaks(TH2D*, int, float*, float*, TGraph2DErrors*);
 void FitLightSpot(TGraph2D*, double, double, double*);
+string TriggerToString(int);
 
 // -----------------------------------------------------------------------------
 /// Display vector as a string
@@ -483,6 +485,67 @@ void DrawCircle(const TVector3& center, double angle, TVector3** dots, int NDOTS
 // ***********************
 // This code lazily copied from $RATROOT/src/calib/quality/DataQualityProc.hh
 // after failing to access it directly - do not modify!
+// -----------------------------------------------------------------------------
+string TriggerToString( int trigger ) {
+  std::stringstream triggerStream;
+  if( trigger == 0x0 )
+    triggerStream << "ORPH";
+  if( trigger & 0x01 )
+    triggerStream << "100L,";
+  if( trigger & 0x02 )
+    triggerStream << "100M,";
+  if( trigger & 0x04 )
+    triggerStream << "10HL,";
+  if( trigger & 0x08 )
+    triggerStream << "20,";
+  if( trigger & 0x10 )
+    triggerStream << "20L,";
+  if( trigger & 0x20 )
+    triggerStream << "ESUML,";
+  if( trigger & 0x40 )
+    triggerStream << "ESUMH,";
+  if( trigger & 0x80 )
+    triggerStream << "OWL,";
+  if( trigger & 0x100 )
+    triggerStream << "OWLL,";
+  if( trigger & 0x200 )
+    triggerStream << "OWLH,";
+  if( trigger & 0x400 )
+    triggerStream << "PUL,";
+  if( trigger & 0x800 )
+    triggerStream << "PRE,";
+  if( trigger & 0x1000 )
+    triggerStream << "PED,";
+  if( trigger & 0x2000 )
+    triggerStream << "PONG,";
+  if( trigger & 0x4000 )
+    triggerStream << "SYNC,";
+  if( trigger & 0x8000 )
+    triggerStream << "EXT,";
+  if( trigger & 0x10000 )
+    triggerStream << "EXT2,";
+  if( trigger & 0x20000 )
+    triggerStream << "EXT3,";
+  if( trigger & 0x40000 )
+    triggerStream << "EXT4,";
+  if( trigger & 0x80000 )
+    triggerStream << "EXT5,";
+  if( trigger & 0x100000 )
+    triggerStream << "EXT6,";
+  if( trigger & 0x200000 )
+    triggerStream << "EXT7,";
+  if( trigger & 0x400000 )
+    triggerStream << "EXT8,";
+  if( trigger & 0x800000 )
+    triggerStream << "SPRaw,";
+  if( trigger & 0x1000000 )
+    triggerStream << "NCD,";
+  if( trigger & 0x2000000 )
+    triggerStream << "SoftGT,";
+  if( trigger & 0x4000000 )
+    triggerStream << "MISS";
+  return triggerStream.str();
+}
 // -----------------------------------------------------------------------------
 /// Namespace taken from DataQualityProc class to get flatmap detector view
 namespace func{
