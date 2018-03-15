@@ -6,12 +6,13 @@
 #include "../HelperFunc.C"
 #include <iomanip>
 #include <ctime>
+#include <ostream>
 
 // Global constants
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
-const int NRUNS = 2;        // Number of runs
+const int NRUNS = 7;        // Number of runs
 const int NSUBRUNS = 200;   // Number of subruns
 
 // Initialise functions
@@ -26,7 +27,8 @@ int main(int argc, char** argv) {
   const int TEST = (RUN_CLUSTER) ? 0 : 1;
   
   // Loop over all fibres in list
-  string input = "PIN_readings_long.txt";
+  //string input = "PIN_readings_2018-02-26.txt";
+  string input = "PIN_readings_2018-03-12.txt";
   ifstream inp(input.c_str());
   if (!inp) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line;
@@ -83,24 +85,34 @@ int main(int argc, char** argv) {
     int subrun, gtid, nhit, lastsubrun=-1, lastgtid=-1;
     int trig, trig_tubii;
     long long time, diff, lasttime=0, lastdiff=0;
-    bool bitflip;
+    bool bitflip=false;
     vector<int> badGTIDs;
     while (true) {
-      if (!in.good()) break;
+
       in >> subrun >> gtid >> trig >> trig_tubii >> nhit >> time;
+      
+      if (run==109799) {
+        printf("%3d %6d %10d %10d %4d %lld\n",subrun,gtid,trig,trig_tubii,nhit,time);
+      }
+      if (!in.good()) break;
+      if (run==109799) cout << "A ";
       if (!(trig & 0x8000)) { // EXTA trigger bit not set
         if(trig & 0x4000000)  // MISS trigger bit set
           cout << "WARNING: No EXTA trigger on GTID " << gtid << ", trigger word is " << TriggerToString(trig) << endl;
-          continue;
+        continue;
       }
-      if (subrun!=lastsubrun) lasttime=time;
+      if (run==109799) cout << "B ";
      
       subrunhits[nruns-1][subrun] = nhit;
       subrunevs[nruns-1][subrun]++;
+      if (run==109799) cout << "C ";
+     
   
       // Time difference between consecutive triggers
       bitflip = false;
       diff = time - lasttime;
+      if (subrun!=lastsubrun) diff=0; // first event in subrun
+      if (run==109799) cout << "D ";
       
       // Fix bit flips in 10 MHz clock, causing negative time differences
       if (lastdiff < 0) {
@@ -108,6 +120,7 @@ int main(int argc, char** argv) {
         diff += lastdiff - 1e6; // fix time difference
         printf("INFO: Fixing bit flip in 10 MHz clock for GTID %7d: new diff is %.3f ms.\n",gtid-1,diff/1e6);
       }
+      if (run==109799) cout << "E ";
       
       // Print a warning in case of unusual time differences    
       if (diff != 0 && (diff/1e6 > 1.4 || diff/1e6 < 0.9)) { // significant deviation from 1 ms
@@ -122,6 +135,7 @@ int main(int argc, char** argv) {
         }
         printf("\n");
       }
+      if (run==109799) cout << "F ";
       
       // Fill graphs
       hdiff[nruns-1]->Fill(diff/1e6);
@@ -130,6 +144,9 @@ int main(int argc, char** argv) {
       lastgtid = gtid;
       lasttime = time;
       lastdiff = diff;
+      
+      if (run==109799) cout << "G " << endl;
+      if (run==109799) printf("%d %d %lld %lld\n",lastsubrun,lastgtid,lasttime,lastdiff);
     }
     
     // Bad GTIDs
@@ -137,7 +154,7 @@ int main(int argc, char** argv) {
     for (int i=0; i<badGTIDs.size(); i++)
       cout << badGTIDs[i] << ' ';
     cout << endl;
-    
+    badGTIDs.clear(); 
   }
   
   // Subrun information
@@ -278,7 +295,6 @@ void get_run_data(int run, bool isMC=false, bool TEST=false) {
   // ********************************************************************
   // Sum PMT hit counts for entire run
   // ********************************************************************
-  int lastsubrun = 0;
   for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
     const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
     printProgress(iEntry, dsreader.GetEntryCount());
@@ -292,7 +308,6 @@ void get_run_data(int run, bool isMC=false, bool TEST=false) {
       // Trigger type
       int trig = ev.GetTrigType();        // MTCA+ trigger word
       int tubii = ev.GetTubiiTrig();      // TUBii trigger word
-      //if (!(trig & 0x8000)) continue;     // EXT trigger only
      
       // Event observables
       int gtid = ev.GetGTID();
@@ -309,12 +324,10 @@ void get_run_data(int run, bool isMC=false, bool TEST=false) {
       //cout << asctime(&time);
       
       // Write to file
-      fprintf(output,"%3d %6d %10d %10d %4d %ld\n",subrun,gtid,trig,tubii,nhits,fulltime);
+      fprintf(output,"%3d %6d %10d %10d %4d %lld\n",subrun,gtid,trig,tubii,nhits,fulltime);
       
     } // event loop
     
-    lastsubrun = subrun;
-      
   } // entry loop
   
   fclose(output);
