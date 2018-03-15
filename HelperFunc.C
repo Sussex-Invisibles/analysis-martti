@@ -87,6 +87,8 @@ string printVector(const TVector3& v) {
 // -----------------------------------------------------------------------------
 /// Display progress bar within a loop (can't have any other output in loop!)
 void printProgress(int it, int n) {
+  int div = (n - (n % 100))/100;              // 1% division
+  if (it % div != 0 && it != n-1) return;
   float prog = (float)it/n;
   int barWidth = 70;
   cout << "[";
@@ -99,7 +101,7 @@ void printProgress(int it, int n) {
   }
   int perc = (int)round(100.*prog);
   cout << "] " << perc << "%\r" << flush;
-  if (perc==100) cout << endl;
+  if (it == n-1) cout << endl;
 }
 
 // -----------------------------------------------------------------------------
