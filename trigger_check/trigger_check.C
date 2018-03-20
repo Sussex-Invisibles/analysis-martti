@@ -13,7 +13,7 @@ const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int VERBOSE = 0;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag 
 const int NRUNS = 7;        // Number of runs
-const int NSUBRUNS = 200;   // Number of subruns
+const int NSUBRUNS = 201;   // Number of subruns
 
 // Initialise functions
 using std::vector;
@@ -32,6 +32,7 @@ int main(int argc, char** argv) {
   ifstream inp(input.c_str());
   if (!inp) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line;
+  int runnumbers[NRUNS]={0};
   int subrunhits[NRUNS][NSUBRUNS]={{0}};
   int subrunevs[NRUNS][NSUBRUNS]={{0}};
   int subrunpin[NRUNS][NSUBRUNS]={{0}};
@@ -58,12 +59,13 @@ int main(int argc, char** argv) {
     inp >> run >> subrun >> pin >> rms;
     if (!inp.good()) break;
     if (TEST && lastrun!=0 && run!=lastrun) continue; // only want one run
+    runnumbers[nruns] = run;
     if (run != lastrun) nruns++;
     subrunpin[nruns-1][subrun] = pin;
     subrunrms[nruns-1][subrun] = rms;
     if (nruns==1) gpins[nruns-1]->SetPoint(subrun,subrun,pin);
     else gpins[nruns-1]->SetPoint(subrun,subrun+0.5,pin);
-    gpins[nruns-1]->SetPointError(subrun,0,rms); // rms value
+    //gpins[nruns-1]->SetPointError(subrun,0,rms); // rms value
     //gpins[nruns-1]->SetPointError(subrun,0,rms/sqrt(NSUBRUNS)); // error on mean
   
     // Do the below only once per run
@@ -88,31 +90,23 @@ int main(int argc, char** argv) {
     bool bitflip=false;
     vector<int> badGTIDs;
     while (true) {
-
       in >> subrun >> gtid >> trig >> trig_tubii >> nhit >> time;
-      
-      if (run==109799) {
-        printf("%3d %6d %10d %10d %4d %lld\n",subrun,gtid,trig,trig_tubii,nhit,time);
-      }
       if (!in.good()) break;
-      if (run==109799) cout << "A ";
       if (!(trig & 0x8000)) { // EXTA trigger bit not set
-        if(trig & 0x4000000)  // MISS trigger bit set
+        if(trig & 0x4000000) { // MISS trigger bit set
           cout << "WARNING: No EXTA trigger on GTID " << gtid << ", trigger word is " << TriggerToString(trig) << endl;
+          badGTIDs.push_back(gtid);
+        }
         continue;
       }
-      if (run==109799) cout << "B ";
      
       subrunhits[nruns-1][subrun] = nhit;
       subrunevs[nruns-1][subrun]++;
-      if (run==109799) cout << "C ";
-     
   
       // Time difference between consecutive triggers
       bitflip = false;
       diff = time - lasttime;
       if (subrun!=lastsubrun) diff=0; // first event in subrun
-      if (run==109799) cout << "D ";
       
       // Fix bit flips in 10 MHz clock, causing negative time differences
       if (lastdiff < 0) {
@@ -120,7 +114,6 @@ int main(int argc, char** argv) {
         diff += lastdiff - 1e6; // fix time difference
         printf("INFO: Fixing bit flip in 10 MHz clock for GTID %7d: new diff is %.3f ms.\n",gtid-1,diff/1e6);
       }
-      if (run==109799) cout << "E ";
       
       // Print a warning in case of unusual time differences    
       if (diff != 0 && (diff/1e6 > 1.4 || diff/1e6 < 0.9)) { // significant deviation from 1 ms
@@ -131,11 +124,9 @@ int main(int argc, char** argv) {
         } else {
           if(gtid-lastgtid==2) printf(" => Missed GTID %7d!",gtid-1);
           else printf(" => Missed multiple GTIDs!!!");
-          for (int id=lastgtid+1; id<gtid; id++) badGTIDs.push_back(id);
         }
         printf("\n");
       }
-      if (run==109799) cout << "F ";
       
       // Fill graphs
       hdiff[nruns-1]->Fill(diff/1e6);
@@ -145,8 +136,7 @@ int main(int argc, char** argv) {
       lasttime = time;
       lastdiff = diff;
       
-      if (run==109799) cout << "G " << endl;
-      if (run==109799) printf("%d %d %lld %lld\n",lastsubrun,lastgtid,lasttime,lastdiff);
+      //if (run==109799) printf("%d %d %lld %lld\n",lastsubrun,lastgtid,lasttime,lastdiff);
     }
     
     // Bad GTIDs
@@ -162,9 +152,12 @@ int main(int argc, char** argv) {
   for (int r=0; r<NRUNS; r++) {
     for (int sr=0; sr<NSUBRUNS; sr++) {
       gmiss[r]->SetPoint(sr,sr,5000-subrunevs[r][sr]);
-      if(subrunevs[r][sr]==0) continue;
+      if(subrunevs[r][sr]==0) {
+        //printf("WARN: Run %6d subrun %3d has no events!\n", r, sr);
+        continue;
+      }
       avgnhit[r][sr] = (float)subrunhits[r][sr]/subrunevs[r][sr];
-      if (VERBOSE) printf("Run %6d subrun %2d has %4d events with an average nhit of %5.2f.\n", run, sr, subrunevs[r][sr], avgnhit[r][sr]);
+      if (VERBOSE) printf("Run %6d subrun %3d has %7d events with an average nhit of %5.2f.\n", run, sr, subrunevs[r][sr], avgnhit[r][sr]);
       mean[r] += subrunpin[r][sr];
       err[r] += pow(subrunrms[r][sr],2);
       nsubruns[r]++;
@@ -175,63 +168,60 @@ int main(int argc, char** argv) {
   }
   if(!TEST) printf("*****\n");
 
-  // Plot graph
-  TCanvas *c = new TCanvas("c","",800,600);
+  // ----------
+
+  // Plotting section
+  TCanvas *c = NULL;
+
+  // Light stability during runs
+  c = new TCanvas("c","",800,600);
   c->SetGrid();
   string title = "TELLIE internal readout stability (FT010A);Subrun number;PIN reading";
-  c->DrawFrame(-0.025*NSUBRUNS,0,1.025*NSUBRUNS,2000,title.c_str())->GetYaxis()->SetTitleOffset(1.4);
-  gpins[0]->SetMarkerStyle(7);
-  gpins[0]->SetMarkerColor(2);
-  gpins[0]->SetLineColor(2);
-  gpins[0]->Draw("P same");
-  gpins[1]->SetMarkerStyle(7);
-  gpins[1]->SetMarkerColor(4);
-  gpins[1]->SetLineColor(4);
-  gpins[1]->Draw("P same");
+  c->DrawFrame(-0.025*NSUBRUNS,900,1.025*NSUBRUNS,1300,title.c_str())->GetYaxis()->SetTitleOffset(1.4);
   TLegend *leg = new TLegend(0.74,0.77,0.89,0.89);
-  leg->AddEntry(gpins[0],"Master","LP");
-  leg->AddEntry(gpins[1],"Slave","LP");
+  for(int r=0; r<NRUNS; r++) {
+    gpins[r]->SetMarkerStyle(7);
+    gpins[r]->SetMarkerColor(r+2);
+    gpins[r]->SetLineColor(r+2);
+    gpins[r]->Draw("P same");
+    leg->AddEntry(gpins[r],std::to_string(runnumbers[r]).c_str(),"LP");
+  }
   leg->Draw();
   c->Print("images/pin_vs_subrun.pdf");
   c->Print("images/pin_vs_subrun.png");
   c->Close();
   
-  // Plot graph
+  // Missing triggers during runs
   c = new TCanvas("c","",800,600);
   c->SetGrid();
   title = "TELLIE trigger stability (FT010A);Subrun number;Missing triggers";
   c->DrawFrame(-0.025*NSUBRUNS,-0.25,1.025*NSUBRUNS,5.25,title.c_str())->GetYaxis()->SetTitleOffset(1.4);
-  gmiss[0]->SetMarkerStyle(8);
-  gmiss[0]->SetMarkerColor(2);
-  gmiss[0]->SetLineColor(2);
-  gmiss[0]->Draw("P same");
-  gmiss[1]->SetMarkerStyle(8);
-  gmiss[1]->SetMarkerColor(4);
-  gmiss[1]->SetLineColor(4);
-  gmiss[1]->Draw("P same");
   leg = new TLegend(0.74,0.77,0.89,0.89);
-  leg->AddEntry(gmiss[0],"Master","LP");
-  leg->AddEntry(gmiss[1],"Slave","LP");
+  for(int r=0; r<NRUNS; r++) {
+    gmiss[r]->SetMarkerStyle(8);
+    gmiss[r]->SetMarkerColor(r+2);
+    gmiss[r]->SetLineColor(r+2);
+    gmiss[r]->Draw("P same");
+    leg->AddEntry(gmiss[r],std::to_string(runnumbers[r]).c_str(),"LP");
+  }
   leg->Draw();
   c->Print("images/trig_vs_subrun.pdf");
   c->Print("images/trig_vs_subrun.png");
   c->Close();
 
-  // Plot graph
+  // Difference in trigger times
   TText *txt = new TText();
   c = new TCanvas("c","",800,600);
   c->SetGrid();
   c->DrawFrame(-0.1,0.2,4.1,9e6,"Trigger time differences;#Delta t [ms];Counts");//->GetYaxis()->SetLog();
   c->SetLogy();
-  hdiff[0]->SetLineWidth(2);
-  hdiff[0]->SetLineColor(2);
-  hdiff[0]->Draw("same");
-  hdiff[1]->SetLineWidth(2);
-  hdiff[1]->SetLineColor(4);
-  hdiff[1]->Draw("same");
   leg = new TLegend(0.74,0.77,0.89,0.89);
-  leg->AddEntry(hdiff[0],"Master","LP");
-  leg->AddEntry(hdiff[1],"Slave","LP");
+  for(int r=0; r<NRUNS; r++) {
+    hdiff[r]->SetLineWidth(2);
+    hdiff[r]->SetLineColor(r+2);
+    hdiff[r]->Draw("same");
+    leg->AddEntry(hdiff[r],std::to_string(runnumbers[r]).c_str(),"LP");
+  }
   leg->Draw();
   txt->DrawText(0,1.5*NSUBRUNS,"1st");
   txt->DrawText(0.90,1e4*NSUBRUNS,"EXTA");
