@@ -27,14 +27,17 @@ with open(fname) as f:
         else: fibre = subRunInfo[0]['fibre'].getString()
         ipw     = subRunInfo[0]['pulse_width'].getInteger()
         # Catch exceptions where DB has non-integral 'photons' entry
-        if num == 101705 or num == 101905: photons = subRunInfo[0]['photons'].getReal()
-        else: photons = subRunInfo[0]['photons'].getInteger()
+        #if num == 101705 or num == 101905: photons = subRunInfo[0]['photons'].getReal()
+        #else: photons = subRunInfo[0]['photons'].getInteger()
+        try: photons = subRunInfo[0]['photons'].getReal()
+        except: photons = subRunInfo[0]['photons'].getInteger()
         pinval=0.
         pinrms=0.
         for sr in range(0,39):
-            if num == 101852: continue
+            #if num == 101852: continue
             pinval += subRunInfo[sr]['pin_value'].getInteger()
-            pinrms += subRunInfo[sr]['pin_rms'].getReal()
+            try: pinrms += subRunInfo[sr]['pin_rms'].getReal()
+            except: pinrms += subRunInfo[sr]['pin_rms'].getInteger()
         pinval /= 40.
         pinrms /= 40.
         output.write("%6s %2d %6d %5d %6d %5d %5d\n" % (fibre, channel, num, ipw, int(photons), pinval, int(pinrms)))
