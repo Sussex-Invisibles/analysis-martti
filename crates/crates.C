@@ -42,29 +42,30 @@ float crates(string, int, bool);
 int main(int argc, char** argv) {
 
   // Crate causing problems
-  const int BAD_CRATE = 12;
+  const int BAD_CRATE = 4;
   
   // Monte-Carlo simulation
   const int IS_MC = 1;
   
   // Loop over all fibres in list 
   ifstream in;
-  in.open("tellie_fibres.list");
+  in.open("../TELLIE_FIBRES.list");
+  FILE *out = fopen("crates.out","w");
   string fibre, fname;
   float badpmtfrac;
   int channel=0;
-  printf("Estimating hit percentages on crate #%d...\n\n", BAD_CRATE);
-  printf("%-3s %-6s %-5s\n","Ch.","Fibre","Frac.");
-  printf("-----------------\n");
+  fprintf(out,"Estimating hit percentages on crate #%d...\n\n", BAD_CRATE);
+  fprintf(out,"%-3s %-6s %-5s\n","Ch.","Fibre","Frac.");
+  fprintf(out,"-----------------\n");
   while (true) {
     in >> fibre;
     if (!in.good()) break;
-    string fname = Form("output/TELLIE_test_%s.root", fibre.c_str());  
+    string fname = Form("../tellie_jobs/output/TELLIE_%s.root", fibre.c_str());  
     channel++;
     badpmtfrac = crates(fname.c_str(), BAD_CRATE, IS_MC);
-    printf("%3d %6s %4.1f%%\n",channel,fibre.c_str(),100.*badpmtfrac);
+    fprintf(out,"%3d %6s %4.1f%%\n",channel,fibre.c_str(),100.*badpmtfrac);
   }
-
+  fclose(out);
   return 0;
 }
 
