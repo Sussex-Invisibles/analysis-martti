@@ -245,7 +245,8 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   
     // Initialise RAT
     RAT::DU::DSReader dsreader(fname);
-    const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
+    //const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
+    const RAT::DU::PMTCalStatus& pmtStatus = RAT::DU::Utility::Get()->GetPMTCalStatus();
     const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     NPMTS = pmtinfo.GetCount();
     cout << "Initialised RAT. Number of PMTs is " << NPMTS << endl;
@@ -319,9 +320,20 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
           for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
             RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
             int pmtID = pmt.GetID();
-            if (!chs.IsTubeOnline(pmtID)) continue;                   // test CHS
-            if (pmt.GetCrossTalkFlag()) continue;                     // remove crosstalk
-            if (pmt.GetStatus().GetULong64_t(0) != 0) continue;       // test PCA
+            unsigned int status = pmtStatus.GetHitStatus(pmt);
+
+            // Stolen from PMTCalSelector:
+            if(status & (1<<pmtStatus.kCHSBit)) continue;
+            if(status & (1<<pmtStatus.kECABit)) continue;
+            if(status & (1<<pmtStatus.kPCABit)) continue;
+            if(status & (1<<pmtStatus.kXTalkBit)) continue;
+
+            // Deprecated (too strict cuts):
+            // if (!chs.IsTubeOnline(pmtID)) continue;                   // test CHS
+            // if (pmt.GetCrossTalkFlag()) continue;                     // remove crosstalk
+            // if (pmt.GetStatus().GetULong64_t(0) != 0) continue;       // test ECA/PCA
+
+            // Good PMT:
             occupancy[pmtID]++;
             //eventnhit++;
           } // pmt loop
