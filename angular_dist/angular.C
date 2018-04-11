@@ -156,8 +156,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
     //lpc.BeginOfRun(); // TODO - find out if this is needed too!
     RAT::DU::GroupVelocity gv = RAT::DU::Utility::Get()->GetGroupVelocity();
-    const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
     //gv.BeginOfRun(); // TODO - find out if this is needed too!
+    //const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
+    const RAT::DU::PMTCalStatus& pmtStatus = RAT::DU::Utility::Get()->GetPMTCalStatus();
     const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     const int NPMTS = pmtinfo.GetCount();
     
@@ -230,7 +231,6 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     
     // Loop over all entries
     int nevents=0;
-    int hitpmts=0;
     float pmtOccup[NPMTS], pmtAngle[NPMTS];                   // occupancy and angle
     memset( pmtOccup, 0, NPMTS*sizeof(float) );               // NPMTS only known at runtime
     memset( pmtAngle, 0, NPMTS*sizeof(float) );               // NPMTS only known at runtime
@@ -259,12 +259,18 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
         for(int iPMT=0; iPMT<pmts.GetNormalCount(); iPMT++) {
           RAT::DS::PMTCal pmt = pmts.GetNormalPMT(iPMT);
           int pmtID = pmt.GetID();
-          hitpmts++;
+          unsigned int status = pmtStatus.GetHitStatus(pmt);
+
+          // Stolen from PMTCalSelector:
+          if(status & (1<<pmtStatus.kCHSBit)) continue;
+          if(status & (1<<pmtStatus.kECABit)) continue;
+          if(status & (1<<pmtStatus.kPCABit)) continue;
+          if(status & (1<<pmtStatus.kXTalkBit)) continue;
           
-          // Cuts on PMT status
-          if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
-          if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
-          if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA / ECA
+          // Cuts on PMT status (deprecated)
+          //if (!chs.IsTubeOnline(pmtID)) continue;             // test CHS
+          //if (pmt.GetCrossTalkFlag()) continue;               // remove crosstalk
+          //if (pmt.GetStatus().GetULong64_t(0) != 0) continue; // test PCA / ECA
           
           // Get info for this PMT
           TVector3 pmtPos = pmtinfo.GetPosition(pmtID);       // position [mm]
