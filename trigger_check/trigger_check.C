@@ -61,6 +61,7 @@ int main(int argc, char** argv) {
     if (TEST && lastrun!=0 && run!=lastrun) continue; // only want one run
     runnumbers[nruns] = run;
     if (run != lastrun) nruns++;
+    if (nruns>NRUNS) break;
     subrunpin[nruns-1][subrun] = pin;
     subrunrms[nruns-1][subrun] = rms;
     if (nruns==1) gpins[nruns-1]->SetPoint(subrun,subrun,pin);
@@ -179,10 +180,10 @@ int main(int argc, char** argv) {
   string title = "TELLIE internal readout stability (FT010A);Subrun number;PIN reading";
   c->DrawFrame(-0.025*NSUBRUNS,900,1.025*NSUBRUNS,1300,title.c_str())->GetYaxis()->SetTitleOffset(1.4);
   TLegend *leg = new TLegend(0.74,0.77,0.89,0.89);
-  for(int r=0; r<NRUNS; r++) {
+  for(int r=2; r<NRUNS; r++) {
     gpins[r]->SetMarkerStyle(7);
-    gpins[r]->SetMarkerColor(r+2);
-    gpins[r]->SetLineColor(r+2);
+    gpins[r]->SetMarkerColor(2*r-2);
+    gpins[r]->SetLineColor(2*r-2);
     gpins[r]->Draw("P same");
     leg->AddEntry(gpins[r],std::to_string(runnumbers[r]).c_str(),"LP");
   }
@@ -197,10 +198,10 @@ int main(int argc, char** argv) {
   title = "TELLIE trigger stability (FT010A);Subrun number;Missing triggers";
   c->DrawFrame(-0.025*NSUBRUNS,-0.25,1.025*NSUBRUNS,5.25,title.c_str())->GetYaxis()->SetTitleOffset(1.4);
   leg = new TLegend(0.74,0.77,0.89,0.89);
-  for(int r=0; r<NRUNS; r++) {
+  for(int r=2; r<NRUNS; r++) {
     gmiss[r]->SetMarkerStyle(8);
-    gmiss[r]->SetMarkerColor(r+2);
-    gmiss[r]->SetLineColor(r+2);
+    gmiss[r]->SetMarkerColor(2*r-2);
+    gmiss[r]->SetLineColor(2*r-2);
     gmiss[r]->Draw("P same");
     leg->AddEntry(gmiss[r],std::to_string(runnumbers[r]).c_str(),"LP");
   }
@@ -216,9 +217,9 @@ int main(int argc, char** argv) {
   c->DrawFrame(-0.1,0.2,4.1,9e6,"Trigger time differences;#Delta t [ms];Counts");//->GetYaxis()->SetLog();
   c->SetLogy();
   leg = new TLegend(0.74,0.77,0.89,0.89);
-  for(int r=0; r<NRUNS; r++) {
+  for(int r=2; r<NRUNS; r++) {
     hdiff[r]->SetLineWidth(2);
-    hdiff[r]->SetLineColor(r+2);
+    hdiff[r]->SetLineColor(2*r-2);
     hdiff[r]->Draw("same");
     leg->AddEntry(hdiff[r],std::to_string(runnumbers[r]).c_str(),"LP");
   }

@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
   }
   
   // Loop over all fibres in list
-  string input = "../pca_runs/TELLIE_PCA.txt";
+  string input = "../pca_runs/TELLIE_PCA_Slave.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;
@@ -89,7 +89,8 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   // Check files for given run
   if(!TEST && VERBOSE) printf("*****\n");
   printf("Checking files for run %d... ", run);
-  string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
+  //string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
+  string fpath = "/its/home/mn372/Software/SNOP/work/downloaded/";
   string fname, out, root, img;
   string mcopt = "";
   ifstream ff;

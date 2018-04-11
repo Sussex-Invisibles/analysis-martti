@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
   const int TEST = (RUN_CLUSTER) ? 0 : 102157;
 
   // Initialise input file
-  string input = "../pca_runs/TELLIE_PCA.txt";
+  string input = "../pca_runs/TELLIE_PCA_Slave.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line;
@@ -97,7 +97,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   // Check files for given run
   if(!TEST && VERBOSE) printf("*****\n");
   printf("Checking files for run %d... ", run);
-  string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
+  //string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
+  string fpath = "/its/home/mn372/Software/SNOP/work/downloaded";
   string fname = "";
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
