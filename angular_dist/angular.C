@@ -98,7 +98,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   if(!TEST && VERBOSE) printf("*****\n");
   printf("Checking files for run %d... ", run);
   //string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
-  string fpath = "/its/home/mn372/Software/SNOP/work/downloaded";
+  //string fpath = "/its/home/mn372/Software/SNOP/work/downloaded";
+  string fpath = "/lustre/scratch/epp/neutrino/snoplus/TELLIE/TELLIE_PCA_RUNS_PROCESSED";
   string fname = "";
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
@@ -452,7 +453,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   }
 
   // TELLIE fibre/trigger delays & Mark's PCA offsets
-  string delayfile = "TELLIE_delays.txt";
+  string delayfile = "TELLIE_delays_Slave.txt";
   ifstream del(delayfile.c_str());
   if (!del) { cerr<<"ERROR - Failed to open "<<delayfile<<endl; exit(1); }
   int num, triggerDelay;

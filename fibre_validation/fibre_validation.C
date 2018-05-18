@@ -90,7 +90,8 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   if(!TEST && VERBOSE) printf("*****\n");
   printf("Checking files for run %d... ", run);
   //string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
-  string fpath = "/its/home/mn372/Software/SNOP/work/downloaded/";
+  //string fpath = "/its/home/mn372/Software/SNOP/work/downloaded";
+  string fpath = "/lustre/scratch/epp/neutrino/snoplus/TELLIE/TELLIE_PCA_RUNS_PROCESSED";
   string fname, out, root, img;
   string mcopt = "";
   ifstream ff;
