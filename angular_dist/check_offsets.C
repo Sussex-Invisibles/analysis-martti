@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
   const int TEST = (RUN_CLUSTER) ? 0 : 102315;// 101410;
   
   // Initialisation
-  string example = Form("%s/Software/SNOP/work/data/Analysis_r0000101834_s000_p000.root",getenv("HOME"));
+  string example = Form("%s/Software/SNOP/work/data/Analysis_r0000110264_s000_p000.root",getenv("HOME"));
   RAT::DU::DSReader dsreader(example);
   const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
   const int NPMTS = pmtinfo.GetCount();
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
   histos[3] = new TH2D("angle","",NBINS,-1,1,NBINS,-MAXOFFSET,MAXOFFSET);
 
   // Loop over all fibres in list
-  string input = "../pca_runs/TELLIE_PCA.txt";
+  string input = "../pca_runs/TELLIE_PCA_Slave.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;
