@@ -41,6 +41,7 @@ TRandom3* gen = new TRandom3();
 // *****************************************************************************
 // Main program
 int main(int argc, char** argv) {
+  gen->SetSeed(0);
   diffuser();
   return 0;
 }
@@ -50,7 +51,6 @@ int main(int argc, char** argv) {
 // Inputs: laser intensity, quartz rod position, density of glass bubbles
 // Output: intensity as function of solid angle
 void diffuser() {
-  gen->SetSeed(0);
   
   // Photon position at injection point
   TVector3 pos(1,0,0);
@@ -71,13 +71,14 @@ void diffuser() {
   inten->SetParameter(0,I0);
   inten->SetParameter(1,lambda);
   
-  /* If the selected distance is greater than d it is checked whether the photon
-exits the diffuser or internally reflects. For a selected distance less than d a
-scattering event will take place. */
+  // Photon tracking
   int step = 0;
   TVector3 newpos, newdir;
-  TGraph track;
-  track.SetPoint(step,pos.X(),pos.Z()); // initial point
+  TGraph trackS, trackT, trackU; // side view, top view
+  // Injection point
+  trackS.SetPoint(step,pos.X(),pos.Z());
+  trackT.SetPoint(step,pos.X(),pos.Y());
+  trackU.SetPoint(step,pos.Y(),pos.Z());
   printf("ENTERING diffuser at (%8.3f %8.3f %8.3f), R=%6.3f\n",step,pos.X(),pos.Y(),pos.Z(),pos.Mag());
   bool exitflask = false;
   while (!exitflask) {
@@ -99,26 +100,52 @@ scattering event will take place. */
     }
     pos = newpos;
     dir = newdir;
-    track.SetPoint(step,pos.X(),pos.Z()); // ignore y for now
+    trackS.SetPoint(step,pos.X(),pos.Z());
+    trackT.SetPoint(step,pos.X(),pos.Y());
+    trackU.SetPoint(step,pos.Y(),pos.Z());
   }
   
   printf("EXITING diffuser after %d scatters at (%8.3f %8.3f %8.3f), R=%6.3f\n",step,pos.X(),pos.Y(),pos.Z(),pos.Mag());
   TVector3 endpos = propagate(pos,dir,6e3);
-  track.SetPoint(step+1,endpos.X(),endpos.Z()); // ignore y for now
+  trackS.SetPoint(step+1,endpos.X(),endpos.Z());
+  trackT.SetPoint(step+1,endpos.X(),endpos.Y());
+  trackU.SetPoint(step+1,endpos.Y(),endpos.Z());
   printf("End point (%8.3f %8.3f %8.3f), R=%6.3f\n",endpos.X(),endpos.Y(),endpos.Z(),endpos.Mag());
   
   double LIM=75;
-  TCanvas c("c","",800,800);
-  c.DrawFrame(-LIM,-LIM,LIM,LIM,"Photon scattering in diffuser;X [mm];Z [mm]");
+  TCanvas c("c","",1200,1200);
+  c.Divide(2,2);
+  c.cd(1)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (front view);X [mm];Z [mm]");
   // Flask
   TEllipse ball(0,0,R);
-  ball.Draw("same");
+  ball.Draw("L same");
+  // Rod
   TBox rod(-roddiam/2,0,roddiam/2,LIM); // must be within limits of frame
   rod.SetFillColor(0);
   rod.SetLineColor(4);
   rod.Draw("L same");
-  track.SetLineColor(2);
-  track.Draw("L same");
+  // Photon track
+  trackS.SetLineColor(2);
+  trackS.Draw("L same");
+  c.cd(3)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (top view);X [mm];Y [mm]");
+  // Flask
+  ball.Draw("L same");
+  // Rod
+  TEllipse rodc(0,0,roddiam/2);
+  rodc.SetFillColor(0);
+  rodc.SetLineColor(4);
+  rodc.Draw("L same");
+  // Photon track
+  trackT.SetLineColor(2);
+  trackT.Draw("L same");
+  c.cd(2)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (side view);Y [mm];Z [mm]");
+  // Flask
+  ball.Draw("L same");
+  // Rod
+  rod.Draw("L same");
+  // Photon track
+  trackU.SetLineColor(2);
+  trackU.Draw("L same");
   c.Print("diffuser.png");
   c.Close();
   
@@ -191,7 +218,7 @@ TVector3 scatter(TVector3 pos, TVector3 dir, double impact) {
   // New direction transformed back into global frame (R. Ford's thesis)
   double param = sqrt((1.-costh*costh)/(1.-gamma*gamma));
   double newalpha = alpha*costh + param*(alpha*gamma*cos(phi)-beta*sin(phi));
-  double newbeta  = beta*costh + param*(beta*gamma*cos(phi)-alpha*sin(phi));
+  double newbeta  = beta*costh + param*(beta*gamma*cos(phi)+alpha*sin(phi));
   double newgamma = gamma*costh - param*(1.-gamma*gamma)*cos(phi);  
   TVector3 newdir(newalpha,newbeta,newgamma);
   return newdir.Unit();
