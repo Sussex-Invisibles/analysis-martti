@@ -13,6 +13,7 @@
 // ROOT stuff
 #include <TCanvas.h>
 #include <TF2.h>
+#include <TEllipse.h>
 #include <TFile.h>
 #include <TGaxis.h>
 #include <TGraph2D.h>
