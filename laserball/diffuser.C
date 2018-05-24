@@ -75,6 +75,7 @@ void diffuser() {
   int step = 0;
   TVector3 newpos, newdir;
   TGraph trackS, trackT, trackU; // side view, top view
+  TH1D htrk("htrk","Single photon tracking (stats);Distance between scatters [mm];Count",50,0,10);
   // Injection point
   trackS.SetPoint(step,pos.X(),pos.Z());
   trackT.SetPoint(step,pos.X(),pos.Y());
@@ -89,12 +90,14 @@ void diffuser() {
     if (dsel < dwall) {
       // propagate selected distance
       newpos = propagate(pos,dir,dsel);
+      htrk.Fill(dsel);
       // scatter in diffuser
       newdir = scatter(newpos,dir,sqrt(y));
       step++;
     } else {
       // propagate up to wall
       newpos = propagate(pos,dir,dwall);
+      htrk.Fill(dwall);
       // exit or reflect internally
       newdir = reflect_or_refract(newpos,dir,sqrt(y),exitflask);
     }
@@ -113,6 +116,7 @@ void diffuser() {
   printf("End point (%8.3f %8.3f %8.3f), R=%6.3f\n",endpos.X(),endpos.Y(),endpos.Z(),endpos.Mag());
   
   double LIM=75;
+  //gStyle->SetAxisLabelOffset?
   TCanvas c("c","",1200,1200);
   c.Divide(2,2);
   c.cd(1)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (front view);X [mm];Z [mm]");
@@ -146,6 +150,8 @@ void diffuser() {
   // Photon track
   trackU.SetLineColor(2);
   trackU.Draw("L same");
+  c.cd(4);
+  htrk.Draw();
   c.Print("diffuser.png");
   c.Close();
   
