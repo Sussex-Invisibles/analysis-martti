@@ -9,6 +9,7 @@
 
 // Global constants
 const int VERBOSE = 0;
+const int NEVENTS = 1e6;
 
 // Laser
 const double I0 = 1.; // laser intensity, normalised for now
@@ -25,141 +26,178 @@ const double lambda = 1.; // optical property (depends on density)
 // Quartz rod
 const double rodlen = 200.; // length [mm]
 const double roddiam = 1.; // diameter [mm]
+const double OFFSET = 2.5;
 
 // *****************************************************************************
 // Function declarations
-void diffuser();
-double distance_to_wall(TVector3, TVector3);
-double reflection_prob(double n1, double n2, double impact);
-TVector3 propagate(TVector3, TVector3, double distance);
-TVector3 scatter(TVector3, TVector3, double impact);
-TVector3 reflect_or_refract(TVector3, TVector3, double impact, bool& exitflask);
+TVector3 diffuser();
+double distance_to_wall(TVector3&, TVector3&);
+double reflection_prob(const double& n1, const double& n2, const double &impact);
+TVector3 propagate(TVector3&, TVector3&, double& distance);
+TVector3 scatter(TVector3&, TVector3&, double& impact);
+TVector3 reflect_or_refract(TVector3&, TVector3&, double& impact, bool& exitflask);
 
-// Random number generator
+// Other global objects (TODO - BAD PRACTICE)
 TRandom3* gen = new TRandom3();
+TF1* aperture = new TF1("aperture","cos(pi/2*x/[0])",0,NA);
+TVector3 pos, dir, newpos, newdir, endpos, enddir;
+TGraph trackS, trackT, trackU; // side view, top view
+TH1D htrk("htrk","Single photon tracking (stats);Distance between scatters [mm];Count",50,0,10);
+int event;
 
 // *****************************************************************************
 // Main program
 int main(int argc, char** argv) {
   gen->SetSeed(0);
-  diffuser();
+  aperture->SetParameter(0,NA);
+  TVector3 outdir;
+  TH1D hphi("hphi","Azimuthal distribution;#phi [#pi];",100,-1,1);
+  TH1D hcth("hcth","Zenithal distribution;cos(#theta) [#pi];",100,-1,1);
+  TH2D hang("hang","Angular distribution of diffuser;#phi [#pi];cos(#theta) [ ]",50,-1,1,50,-1,1);
+  for (event=0; event<NEVENTS; event++) {
+    printProgress(event,NEVENTS);
+    outdir = diffuser();
+    hphi.Fill(outdir.Phi()/pi);
+    hcth.Fill(cos(outdir.Theta()));
+    hang.Fill(outdir.Phi()/pi,cos(outdir.Theta()));
+  }
+  TCanvas c("c","",1200,1200);
+  c.Divide(2,2);
+  c.cd(1)->SetGrid();
+  hphi.SetAxisRange(0,1.2*hphi.GetMaximum(),"Y");
+  hphi.Draw();
+  c.cd(2)->SetGrid();
+  hcth.SetAxisRange(0,1.2*hcth.GetMaximum(),"Y");
+  hcth.Draw();
+  c.cd(3)->SetGrid();
+  hang.Draw("colz");
+  hang.SetAxisRange(0,hang.GetMaximum(),"Z");
+  hang.Draw("colz same");
+  c.Print("diffuser.png");
+  c.Close();
   return 0;
 }
 
 // *****************************************************************************
 // Track a single photon through the diffuser flask
-// Inputs: laser intensity, quartz rod position, density of glass bubbles
-// Output: intensity as function of solid angle
-void diffuser() {
+// Inputs: none
+// Output: escape direction of photon, seen from 6m sphere
+TVector3 diffuser() {
   
   // Photon position at injection point
-  TVector3 pos(1,0,0);
+  pos = e1;
   double A = pi*pow(roddiam/2.,2)*gen->Rndm(); // random within area
   pos.SetMag(sqrt(A/pi)); // radius [mm]
   pos.SetPhi(2*pi*gen->Rndm()); // angle [rad]
-  
+  pos += OFFSET*e3; // offset in z-direction
+
   // Photon direction at injection point
-  TVector3 dir(0,0,1);
+  dir = e3;
   dir.SetPhi(2*pi*gen->Rndm()); // azimuthal direction [0,2pi)
-  TF1* aperture = new TF1("aperture","cos(pi/2*x/[0])",0,NA);
-  aperture->SetParameter(0,NA);
   double theta = aperture->GetRandom();
   dir.SetTheta(pi-theta); // downwards zenith direction [0,NA)
   
   // Intensity dropoff
-  TF1* inten = new TF1("intensity","[0]*exp(-x/[1])",0,R/10);
-  inten->SetParameter(0,I0);
-  inten->SetParameter(1,lambda);
+  //TF1* inten = new TF1("intensity","[0]*exp(-x/[1])",0,R/10);
+  //inten->SetParameter(0,I0);
+  //inten->SetParameter(1,lambda);
   
   // Photon tracking
   int step = 0;
-  TVector3 newpos, newdir;
-  TGraph trackS, trackT, trackU; // side view, top view
-  TH1D htrk("htrk","Single photon tracking (stats);Distance between scatters [mm];Count",50,0,10);
   // Injection point
-  trackS.SetPoint(step,pos.X(),pos.Z());
-  trackT.SetPoint(step,pos.X(),pos.Y());
-  trackU.SetPoint(step,pos.Y(),pos.Z());
-  printf("ENTERING diffuser at (%8.3f %8.3f %8.3f), R=%6.3f\n",step,pos.X(),pos.Y(),pos.Z(),pos.Mag());
+  if (!event) {
+    trackS.SetPoint(step,pos.X(),pos.Z());
+    trackT.SetPoint(step,pos.X(),pos.Y());
+    trackU.SetPoint(step,pos.Y(),pos.Z());
+  }
+  if (VERBOSE) printf("ENTERING diffuser at (%8.3f %8.3f %8.3f), R=%6.3f\n",pos.X(),pos.Y(),pos.Z(),pos.Mag());
   bool exitflask = false;
   while (!exitflask) {
     if (VERBOSE) printf("position (%8.3f %8.3f %8.3f), direction = (%8.3f %8.3f %8.3f)\n",pos.X(),pos.Y(),pos.Z(),dir.X(),dir.Y(),dir.Z());
     double y = gen->Rndm();
     double dsel = -lambda*log(y);  // randomly selected distance in diffuser [mm]
     double dwall = distance_to_wall(pos,dir); // distance to flask wall [mm]
+    double impact = sqrt(y);
     if (dsel < dwall) {
       // propagate selected distance
       newpos = propagate(pos,dir,dsel);
-      htrk.Fill(dsel);
+      if (!event) htrk.Fill(dsel);
       // scatter in diffuser
-      newdir = scatter(newpos,dir,sqrt(y));
+      newdir = scatter(newpos,dir,impact);
       step++;
     } else {
       // propagate up to wall
       newpos = propagate(pos,dir,dwall);
-      htrk.Fill(dwall);
+      if (!event) htrk.Fill(dwall);
       // exit or reflect internally
-      newdir = reflect_or_refract(newpos,dir,sqrt(y),exitflask);
+      newdir = reflect_or_refract(newpos,dir,impact,exitflask);
     }
     pos = newpos;
     dir = newdir;
-    trackS.SetPoint(step,pos.X(),pos.Z());
-    trackT.SetPoint(step,pos.X(),pos.Y());
-    trackU.SetPoint(step,pos.Y(),pos.Z());
+    if (!event) {
+      trackS.SetPoint(step,pos.X(),pos.Z());
+      trackT.SetPoint(step,pos.X(),pos.Y());
+      trackU.SetPoint(step,pos.Y(),pos.Z());
+    }
   }
   
-  printf("EXITING diffuser after %d scatters at (%8.3f %8.3f %8.3f), R=%6.3f\n",step,pos.X(),pos.Y(),pos.Z(),pos.Mag());
-  TVector3 endpos = propagate(pos,dir,6e3);
-  trackS.SetPoint(step+1,endpos.X(),endpos.Z());
-  trackT.SetPoint(step+1,endpos.X(),endpos.Y());
-  trackU.SetPoint(step+1,endpos.Y(),endpos.Z());
-  printf("End point (%8.3f %8.3f %8.3f), R=%6.3f\n",endpos.X(),endpos.Y(),endpos.Z(),endpos.Mag());
-  
-  double LIM=75;
-  //gStyle->SetAxisLabelOffset?
-  TCanvas c("c","",1200,1200);
-  c.Divide(2,2);
-  c.cd(1)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (front view);X [mm];Z [mm]");
-  // Flask
-  TEllipse ball(0,0,R);
-  ball.Draw("L same");
-  // Rod
-  TBox rod(-roddiam/2,0,roddiam/2,LIM); // must be within limits of frame
-  rod.SetFillColor(0);
-  rod.SetLineColor(4);
-  rod.Draw("L same");
-  // Photon track
-  trackS.SetLineColor(2);
-  trackS.Draw("L same");
-  c.cd(3)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (top view);X [mm];Y [mm]");
-  // Flask
-  ball.Draw("L same");
-  // Rod
-  TEllipse rodc(0,0,roddiam/2);
-  rodc.SetFillColor(0);
-  rodc.SetLineColor(4);
-  rodc.Draw("L same");
-  // Photon track
-  trackT.SetLineColor(2);
-  trackT.Draw("L same");
-  c.cd(2)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (side view);Y [mm];Z [mm]");
-  // Flask
-  ball.Draw("L same");
-  // Rod
-  rod.Draw("L same");
-  // Photon track
-  trackU.SetLineColor(2);
-  trackU.Draw("L same");
-  c.cd(4);
-  htrk.Draw();
-  c.Print("diffuser.png");
-  c.Close();
-  
+  if (VERBOSE) printf("EXITING diffuser after %d scatters at (%8.3f %8.3f %8.3f), R=%6.3f\n",step,pos.X(),pos.Y(),pos.Z(),pos.Mag());
+  double RMAX = 6e3; // AV radius [mm]
+  endpos = propagate(pos,dir,RMAX);
+  if (VERBOSE) printf("End point (%8.3f %8.3f %8.3f), R=%6.3f\n",endpos.X(),endpos.Y(),endpos.Z(),endpos.Mag());
+  if (!event) {
+    trackS.SetPoint(step+1,endpos.X(),endpos.Z());
+    trackT.SetPoint(step+1,endpos.X(),endpos.Y());
+    trackU.SetPoint(step+1,endpos.Y(),endpos.Z());
+    
+    double LIM=75;
+    gStyle->SetOptStat(0);
+    //gStyle->SetAxisLabelOffset?
+    TCanvas c("c","",1200,1200);
+    c.Divide(2,2);
+    c.cd(1)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (front view);X [mm];Z [mm]");
+    // Flask
+    TEllipse ball(0,0,R);
+    ball.Draw("L same");
+    // Rod
+    TBox rod(-roddiam/2,0,roddiam/2,LIM); // must be within limits of frame
+    rod.SetFillColor(0);
+    rod.SetLineColor(4);
+    rod.Draw("L same");
+    // Photon track
+    trackS.SetLineColor(2);
+    trackS.Draw("L same");
+    c.cd(3)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (top view);X [mm];Y [mm]");
+    // Flask
+    ball.Draw("L same");
+    // Rod
+    TEllipse rodc(0,0,roddiam/2);
+    rodc.SetFillColor(0);
+    rodc.SetLineColor(4);
+    rodc.Draw("L same");
+    // Photon track
+    trackT.SetLineColor(2);
+    trackT.Draw("L same");
+    c.cd(2)->DrawFrame(-LIM,-LIM,LIM,LIM,"Single photon tracking (side view);Y [mm];Z [mm]");
+    // Flask
+    ball.Draw("L same");
+    // Rod
+    rod.Draw("L same");
+    // Photon track
+    trackU.SetLineColor(2);
+    trackU.Draw("L same");
+    c.cd(4);
+    htrk.Draw();
+    c.Print("photon_track.png");
+    c.Close();
+  }
+
+  return endpos.Unit();
 }
 
 // *****************************************************************************
 // Calculate distance to inner flask boundary
-double distance_to_wall(TVector3 pos, TVector3 dir) {
+double distance_to_wall(TVector3& pos, TVector3& dir) {
   double x = pos.X();
   double y = pos.Y();
   double z = pos.Z();
@@ -172,7 +210,7 @@ double distance_to_wall(TVector3 pos, TVector3 dir) {
 
 // *****************************************************************************
 // Reflection probability
-double reflection_prob(double n1, double n2, double b) {
+double reflection_prob(const double& n1, const double& n2, const double& b) {
     // Consider transition between materials (n2 > n1)
     double ni = n1/n2;
     // Calculate Fresnel coefficients
@@ -184,17 +222,16 @@ double reflection_prob(double n1, double n2, double b) {
 
 // *****************************************************************************
 // Propagate through silicone
-TVector3 propagate(TVector3 pos, TVector3 dir, double dist) {
+TVector3 propagate(TVector3& pos, TVector3& dir, double& dist) {
   double x = pos.X()+dir.X()*dist;
   double y = pos.Y()+dir.Y()*dist;
   double z = pos.Z()+dir.Z()*dist;
-  TVector3 newpos(x,y,z);
-  return newpos;
+  return TVector3(x,y,z);
 }
 
 // *****************************************************************************
 // Scatter off a glass bubble
-TVector3 scatter(TVector3 pos, TVector3 dir, double impact) {
+TVector3 scatter(TVector3& pos, TVector3& dir, double& impact) {
   
   // Directional cosines
   double alpha = dir.X();
@@ -226,13 +263,13 @@ TVector3 scatter(TVector3 pos, TVector3 dir, double impact) {
   double newalpha = alpha*costh + param*(alpha*gamma*cos(phi)-beta*sin(phi));
   double newbeta  = beta*costh + param*(beta*gamma*cos(phi)+alpha*sin(phi));
   double newgamma = gamma*costh - param*(1.-gamma*gamma)*cos(phi);  
-  TVector3 newdir(newalpha,newbeta,newgamma);
-  return newdir.Unit();
+  TVector3 scatdir(newalpha,newbeta,newgamma);
+  return scatdir.Unit();
 }
 
 // *****************************************************************************
 // Reflect at flask wall, or refract out of diffuser
-TVector3 reflect_or_refract(TVector3 pos, TVector3 dir, double impact, bool& exitflask) {
+TVector3 reflect_or_refract(TVector3& pos, TVector3& dir, double& impact, bool& exitflask) {
 
   // Photon position and directional cosines
   double x = pos.X();
@@ -245,19 +282,19 @@ TVector3 reflect_or_refract(TVector3 pos, TVector3 dir, double impact, bool& exi
   // Forward scattering angle depends on scattering modes A, B, C
   double prod = dir.Unit().Dot(pos.Unit());
   double sinOmega = ng*ng*(1.-fabs(prod));
-  TVector3 newdir;
+  TVector3 scatdir;
   if (sinOmega > 1) {
     // (A) internal reflection
-    newdir = dir-2.*prod*pos;
+    scatdir = dir-2.*prod*pos;
     exitflask = false;
   } else {
     // (B) probability of reflecting despite sinOmega <= 1
     double prob = reflection_prob(ns,ng,impact);
     double roll = gen->Rndm();
     if (roll < prob) {
-      newdir = dir-2.*prod*pos;
+      scatdir = dir-2.*prod*pos;
       exitflask = false;
-      printf("REFLECTING on diffuser wall at (%8.3f %8.3f %8.3f), R=%6.3f\n",x,y,z,pos.Mag());
+      if (VERBOSE) printf("REFLECTING on diffuser wall at (%8.3f %8.3f %8.3f), R=%6.3f\n",x,y,z,pos.Mag());
     }
     // (C) refract out of the diffuser
     else {
@@ -302,31 +339,31 @@ TVector3 reflect_or_refract(TVector3 pos, TVector3 dir, double impact, bool& exi
       double alp = sqrt(1-pow(ns/ng,2)*(1-u*u));
       double bet = ns/ng*sqrt(1-u*u);
       if (bet*rotdir.X() < 0) bet*=-1; // change sign
-      newdir.SetXYZ(bet,0,alp);
+      scatdir.SetXYZ(bet,0,alp);
       
       // Check that rotated vectors are all in x-z plane
       if (VERBOSE) {
         printf("-----\n");
         printf("rotpos = (%8.3f %8.3f %8.3f), length=%8.3f\n",rotpos.X(),rotpos.Y(),rotpos.Z(),rotpos.Mag());
         printf("rotdir = (%8.3f %8.3f %8.3f), length=%8.3f\n",rotdir.X(),rotdir.Y(),rotdir.Z(),rotdir.Mag());
-        printf("newdir = (%8.3f %8.3f %8.3f), length=%8.3f\n",newdir.X(),newdir.Y(),newdir.Z(),newdir.Mag());
+        printf("newdir = (%8.3f %8.3f %8.3f), length=%8.3f\n",scatdir.X(),scatdir.Y(),scatdir.Z(),scatdir.Mag());
       }
       
       // Rotate back last step
       rotdir.RotateZ(angZ);
-      newdir.RotateZ(angZ);
+      scatdir.RotateZ(angZ);
       
       // Rotate back to original frame
       rotpos.RotateUz(pos.Unit());
       rotdir.RotateUz(pos.Unit());
-      newdir.RotateUz(pos.Unit());
+      scatdir.RotateUz(pos.Unit());
       
       // Check output vectors
       if (VERBOSE) {
         printf("-----\n");
         printf("rotpos = (%8.3f %8.3f %8.3f), length=%8.3f\n",rotpos.X(),rotpos.Y(),rotpos.Z(),rotpos.Mag());
         printf("rotdir = (%8.3f %8.3f %8.3f), length=%8.3f\n",rotdir.X(),rotdir.Y(),rotdir.Z(),rotdir.Mag());
-        printf("newdir = (%8.3f %8.3f %8.3f), length=%8.3f\n",newdir.X(),newdir.Y(),newdir.Z(),newdir.Mag());
+        printf("newdir = (%8.3f %8.3f %8.3f), length=%8.3f\n",scatdir.X(),scatdir.Y(),scatdir.Z(),scatdir.Mag());
         printf("-----\n");
       }
       
@@ -334,9 +371,9 @@ TVector3 reflect_or_refract(TVector3 pos, TVector3 dir, double impact, bool& exi
       if (VERBOSE) {
         printf("CHECK RESULTS\n");
         double d = sqrt(1.-pow(ns/ng,2)*(1.-pow(fabs(prod),2)));
-        printf("(1) Snell's law: 0 = %e\n",newdir*pos.Unit()-d);
-        printf("(2) Unit length: 0 = %e\n",newdir.Mag()-1);
-        printf("(3) All planar:  0 = %e\n",newdir.Dot(pos.Cross(dir)));
+        printf("(1) Snell's law: 0 = %e\n",scatdir*pos.Unit()-d);
+        printf("(2) Unit length: 0 = %e\n",scatdir.Mag()-1);
+        printf("(3) All planar:  0 = %e\n",scatdir.Dot(pos.Cross(dir)));
         printf("-----\n");
       }
       
@@ -345,6 +382,6 @@ TVector3 reflect_or_refract(TVector3 pos, TVector3 dir, double impact, bool& exi
     }
   }
   
-  return newdir.Unit();
+  return scatdir.Unit();
 }
 
