@@ -10,7 +10,7 @@
 // Global constants
 const int VERBOSE = 0; // verbosity (1=lots)
 const int NEVENTS = 1e6; // number of photons
-const double OFFSET = 0; // injection point offset
+const int NBINS = 100; // number of bins
 
 // Laser
 const double I0 = 1.; // laser intensity, normalised for now
@@ -27,10 +27,12 @@ const double lambda = 1.; // optical property (depends on density)
 // Quartz rod
 const double rodlen = 200.; // length [mm]
 const double roddiam = 1.; // diameter [mm]
+const double OFFSETS[] = {0, 2.5, 5}; // injection point offsets
+double OFFSET;
 
 // *****************************************************************************
 // Function declarations
-TVector3 diffuser();
+TVector3 diffuser(double& tracklen);
 double distance_to_wall(TVector3&, TVector3&);
 double reflection_prob(const double& n1, const double& n2, const double &impact);
 TVector3 propagate(TVector3&, TVector3&, double& distance);
@@ -42,8 +44,8 @@ TRandom3* gen = new TRandom3();
 TF1* aperture = new TF1("aperture","cos(pi/2*x/[0])",0,NA);
 TVector3 pos, dir, newpos, newdir, endpos, enddir;
 TGraph trackS, trackT, trackU; // side view, top view
-TH1D htrk("htrk","Single photon tracking (stats);Distance between scatters [mm];Count",50,0,10);
-TFile outfile(Form("diffuser_z0=%.1f.root",OFFSET),"RECREATE");
+TH1D htrk("htrk","Single photon tracking (statistics);Distance between scatters [mm];Events",NBINS/2,0,5);
+TFile outfile("diffuser.root","RECREATE");
 int event;
 
 // *****************************************************************************
@@ -54,41 +56,62 @@ int main(int argc, char** argv) {
   gen->SetSeed(0);
   aperture->SetParameter(0,NA);
   TVector3 outdir;
+  double length;
   gStyle->SetTitleOffset(1.1,"x");
   gStyle->SetTitleOffset(1.4,"y");
-  TH1D hphi("hphi",Form("Azimuthal distribution (z_{0} = %.1f mm);#phi [#pi];Events",OFFSET),100,-1,1);
-  TH1D hcth("hcth",Form("Polar distribution (z_{0} = %.1f mm);cos(#theta) [#pi];Events",OFFSET),100,-1,1);
-  TH2D hang("hang","Angular distribution of diffuser;#phi [#pi];cos(#theta) [ ]",50,-1,1,50,-1,1);
 
-  // Generate events
-  for (event=0; event<NEVENTS; event++) {
-    printProgress(event,NEVENTS);
-    outdir = diffuser();
-    hphi.Fill(outdir.Phi()/pi);
-    hcth.Fill(cos(outdir.Theta()));
-    hang.Fill(outdir.Phi()/pi,cos(outdir.Theta()));
+  // Loop over all offsets
+  for (int it=0; it<sizeof(OFFSETS)/sizeof(double); it++) {
+    OFFSET = OFFSETS[it];
+    cout << "SIMULATING DIFFUSER WITH INJECTION POINT OFFSET Z = " << OFFSET << " mm" << endl;
+
+    string tlen = Form("hlen_z0=%.1f",OFFSET);
+    string tphi = Form("hphi_z0=%.1f",OFFSET);
+    string tcth = Form("hcth_z0=%.1f",OFFSET);
+    string tang = Form("hang_z0=%.1f",OFFSET);
+    TH1D hlen(tlen.c_str(),"Photon track length in diffuser;L [mm];Events [#times 10^{3}]",NBINS,0,2500);
+    TH1D hphi(tphi.c_str(),Form("Azimuthal distribution (z_{0} = %.1f mm);#phi [#pi];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
+    TH1D hcth(tcth.c_str(),Form("Polar distribution (z_{0} = %.1f mm);cos(#theta) [#pi];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
+    TH2D hang(tang.c_str(),"Angular distribution of diffuser;#phi [#pi];cos(#theta) [ ]",NBINS/2,-1,1,NBINS/2,-1,1);
+  
+    // Generate events
+    for (event=0; event<NEVENTS; event++) {
+      printProgress(event,NEVENTS);
+      outdir = diffuser(length);
+      hlen.Fill(length);
+      hphi.Fill(outdir.Phi()/pi);
+      hcth.Fill(cos(outdir.Theta()));
+      hang.Fill(outdir.Phi()/pi,cos(outdir.Theta()));
+    }
+  
+    // Plot distributions
+    double scale = 1e-3;
+    TCanvas c("c","",1200,1200);
+    c.Divide(2,2);
+    c.cd(1)->SetGrid();
+    hphi.Scale(scale);
+    hphi.SetAxisRange(0,1.25*NEVENTS/NBINS*scale,"Y");
+    //hphi.GetYaxis()->SetTitleOffset(1.2);
+    hphi.Draw();
+    c.cd(2)->SetGrid();
+    hcth.Scale(scale);
+    hcth.SetAxisRange(0,1.25*NEVENTS/NBINS*scale,"Y");
+    //hcth.GetYaxis()->SetTitleOffset(1.2);
+    hcth.Draw();
+    c.cd(3)->SetGrid();
+    hang.Draw("colz");
+    hang.SetAxisRange(0,5*NEVENTS/NBINS/NBINS,"Z");
+    //hang.GetYaxis()->SetTitleOffset(1.2);
+    hang.Draw("colz same");
+    c.cd(4)->SetGrid();
+    hlen.Scale(scale);
+    hlen.SetAxisRange(0,5*NEVENTS/NBINS*scale,"Y");
+    hlen.Draw();
+    c.Print(Form("diffuser_z0=%.1f.png",OFFSET));
+    c.Close();
+  
+    outfile.Write();
   }
-
-  // Plot distributions
-  TCanvas c("c","",1200,1200);
-  c.Divide(2,2);
-  c.cd(1)->SetGrid();
-  hphi.SetAxisRange(0,1.2*hphi.GetMaximum(),"Y");
-  //hphi.GetYaxis()->SetTitleOffset(1.2);
-  hphi.Draw();
-  c.cd(2)->SetGrid();
-  hcth.SetAxisRange(0,1.2*hcth.GetMaximum(),"Y");
-  //hcth.GetYaxis()->SetTitleOffset(1.2);
-  hcth.Draw();
-  c.cd(3)->SetGrid();
-  hang.Draw("colz");
-  hang.SetAxisRange(0,hang.GetMaximum(),"Z");
-  //hang.GetYaxis()->SetTitleOffset(1.2);
-  hang.Draw("colz same");
-  c.Print(Form("diffuser_z0=%.1f.png",OFFSET));
-  c.Close();
-
-  outfile.Write();
   outfile.Close();
 
   return 0;
@@ -98,7 +121,7 @@ int main(int argc, char** argv) {
 // Track a single photon through the diffuser flask
 // Inputs: none
 // Output: escape direction of photon, seen from 6m sphere
-TVector3 diffuser() {
+TVector3 diffuser(double& tracklen) {
   
   // Photon position at injection point
   pos = e1;
@@ -120,6 +143,10 @@ TVector3 diffuser() {
   
   // Photon tracking
   int step = 0;
+  tracklen = 0;
+  trackS.Set(0);
+  trackT.Set(0);
+  trackU.Set(0);
   // Injection point
   if (!event) {
     trackS.SetPoint(step,pos.X(),pos.Z());
@@ -137,6 +164,7 @@ TVector3 diffuser() {
     if (dsel < dwall) {
       // propagate selected distance
       newpos = propagate(pos,dir,dsel);
+      tracklen += dsel;
       if (!event) htrk.Fill(dsel);
       // scatter in diffuser
       newdir = scatter(newpos,dir,impact);
@@ -144,12 +172,15 @@ TVector3 diffuser() {
     } else {
       // propagate up to wall
       newpos = propagate(pos,dir,dwall);
+      tracklen += dwall;
       if (!event) htrk.Fill(dwall);
       // exit or reflect internally
       newdir = reflect_or_refract(newpos,dir,impact,exitflask);
     }
     pos = newpos;
     dir = newdir;
+    if(pos.Mag()>R+1e-6) printf("*** WARNING *** Position is (%8.3f %8.3f %8.3f), R=%6.3f\n",pos.X(),pos.Y(),pos.Z(),pos.Mag());
+    if(fabs(dir.Mag()-1.)>1e-6) printf("*** WARNING *** Direction is (%8.3f %8.3f %8.3f), R=%6.3f\n",dir.X(),dir.Y(),dir.Z(),dir.Mag());
     if (!event) {
       trackS.SetPoint(step,pos.X(),pos.Z());
       trackT.SetPoint(step,pos.X(),pos.Y());
