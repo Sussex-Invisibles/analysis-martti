@@ -8,8 +8,9 @@
 #include "../HelperFunc.C"
 
 // Global constants
-const int VERBOSE = 0;
-const int NEVENTS = 1e6;
+const int VERBOSE = 0; // verbosity (1=lots)
+const int NEVENTS = 1e6; // number of photons
+const double OFFSET = 0; // injection point offset
 
 // Laser
 const double I0 = 1.; // laser intensity, normalised for now
@@ -26,7 +27,6 @@ const double lambda = 1.; // optical property (depends on density)
 // Quartz rod
 const double rodlen = 200.; // length [mm]
 const double roddiam = 1.; // diameter [mm]
-const double OFFSET = 2.5;
 
 // *****************************************************************************
 // Function declarations
@@ -43,17 +43,24 @@ TF1* aperture = new TF1("aperture","cos(pi/2*x/[0])",0,NA);
 TVector3 pos, dir, newpos, newdir, endpos, enddir;
 TGraph trackS, trackT, trackU; // side view, top view
 TH1D htrk("htrk","Single photon tracking (stats);Distance between scatters [mm];Count",50,0,10);
+TFile outfile(Form("diffuser_z0=%.1f.root",OFFSET),"RECREATE");
 int event;
 
 // *****************************************************************************
 // Main program
 int main(int argc, char** argv) {
+
+  // Initialisation
   gen->SetSeed(0);
   aperture->SetParameter(0,NA);
   TVector3 outdir;
-  TH1D hphi("hphi","Azimuthal distribution;#phi [#pi];",100,-1,1);
-  TH1D hcth("hcth","Zenithal distribution;cos(#theta) [#pi];",100,-1,1);
+  gStyle->SetTitleOffset(1.1,"x");
+  gStyle->SetTitleOffset(1.4,"y");
+  TH1D hphi("hphi",Form("Azimuthal distribution (z_{0} = %.1f mm);#phi [#pi];Events",OFFSET),100,-1,1);
+  TH1D hcth("hcth",Form("Polar distribution (z_{0} = %.1f mm);cos(#theta) [#pi];Events",OFFSET),100,-1,1);
   TH2D hang("hang","Angular distribution of diffuser;#phi [#pi];cos(#theta) [ ]",50,-1,1,50,-1,1);
+
+  // Generate events
   for (event=0; event<NEVENTS; event++) {
     printProgress(event,NEVENTS);
     outdir = diffuser();
@@ -61,20 +68,29 @@ int main(int argc, char** argv) {
     hcth.Fill(cos(outdir.Theta()));
     hang.Fill(outdir.Phi()/pi,cos(outdir.Theta()));
   }
+
+  // Plot distributions
   TCanvas c("c","",1200,1200);
   c.Divide(2,2);
   c.cd(1)->SetGrid();
   hphi.SetAxisRange(0,1.2*hphi.GetMaximum(),"Y");
+  //hphi.GetYaxis()->SetTitleOffset(1.2);
   hphi.Draw();
   c.cd(2)->SetGrid();
   hcth.SetAxisRange(0,1.2*hcth.GetMaximum(),"Y");
+  //hcth.GetYaxis()->SetTitleOffset(1.2);
   hcth.Draw();
   c.cd(3)->SetGrid();
   hang.Draw("colz");
   hang.SetAxisRange(0,hang.GetMaximum(),"Z");
+  //hang.GetYaxis()->SetTitleOffset(1.2);
   hang.Draw("colz same");
-  c.Print("diffuser.png");
+  c.Print(Form("diffuser_z0=%.1f.png",OFFSET));
   c.Close();
+
+  outfile.Write();
+  outfile.Close();
+
   return 0;
 }
 
@@ -160,7 +176,7 @@ TVector3 diffuser() {
     TEllipse ball(0,0,R);
     ball.Draw("L same");
     // Rod
-    TBox rod(-roddiam/2,0,roddiam/2,LIM); // must be within limits of frame
+    TBox rod(-roddiam/2,OFFSET,roddiam/2,LIM); // must be within limits of frame
     rod.SetFillColor(0);
     rod.SetLineColor(4);
     rod.Draw("L same");
@@ -187,8 +203,10 @@ TVector3 diffuser() {
     trackU.SetLineColor(2);
     trackU.Draw("L same");
     c.cd(4);
+    htrk.GetXaxis()->SetTitleOffset(1.1);
+    htrk.GetYaxis()->SetTitleOffset(1.4);
     htrk.Draw();
-    c.Print("photon_track.png");
+    c.Print(Form("photon_track_z0=%.1f.png",OFFSET));
     c.Close();
   }
 
