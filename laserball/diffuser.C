@@ -30,6 +30,10 @@ const double roddiam = 1.; // diameter [mm]
 const double OFFSETS[] = {0, 2.5, 5}; // injection point offsets
 double OFFSET;
 
+// Other
+const double c0 = 300; // speed of light in vacuum [mm/ns]
+const double cs = c0/ns; // speed of light in SilGel [mm/ns]
+
 // *****************************************************************************
 // Function declarations
 TVector3 diffuser(double& tracklen);
@@ -63,22 +67,22 @@ int main(int argc, char** argv) {
   // Loop over all offsets
   for (int it=0; it<sizeof(OFFSETS)/sizeof(double); it++) {
     OFFSET = OFFSETS[it];
-    cout << "SIMULATING DIFFUSER WITH INJECTION POINT OFFSET Z = " << OFFSET << " mm" << endl;
+    cout << endl << "SIMULATING DIFFUSER WITH INJECTION POINT OFFSET Z = " << OFFSET << " mm" << endl;
 
-    string tlen = Form("hlen_z0=%.1f",OFFSET);
+    string tlen = Form("hesc_z0=%.1f",OFFSET);
     string tphi = Form("hphi_z0=%.1f",OFFSET);
     string tcth = Form("hcth_z0=%.1f",OFFSET);
     string tang = Form("hang_z0=%.1f",OFFSET);
-    TH1D hlen(tlen.c_str(),"Photon track length in diffuser;L [mm];Events [#times 10^{3}]",NBINS,0,2500);
+    TH1D hesc(tlen.c_str(),"Escape time from diffuser;t [ns];Events [#times 10^{3}]",NBINS,0,2500/cs);
     TH1D hphi(tphi.c_str(),Form("Azimuthal distribution (z_{0} = %.1f mm);#phi [#pi];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
     TH1D hcth(tcth.c_str(),Form("Polar distribution (z_{0} = %.1f mm);cos(#theta) [#pi];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
     TH2D hang(tang.c_str(),"Angular distribution of diffuser;#phi [#pi];cos(#theta) [ ]",NBINS/2,-1,1,NBINS/2,-1,1);
-  
+    
     // Generate events
     for (event=0; event<NEVENTS; event++) {
       printProgress(event,NEVENTS);
       outdir = diffuser(length);
-      hlen.Fill(length);
+      hesc.Fill(length/cs); // assume constant speed in silicone, neglect time spend in bubbles
       hphi.Fill(outdir.Phi()/pi);
       hcth.Fill(cos(outdir.Theta()));
       hang.Fill(outdir.Phi()/pi,cos(outdir.Theta()));
@@ -104,10 +108,11 @@ int main(int argc, char** argv) {
     //hang.GetYaxis()->SetTitleOffset(1.2);
     hang.Draw("colz same");
     c.cd(4)->SetGrid();
-    hlen.Scale(scale);
-    hlen.SetAxisRange(0,5*NEVENTS/NBINS*scale,"Y");
-    hlen.Draw();
+    hesc.Scale(scale);
+    hesc.SetAxisRange(0,5*NEVENTS/NBINS*scale,"Y");
+    hesc.Draw();
     c.Print(Form("diffuser_z0=%.1f.png",OFFSET));
+    c.Print(Form("diffuser_z0=%.1f.pdf",OFFSET));
     c.Close();
   
     outfile.Write();
@@ -238,6 +243,7 @@ TVector3 diffuser(double& tracklen) {
     htrk.GetYaxis()->SetTitleOffset(1.4);
     htrk.Draw();
     c.Print(Form("photon_track_z0=%.1f.png",OFFSET));
+    c.Print(Form("photon_track_z0=%.1f.pdf",OFFSET));
     c.Close();
   }
 
