@@ -41,7 +41,7 @@
 #include "Xianguo.C"
 
 // Set output verbosity (kPrint, kInfo, kWarning, kError, kBreak, kSysError, kFatal)
-gErrorIgnoreLevel = kWarning;
+//gErrorIgnoreLevel = kWarning;
 
 // Include frequently used functions from 'std' (entire namespace is bad practice)
 using std::cerr;
