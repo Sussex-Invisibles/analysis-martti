@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
     int ATOM = ATOM_Z[mat];
     
     // Input/Output files
-    string fpath = ((TEST) ? "test7" : MATERIAL);
+    string fpath = ((TEST) ? "test6" : MATERIAL);
     string inroot = fpath;
     if (!TEST) inroot = inroot + "/output";
     inroot = inroot + "/AmBe_*.root";
@@ -112,6 +112,7 @@ int main(int argc, char** argv) {
     TH1D *hGamAV=NULL, *hGamAVn=NULL, *hGamFrac=NULL, *hGamFracn=NULL;
     TH2D *hGamTime=NULL, *hnCapPos=NULL, *hnCapPosZ=NULL;
     TH2I *hnCapIso=NULL;
+    TH2D *hEnergy=NULL, *hDeltaE=NULL;
     
     string outroot = fpath;
     if (!TEST) outroot = outroot + "/results";
@@ -133,6 +134,8 @@ int main(int argc, char** argv) {
       hnCapPos  = (TH2D*)outfile->Get("hnCapPos");
       hnCapPosZ = (TH2D*)outfile->Get("hnCapPosZ");
       hnCapIso  = (TH2I*)outfile->Get("hnCapIso");
+      hEnergy   = (TH2D*)outfile->Get("hEnergy");
+      hDeltaE   = (TH2D*)outfile->Get("hDeltaE");
     } else {          // if not processed, read input file & generate output
       outfile = new TFile(outroot.c_str(),"NEW");
       std::ofstream out(outlog.c_str());
@@ -156,6 +159,8 @@ int main(int argc, char** argv) {
       hnCapPos  = new TH2D("hnCapPos","Neutron capture position",200,0,100,400,-500,500);
       hnCapPosZ = new TH2D("hnCapPosZ","Neutron capture position",1000,0,100,2000,-500,500);
       hnCapIso  = new TH2I("hnCapIso","Neutron capture isotope",180,0,180,120,0,120);
+      hEnergy   = new TH2D("hEnergy","Reconstructed vs true energy",NBINS,0,2*EMAX,NBINS,0,2*EMAX);
+      hDeltaE   = new TH2D("hDeltaE","Difference vs true energy",NBINS,0,2*EMAX,NBINS,-EMAX,EMAX);
       BinLog(hGamTime->GetYaxis(), 0.04); // log axis for timing (0.04 ns - 4 ms)
       
       // Loop over all entries in file
@@ -170,6 +175,41 @@ int main(int argc, char** argv) {
         // Initialise MC for this event
         RAT::DS::MC mc;
         if (isMC) mc = ds.GetMC();  // don't initialise this for real data (crashes)
+
+        int npart = mc.GetMCParticleCount();
+        double mcEnergy = 0;
+        for (int ipart=0; ipart<npart; ipart++) {
+          mcEnergy += mc.GetMCParticle(ipart).GetKineticEnergy();
+        }
+
+        // Loop over events
+        double fitEnergy = 0;
+        for (int iEvent=0; iEvent<ds.GetEVCount(); iEvent++) {
+          RAT::DS::EV evt = ds.GetEV(iEvent);
+
+          int trig = evt.GetTrigType();
+
+          int nhits_cleaned = evt.GetNhitsCleaned();
+          if (nhits_cleaned == 0) continue;
+          //hNHits->Fill(nhits_cleaned);
+
+          string lFit = evt.GetDefaultFitName();
+          try {
+            RAT::DS::FitVertex fitVertex = evt.GetDefaultFitVertex();
+            if (fitVertex.ContainsEnergy() && fitVertex.ValidEnergy())
+              fitEnergy += fitVertex.GetEnergy();
+          } catch (RAT::DS::FitResult::NoVertexError& e) {
+            cout << lFit << " has not reconstructed a vertex. Continuing..." << endl;
+            continue;
+          } catch (std::runtime_error& e) {
+            cout << lFit << " failed for event " << iEvent << ". Continuing..." << endl;
+            continue;
+          }
+        }
+        
+        double deltaE = fitEnergy - mcEnergy;
+        hEnergy->Fill(mcEnergy,fitEnergy);
+        hDeltaE->Fill(mcEnergy,deltaE);
         
         /*
         // Loop over all MC *primary* particles
@@ -507,19 +547,39 @@ int main(int argc, char** argv) {
     int maxx = (ATOM<80) ? 2.25*ATOM : 140;
     int maxy = (ATOM<80) ? 1.50*ATOM :  90;
     c->DrawFrame(0,0,maxx,maxy,"Neutron capture isotopes;N;Z");
-    hnCapIso->Draw("colz same");
-    hnCapIso->SetMaximum(1e5);
-    int minbin = hnCapIso->ProjectionX("_px",ATOM,ATOM+1)->FindFirstBinAbove(0);
-    TArrow *arr = new TArrow(minbin-maxx/10.,ATOM+0.5,minbin-maxx/30.,ATOM+0.5,0.02,"|>");
-    arr->SetAngle(40);
-    arr->SetLineWidth(2);
-    arr->SetLineColor(2);
-    arr->SetFillColor(2);
-    arr->Draw();
+    if (hnCapIso) {
+      hnCapIso->Draw("colz same");
+      hnCapIso->SetMaximum(1e5);
+      int minbin = hnCapIso->ProjectionX("_px",ATOM,ATOM+1)->FindFirstBinAbove(0);
+      TArrow *arr = new TArrow(minbin-maxx/10.,ATOM+0.5,minbin-maxx/30.,ATOM+0.5,0.02,"|>");
+      arr->SetAngle(40);
+      arr->SetLineWidth(2);
+      arr->SetLineColor(2);
+      arr->SetFillColor(2);
+      arr->Draw();
+    }
     c->Print((imgname+"_6.png").c_str());
     c->Print((imgname+"_6.pdf").c_str());
     c->Close();
-    
+   
+    // Energy reconstruction/resolution
+    TLine *line = new TLine(0,0,2*EMAX,2*EMAX);
+    line->SetLineColor(1);
+    line->SetLineWidth(2);
+    c = new TCanvas("c","",1000,600);
+    c->Divide(2,1);
+    c->cd(1)->SetGrid();
+    c->cd(1)->DrawFrame(0,0,2*EMAX,2*EMAX,"Energy reconstruction;#Sigma E_{true} [MeV];#Sigma E_{rec} [MeV]");
+    if (hEnergy) hEnergy->Draw("colz same");
+    line->Draw();
+    c->cd(2)->SetGrid();
+    c->cd(2)->DrawFrame(0,-EMAX,2*EMAX,EMAX,"Energy resolution;#Sigma E_{true} [MeV];#Sigma E_{rec} - #Sigma E_{true} [MeV]");
+    if (hDeltaE) hDeltaE->Draw("colz same");
+    line->DrawLine(0,0,2*EMAX,0);
+    c->Print((imgname+"_7.png").c_str());
+    c->Print((imgname+"_7.pdf").c_str());
+    c->Close();
+
     // Free memory
     if (hPro) delete hPro;
     if (hNeu) delete hNeu;
@@ -528,6 +588,8 @@ int main(int argc, char** argv) {
     if (hOth) delete hOth;
     if (hGamAV) delete hGamAV;
     if (hGamAVn) delete hGamAVn;
+    if (hEnergy) delete hEnergy;
+    if (hDeltaE) delete hDeltaE;
     if (leg) delete leg;
     if (c) delete c;
     
