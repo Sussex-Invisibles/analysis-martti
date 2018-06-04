@@ -687,7 +687,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hwdth->Draw();
   hwdth->GetXaxis()->SetTitleOffset(1.2);
   hwdth->GetYaxis()->SetTitleOffset(1.5);
-  hwdth->GetYaxis()->SetRangeUser(3.8,5.2);
+  hwdth->GetYaxis()->SetRangeUser(3.2,5.2);
   
   // *****
   // Mean intensities and number of PMTs in angular segment
@@ -698,7 +698,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hpeak->Draw();
   hpeak->GetXaxis()->SetTitleOffset(1.2);
   hpeak->GetYaxis()->SetTitleOffset(1.7);
-  hpeak->GetYaxis()->SetRangeUser(0, 900);
+  hpeak->GetYaxis()->SetRangeUser(0, 1200);
   // PMTs in that bin
   hpmtseg->SetLineWidth(2);
   hpmtseg->SetLineColor(2);
@@ -730,7 +730,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   hresid->Draw();
   hresid->GetXaxis()->SetTitleOffset(1.2);
   hresid->GetYaxis()->SetTitleOffset(1.5);
-  hresid->GetYaxis()->SetRangeUser(0,500);
+  hresid->GetYaxis()->SetRangeUser(0,700);
   
   // *****
   /*
