@@ -22,7 +22,7 @@ const double R = flaskdiam/2.; // radius
 const double na = 1.0; // refractive index (air)
 const double ns = 1.4; // refractive index (SilGel)
 const double ng = 1.5; // refractive index (glass)
-const double lambda = 1.; // optical property (depends on density)
+const double lambda = 1.0; // optical property (depends on density)
 
 // Quartz rod
 const double rodlen = 200.; // length [mm]
@@ -94,22 +94,26 @@ int main(int argc, char** argv) {
     c.Divide(2,2);
     c.cd(1)->SetGrid();
     hphi.Scale(scale);
-    hphi.SetAxisRange(0,1.25*NEVENTS/NBINS*scale,"Y");
+    hphi.SetMinimum(0);
+    //hphi.SetAxisRange(0,1.25*NEVENTS/NBINS*scale,"Y");
     //hphi.GetYaxis()->SetTitleOffset(1.2);
     hphi.Draw();
     c.cd(2)->SetGrid();
     hcth.Scale(scale);
-    hcth.SetAxisRange(0,1.25*NEVENTS/NBINS*scale,"Y");
+    hcth.SetMinimum(0);
+    //hcth.SetAxisRange(0,1.25*NEVENTS/NBINS*scale,"Y");
     //hcth.GetYaxis()->SetTitleOffset(1.2);
     hcth.Draw();
     c.cd(3)->SetGrid();
     hang.Draw("colz");
-    hang.SetAxisRange(0,5*NEVENTS/NBINS/NBINS,"Z");
+    hang.SetMinimum(0);
+    //hang.SetAxisRange(0,5*NEVENTS/NBINS/NBINS,"Z");
     //hang.GetYaxis()->SetTitleOffset(1.2);
     hang.Draw("colz same");
     c.cd(4)->SetGrid();
     hesc.Scale(scale);
-    hesc.SetAxisRange(0,5*NEVENTS/NBINS*scale,"Y");
+    hesc.SetMinimum(0);
+    //hesc.SetAxisRange(0,5*NEVENTS/NBINS*scale,"Y");
     hesc.Draw();
     c.Print(Form("diffuser_z0=%.1f.png",OFFSET));
     c.Print(Form("diffuser_z0=%.1f.pdf",OFFSET));
