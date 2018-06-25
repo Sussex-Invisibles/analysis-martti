@@ -17,21 +17,21 @@ const double I0 = 1.; // laser intensity, normalised for now
 const double NA = 0.2; // numerical aperture for fibre (from R. Ford's thesis)
 
 // Diffuser ball - TODO REVIEW ALL PARAMETERS
-const double flaskdiam = 100.; // diameter of the diffuser flask [mm]
+const double flaskdiam = 106.; // diameter of the diffuser flask [mm]
 const double R = flaskdiam/2.; // radius
 const double na = 1.0; // refractive index (air)
-const double ns = 1.4; // refractive index (SilGel)
-const double ng = 1.5; // refractive index (glass)
-const double lambda = 1.0; // optical property (depends on density)
+const double ns = 1.404; // refractive index (SilGel)
+const double ng = 1.530; // refractive index (glass)
+const double lambda = 2.70; // optical property (depends on density)
 
 // Quartz rod
 const double rodlen = 200.; // length [mm]
 const double roddiam = 1.; // diameter [mm]
-const double OFFSETS[] = {0, 2.5, 5}; // injection point offsets
+const double OFFSETS[] = {0.0, 2.5, 5.0, 7.5, 10.}; // injection point offsets
 double OFFSET;
 
 // Other
-const double c0 = 300; // speed of light in vacuum [mm/ns]
+const double c0 = 299.792458; // speed of light in vacuum [mm/ns]
 const double cs = c0/ns; // speed of light in SilGel [mm/ns]
 
 // *****************************************************************************
