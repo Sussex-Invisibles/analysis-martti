@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
   const int NFIBRES = 5;
   const string FIBRES[NFIBRES] = {"FT010A","FT033A","FT048A","FT079A","FT090A"};
   
-  const int NSETS = 3;
+  const int NSETS = 4;
   TGraph *g[NSETS][NFIBRES] = {{NULL}};
 
   string output = "output.root";
@@ -86,6 +86,7 @@ int main(int argc, char** argv) {
         set = 0;
         if (run > 111000) set = 1;
         if (run > 111800) set = 2;
+        if (run > 115000) set = 3;
         
         // Determine fibre index
         fib = 0;
@@ -129,6 +130,7 @@ int main(int argc, char** argv) {
   
   // Plot graphs
   int xmin[NFIBRES] = {600,1100,500,800,700};
+  int col[NSETS] = {2,3,4,92};
   TCanvas *c = new TCanvas("c","",1500,1000);
   c->Divide(3,2);
   TVirtualPad *p;
@@ -143,15 +145,16 @@ int main(int argc, char** argv) {
       if (!g[iset][ifib]) continue;
       if (g[iset][ifib]->GetN()==0) continue;
       g[iset][ifib]->SetMarkerStyle(7);
-      g[iset][ifib]->SetMarkerColor(iset+2);
+      g[iset][ifib]->SetMarkerColor(col[iset]);
       g[iset][ifib]->Draw("P same");
     }
   }
   p = c->cd(6);
   TLegend l(0.1,0.1,0.9,0.9);
-  l.AddEntry(g[0][0],"23 March 2018","p");
-  l.AddEntry(g[1][0],"25 March 2018","p");
-  l.AddEntry(g[2][0],"17 April 2018","p");
+  if(g[0][0]) l.AddEntry(g[0][0],"23 March 2018","p");
+  if(g[1][0]) l.AddEntry(g[1][0],"25 March 2018","p");
+  if(g[2][0]) l.AddEntry(g[2][0],"17 April 2018","p");
+  if(g[3][0]) l.AddEntry(g[3][0],"10 July 2018","p");
   l.Draw();
   c->Print("stability_check.pdf");
   c->Print("stability_check.png");
@@ -178,6 +181,9 @@ void get_subrun_nhit(int run, int *srevts, int *srhits, bool isMC=false, bool TE
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
     fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+    f.open(fname.c_str());
+    if (f.good()) break;
+    fname = Form("%s/Calibration_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
     f.open(fname.c_str());
     if (f.good()) break;
   }
