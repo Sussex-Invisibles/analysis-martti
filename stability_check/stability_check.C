@@ -29,6 +29,7 @@ int main(int argc, char** argv) {
   const int NSETS = 4;
   TGraph *g[NSETS][NFIBRES] = {{NULL}};
 
+  /*
   string output = "output.root";
   ifstream out(output.c_str());
   TFile *outfile = NULL;
@@ -36,6 +37,7 @@ int main(int argc, char** argv) {
   if (out) extracted = true;
 
   if (extracted) {
+  
     cout << "Extracting from file " << output << "..." << endl;  
     outfile = new TFile(output.c_str(),"READ");
     for (int iset=0; iset<NSETS; iset++) {
@@ -55,15 +57,17 @@ int main(int argc, char** argv) {
         g[iset][ifib] = new TGraph();
       }
     }
+    */
 
     // Loop over all fibres in list
     string input1 = "PIN_readings_auto.txt";
     ifstream in1(input1.c_str());
     if (!in1) { cerr<<"Failed to open "<<input1<<endl; exit(1); }
     //TH2F *nhits = new TH2F("nhits","NHit/event vs PIN reading",100,0,1e4,100,0,100);
-    string line, fibre;
+    FILE *fout = NULL;
+    string line, fibre, out;
     int set, fib;
-    int run, subrun, pin;
+    int run, subrun, ipw, pin;
     float rms;
     float subrunpin[MAXSUBRUNS]={0}, subrunrms[MAXSUBRUNS]={0}, avgnhit[MAXSUBRUNS]={0};
     int subrunevs[MAXSUBRUNS]={0}, subrunhits[MAXSUBRUNS]={0};
@@ -73,11 +77,12 @@ int main(int argc, char** argv) {
     }
     int lastrun = 0;
     while (true) {
-      in1 >> fibre >> run >> subrun >> pin >> rms;
+      in1 >> fibre >> run >> subrun >> ipw >> pin >> rms;
       if (!in1.good()) break;
       if (TEST && lastrun!=0 && run!=lastrun) continue; // only want one run
       subrunpin[subrun] = pin;
       subrunrms[subrun] = rms;
+      out = Form("output/%d.out",run);
 
       if (run != lastrun) { // only do this once per run
         lastrun = run;
@@ -104,8 +109,13 @@ int main(int argc, char** argv) {
 
       if(subrunevs[subrun]==0) avgnhit[subrun] = 0;
       else avgnhit[subrun] = (float)subrunhits[subrun]/subrunevs[subrun];
-      //printf("Set %d, fibre %d (%s), subrun %d, PIN %.2f, %d events with an average %.2f nhits\n",set+1,fib+1,FIBRES[fib].c_str(),subrun,subrunpin[subrun],subrunevs[subrun],avgnhit[subrun]);
-      g[set][fib]->SetPoint(nsubruns[set][fib],subrunpin[subrun],avgnhit[subrun]);
+      //g[set][fib]->SetPoint(nsubruns[set][fib],subrunpin[subrun],avgnhit[subrun]);
+      
+      // Update output file
+      fout = fopen(out.c_str(),"a");
+      fprintf(fout,"%6s %6d %1d %5d %5d %6.2f %6.2f\n",fibre.c_str(),run,subrun,ipw,(int)subrunpin[subrun],subrunrms[subrun],avgnhit[subrun]);
+      fclose(fout);
+      
       nsubruns[set][fib]++;
     }
     printf("Ran over %d runs.\n",nruns);
@@ -114,15 +124,18 @@ int main(int argc, char** argv) {
       return 1; 
     }
   
+    /*
     for (int iset=0; iset<NSETS; iset++) {
       for (int ifib=0; ifib<NFIBRES; ifib++) {
         if (g[iset][ifib]->GetN()==0) continue;
         g[iset][ifib]->Write(Form("g_%d_%d",iset,ifib));
       }
     }
+    */
 
-  }
+  //}
   
+  /*
   // Plot options
   gErrorIgnoreLevel = kWarning;
   gStyle->SetTitleOffset(1.3,"x");
@@ -161,8 +174,10 @@ int main(int argc, char** argv) {
   c->Close();
 
   // End of program
-  outfile->Close();
+  //outfile->Close();
   if (c) delete c;
+  */
+  
   return 0;
 }
 
@@ -206,6 +221,11 @@ void get_subrun_nhit(int run, int *srevts, int *srhits, bool isMC=false, bool TE
     printf("OK. Extracting data for run %d.\n",run);
   }
 
+  // Aggro offline mode
+  RAT::DB *db = RAT::DB::Get();
+  db->SetAirplaneModeStatus(true);
+  db->SetDefaultPlaneLockStatus(false);
+
   // Initialise RAT
   RAT::DU::DSReader dsreader(fname);
   const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
@@ -220,6 +240,12 @@ void get_subrun_nhit(int run, int *srevts, int *srhits, bool isMC=false, bool TE
     for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
       const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
       int subrunid = ds.GetSubRunID();             // sub run this event belongs to
+
+      // Print progress
+      if (iEntry % int(dsreader.GetEntryCount()/100.) == 0) {
+        printProgress(iEntry, dsreader.GetEntryCount());
+      }
+      
       // Loop over triggered events in each entry
       for(int iEv=0; iEv<ds.GetEVCount(); iEv++) { // mostly 1 event per entry
         const RAT::DS::EV& ev = ds.GetEV(iEv);
