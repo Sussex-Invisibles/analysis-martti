@@ -112,6 +112,7 @@ int main(int argc, char** argv) {
     TH1D *hGamAV=NULL, *hGamAVn=NULL, *hGamFrac=NULL, *hGamFracn=NULL;
     TH2D *hGamTime=NULL, *hnCapPos=NULL, *hnCapPosZ=NULL;
     TH2I *hnCapIso=NULL;
+    TH1I *hNHit=NULL;
     TH2D *hEnergy=NULL, *hDeltaE=NULL;
     
     string outroot = fpath;
@@ -134,6 +135,7 @@ int main(int argc, char** argv) {
       hnCapPos  = (TH2D*)outfile->Get("hnCapPos");
       hnCapPosZ = (TH2D*)outfile->Get("hnCapPosZ");
       hnCapIso  = (TH2I*)outfile->Get("hnCapIso");
+      hNHit     = (TH1I*)outfile->Get("hNHit");
       hEnergy   = (TH2D*)outfile->Get("hEnergy");
       hDeltaE   = (TH2D*)outfile->Get("hDeltaE");
     } else {          // if not processed, read input file & generate output
@@ -159,6 +161,7 @@ int main(int argc, char** argv) {
       hnCapPos  = new TH2D("hnCapPos","Neutron capture position",200,0,100,400,-500,500);
       hnCapPosZ = new TH2D("hnCapPosZ","Neutron capture position",1000,0,100,2000,-500,500);
       hnCapIso  = new TH2I("hnCapIso","Neutron capture isotope",180,0,180,120,0,120);
+      hNHit     = new TH1I("hNHit","Cleaned NHit",NBINS,0,9600);
       hEnergy   = new TH2D("hEnergy","Reconstructed vs true energy",NBINS,0,2*EMAX,NBINS,0,2*EMAX);
       hDeltaE   = new TH2D("hDeltaE","Difference vs true energy",NBINS,0,2*EMAX,NBINS,-EMAX,EMAX);
       BinLog(hGamTime->GetYaxis(), 0.04); // log axis for timing (0.04 ns - 4 ms)
@@ -191,7 +194,7 @@ int main(int argc, char** argv) {
 
           int nhits_cleaned = evt.GetNhitsCleaned();
           if (nhits_cleaned == 0) continue;
-          //hNHits->Fill(nhits_cleaned);
+          hNHit->Fill(nhits_cleaned);
 
           string lFit = evt.GetDefaultFitName();
           try {
@@ -563,21 +566,33 @@ int main(int argc, char** argv) {
     c->Close();
    
     // Energy reconstruction/resolution
-    TLine *line = new TLine(0,0,2*EMAX,2*EMAX);
+    TLine *line = new TLine(0,0,4/3.*EMAX,4/3.*EMAX);
     line->SetLineColor(1);
     line->SetLineWidth(2);
     c = new TCanvas("c","",1000,600);
     c->Divide(2,1);
     c->cd(1)->SetGrid();
-    c->cd(1)->DrawFrame(0,0,2*EMAX,2*EMAX,"Energy reconstruction;#Sigma E_{true} [MeV];#Sigma E_{rec} [MeV]");
+    c->cd(1)->DrawFrame(0,0,4/3.*EMAX,2*EMAX,"Energy reconstruction;#Sigma E_{true} [MeV];#Sigma E_{rec} [MeV]");
     if (hEnergy) hEnergy->Draw("colz same");
     line->Draw();
     c->cd(2)->SetGrid();
-    c->cd(2)->DrawFrame(0,-EMAX,2*EMAX,EMAX,"Energy resolution;#Sigma E_{true} [MeV];#Sigma E_{rec} - #Sigma E_{true} [MeV]");
+    c->cd(2)->DrawFrame(0,-EMAX,4/3.*EMAX,EMAX,"Energy resolution;#Sigma E_{true} [MeV];#Sigma E_{rec} - #Sigma E_{true} [MeV]");
     if (hDeltaE) hDeltaE->Draw("colz same");
-    line->DrawLine(0,0,2*EMAX,0);
+    line->DrawLine(0,0,4/3.*EMAX,0);
     c->Print((imgname+"_7.png").c_str());
     c->Print((imgname+"_7.pdf").c_str());
+    c->Close();
+     
+
+    c = new TCanvas("c","",800,600);
+    c->SetGrid();
+    c->SetLogy();
+    c->DrawFrame(0,0.5,9600,2*hNHit->GetMaximum(),"Detector response;NHits (cleaned);Events");
+    hNHit->SetLineColor(2);
+    hNHit->SetLineWidth(2);
+    hNHit->Draw("same");
+    c->Print((imgname+"_8.png").c_str());
+    c->Print((imgname+"_8.pdf").c_str());
     c->Close();
 
     // Free memory
