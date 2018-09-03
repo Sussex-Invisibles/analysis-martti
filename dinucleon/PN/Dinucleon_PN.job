@@ -1,0 +1,14 @@
+#$ -S /bin/bash
+#$ -cwd
+#$ -j y
+#$ -o /home/m/mn/mn372/Software/SNOP/work/analysis/dinucleon/PN/logs/bash
+
+cd /home/m/mn/mn372/Software/SNOP/work/analysis/dinucleon/PN
+echo "Running job script #${SGE_TASK_ID}"
+cd logs/rat_logs/
+source /home/m/mn/mn372/Software/SNOP/env_dinucleon.sh
+echo "Using RAT installation ${RATROOT}"
+rat $RATROOT/mac/run-by-run-production/water/PN_decay.mac -n 105000 -N 10000 -o /home/m/mn/mn372/Software/SNOP/work/analysis/dinucleon/PN/output/PN_decay_${SGE_TASK_ID}.root
+echo "Finished job script #${SGE_TASK_ID}"
+cd /home/m/mn/mn372/Software/SNOP/work/analysis/dinucleon/PN
+
