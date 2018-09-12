@@ -22,7 +22,7 @@ const double R = flaskdiam/2.; // radius
 const double na = 1.0; // refractive index (air)
 const double ns = 1.404; // refractive index (SilGel)
 const double ng = 1.530; // refractive index (glass)
-const double lambda = 2.70; // optical property (depends on density)
+const double lambda = 2.7; // mean free path [mm]
 
 // Quartz rod
 const double rodlen = 200.; // length [mm]
@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
     string tphi = Form("hphi_z0=%.1f",OFFSET);
     string tcth = Form("hcth_z0=%.1f",OFFSET);
     string tang = Form("hang_z0=%.1f",OFFSET);
-    TH1D hesc(tlen.c_str(),"Escape time from diffuser;t [ns];Events [#times 10^{3}]",NBINS,0,2500/cs);
+    TH1D hesc(tlen.c_str(),"Escape time from diffuser;t [ns];Events [#times 10^{3}]",10*NBINS,0,10.);
     TH1D hphi(tphi.c_str(),Form("Azimuthal distribution (z_{0} = %.1f mm);#phi [#pi];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
     TH1D hcth(tcth.c_str(),Form("Polar distribution (z_{0} = %.1f mm);cos(#theta) [ ];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
     TH2D hang(tang.c_str(),"Angular distribution of diffuser;#phi [#pi];cos(#theta) [ ]",NBINS/2,-1,1,NBINS/2,-1,1);
@@ -118,7 +118,9 @@ int main(int argc, char** argv) {
     c.Print(Form("diffuser_z0=%.1f.png",OFFSET));
     c.Print(Form("diffuser_z0=%.1f.pdf",OFFSET));
     c.Close();
-  
+ 
+    cout << "Time spread is " << getFWHM(&hesc) << " ns (FWHM)." << endl;
+
     outfile.Write();
   }
   outfile.Close();
