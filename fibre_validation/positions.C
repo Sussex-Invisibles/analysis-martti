@@ -71,9 +71,12 @@ void positions(string fibre, int run, bool isMC=false, bool TEST=false) {
   if(!TEST) printf("*****\n");
   printf("Checking files for run %d... ", run);
   string fpath = (RUN_CLUSTER) ? "/lustre/scratch/epp/neutrino/snoplus/TELLIE_PCA_RUNS_PROCESSED" : "/home/nirkko/Desktop/fibre_validation";
-  string fname = Form("%s/Analysis_r0000%d_s000_p000.root",fpath.c_str(),run);
+  string fname1 = Form("%s/Analysis_r0000%d_s000_p000.root",fpath.c_str(),run);
+  string fname2 = Form("%s/Calibration_r0000%d_s000_p000.root",fpath.c_str(),run);
   string out   = Form("./output/PCA_%s.pdf",fibre.c_str());
-  ifstream f(fname.c_str());
+  ifstream f(fname1.c_str());
+  if (!f.good()) f = fopen(fname2.c_str());
+  ifstream f2(fname2.c_str());
   ifstream g(out.c_str());
   if (!TEST && g.good()) {   // file downloaded and processed
     printf("already processed! Skipping fibre %s.\n",fibre.c_str());
