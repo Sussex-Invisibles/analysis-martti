@@ -42,7 +42,7 @@ float crates(string, int, bool);
 int main(int argc, char** argv) {
 
   // Crate causing problems
-  const int BAD_CRATE = 4;
+  const int BAD_CRATE = 1;
   
   // Monte-Carlo simulation
   const int IS_MC = 1;
