@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
     string tang = Form("hang_z0=%.1f",OFFSET);
     TH1D hesc(tlen.c_str(),"Escape time from diffuser;t [ns];Events [#times 10^{3}]",NBINS,0,2500/cs);
     TH1D hphi(tphi.c_str(),Form("Azimuthal distribution (z_{0} = %.1f mm);#phi [#pi];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
-    TH1D hcth(tcth.c_str(),Form("Polar distribution (z_{0} = %.1f mm);cos(#theta) [#pi];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
+    TH1D hcth(tcth.c_str(),Form("Polar distribution (z_{0} = %.1f mm);cos(#theta) [ ];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
     TH2D hang(tang.c_str(),"Angular distribution of diffuser;#phi [#pi];cos(#theta) [ ]",NBINS/2,-1,1,NBINS/2,-1,1);
     
     // Generate events
