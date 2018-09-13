@@ -8,13 +8,14 @@
 #include "../HelperFunc.C"
 
 // Global constants
-const int VERBOSE = 0; // verbosity (1=lots)
+const int VERBOSE = 1; // verbosity (1=lots)
 const int NEVENTS = 1e6; // number of photons
 const int NBINS = 100; // number of bins
 
 // Laser
 const double I0 = 1.; // laser intensity, normalised for now
 const double NA = 0.2; // numerical aperture for fibre (from R. Ford's thesis)
+const double lambda = 4.05e-5; // wavelength [cm]
 
 // Diffuser ball - TODO REVIEW ALL PARAMETERS
 const double flaskdiam = 100.; // diameter of the diffuser flask [mm]
@@ -22,7 +23,13 @@ const double R = flaskdiam/2.; // radius
 const double na = 1.0; // refractive index (air)
 const double ns = 1.4; // refractive index (SilGel)
 const double ng = 1.5; // refractive index (glass)
-const double lambda = 1.0; // optical property (depends on density)
+
+// Glass bubbles
+const double r_bub = 2.e-3; // average radius of hollow glass microsphere [cm]
+const double d_bub = 1.e-4; // approx. wall thickness of hollow sphere [cm] - TODO get reference
+const double rho_bub = 2.23; // density of borosilicate glass [g/cm³] - TODO get reference
+const double con_bub = 4.84e-3; // density of bubbles in silgel [g/cm³] - TODO use optimum value ~1.57 mg/mL
+const double scatlen = 10*GetScatteringLength(con_bub); // mean free path [mm]
 
 // Quartz rod
 const double rodlen = 200.; // length [mm]
@@ -56,6 +63,9 @@ int event;
 // Main program
 int main(int argc, char** argv) {
 
+  // Set output verbosity (kPrint, kInfo, kWarning, kError, kBreak, kSysError, kFatal)
+  gErrorIgnoreLevel = kWarning;
+  
   // Initialisation
   gen->SetSeed(0);
   aperture->SetParameter(0,NA);
@@ -444,3 +454,28 @@ TVector3 reflect_or_refract(TVector3& pos, TVector3& dir, double& impact, bool& 
   return scatdir.Unit();
 }
 
+// *****************************************************************************
+// Get scattering length from theory, given a bubble mass density
+double GetScatteringLength(double density) {
+  // Scattering cross section of glass microspheres
+  // https://en.wikipedia.org/wiki/Anomalous_diffraction_theory
+  // https://www.gfdl.noaa.gov/wp-content/uploads/files/user_files/pag/lecture2008/lecture3.pdf
+  double n = ns/na; // refractive index (outer vs inner)
+  double p = 4.*pi*r*(n-1.)/lambda; // phase delay of wave through sphere
+  double Q = 2. - 4./p*sin(p) + 4./(p*p)*(1.-cos(p)); // scattering efficiency (same as extinction efficiency)
+  double sigma = pi*r_bub*r_bub*Q; // scattering cross section [cm²]
+  if (VERBOSE) cout << "Estimated scattering cross section: " << sigma << " cm^2" << endl;
+  
+  // Number density of glass microspheres (very approximate)
+  double V = 4.*pi/3.*(pow(r_bub,3) - pow(r_bub-d_bub,3)); // volume of glass [cm³]
+  double m = rho_bub*V; // mass of hollow sphere [g]
+  double N = density/m; // number concentration [cm⁻³]
+  if (VERBOSE) cout << "Estimated number concentration of bubbles: " << N << "/cm^3" << endl;
+  
+  // Scattering parameters
+  double eps = N*sigma; // scattering coefficient [cm⁻¹]
+  double L = 1./eps; // scattering length [cm]
+  if (VERBOSE) cout << "Estimated scattering length: " << L << " cm" << endl;
+
+  return L;
+}
