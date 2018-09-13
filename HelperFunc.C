@@ -14,6 +14,7 @@
 #include <TCanvas.h>
 #include <TF2.h>
 #include <TEllipse.h>
+#include <TError.h>
 #include <TFile.h>
 #include <TGaxis.h>
 #include <TGraph2D.h>
@@ -39,9 +40,6 @@
 
 // Helpful functions
 #include "Xianguo.C"
-
-// Set output verbosity (kPrint, kInfo, kWarning, kError, kBreak, kSysError, kFatal)
-//gErrorIgnoreLevel = kWarning;
 
 // Include frequently used functions from 'std' (entire namespace is bad practice)
 using std::cerr;
