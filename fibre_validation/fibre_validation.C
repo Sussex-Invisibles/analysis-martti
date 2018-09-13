@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
   }
   
   // Loop over all fibres in list
-  string input = "../pca_runs/TELLIE_PCA_Slave.txt";
+  string input = "../pca_runs/TELLIE_PCA_Jun2018.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;
@@ -107,6 +107,9 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   } else {
     for (int pass=3;pass>=0;pass--) {
       fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+      ff.open(fname.c_str());
+      if (ff.good()) break;
+      fname = Form("%s/Calibration_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
       ff.open(fname.c_str());
       if (ff.good()) break;
     }

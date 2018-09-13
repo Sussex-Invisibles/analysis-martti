@@ -18,27 +18,26 @@ const double NA = 0.2; // numerical aperture for fibre (from R. Ford's thesis)
 const double lambda = 4.05e-5; // wavelength [cm]
 
 // Diffuser ball - TODO REVIEW ALL PARAMETERS
-const double flaskdiam = 100.; // diameter of the diffuser flask [mm]
+const double flaskdiam = 106.; // diameter of the diffuser flask [mm]
 const double R = flaskdiam/2.; // radius
-const double na = 1.0; // refractive index (air)
-const double ns = 1.4; // refractive index (SilGel)
-const double ng = 1.5; // refractive index (glass)
+const double na = 1.000; // refractive index (air)
+const double ns = 1.404; // refractive index (SilGel)
+const double ng = 1.530; // refractive index (glass)
 
 // Glass bubbles
 const double r_bub = 2.e-3; // average radius of hollow glass microsphere [cm]
 const double d_bub = 1.e-4; // approx. wall thickness of hollow sphere [cm] - TODO get reference
 const double rho_bub = 2.23; // density of borosilicate glass [g/cm³] - TODO get reference
 const double con_bub = 4.84e-3; // density of bubbles in silgel [g/cm³] - TODO use optimum value ~1.57 mg/mL
-const double scatlen = 10*GetScatteringLength(con_bub); // mean free path [mm]
 
 // Quartz rod
 const double rodlen = 200.; // length [mm]
 const double roddiam = 1.; // diameter [mm]
-const double OFFSETS[] = {0, 2.5, 5}; // injection point offsets
+const double OFFSETS[] = {0.0, 2.5, 5.0, 7.5, 10.}; // injection point offsets
 double OFFSET;
 
 // Other
-const double c0 = 300; // speed of light in vacuum [mm/ns]
+const double c0 = 299.792458; // speed of light in vacuum [mm/ns]
 const double cs = c0/ns; // speed of light in SilGel [mm/ns]
 
 // *****************************************************************************
@@ -49,6 +48,7 @@ double reflection_prob(const double& n1, const double& n2, const double &impact)
 TVector3 propagate(TVector3&, TVector3&, double& distance);
 TVector3 scatter(TVector3&, TVector3&, double& impact);
 TVector3 reflect_or_refract(TVector3&, TVector3&, double& impact, bool& exitflask);
+double GetScatteringLength(double density);
 
 // Other global objects (TODO - BAD PRACTICE)
 TRandom3* gen = new TRandom3();
@@ -83,9 +83,9 @@ int main(int argc, char** argv) {
     string tphi = Form("hphi_z0=%.1f",OFFSET);
     string tcth = Form("hcth_z0=%.1f",OFFSET);
     string tang = Form("hang_z0=%.1f",OFFSET);
-    TH1D hesc(tlen.c_str(),"Escape time from diffuser;t [ns];Events [#times 10^{3}]",NBINS,0,2500/cs);
+    TH1D hesc(tlen.c_str(),"Escape time from diffuser;t [ns];Events [#times 10^{3}]",10*NBINS,0,10.);
     TH1D hphi(tphi.c_str(),Form("Azimuthal distribution (z_{0} = %.1f mm);#phi [#pi];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
-    TH1D hcth(tcth.c_str(),Form("Polar distribution (z_{0} = %.1f mm);cos(#theta) [#pi];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
+    TH1D hcth(tcth.c_str(),Form("Polar distribution (z_{0} = %.1f mm);cos(#theta) [ ];Events [#times 10^{3}]",OFFSET),NBINS,-1,1);
     TH2D hang(tang.c_str(),"Angular distribution of diffuser;#phi [#pi];cos(#theta) [ ]",NBINS/2,-1,1,NBINS/2,-1,1);
     
     // Generate events
@@ -128,7 +128,9 @@ int main(int argc, char** argv) {
     c.Print(Form("diffuser_z0=%.1f.png",OFFSET));
     c.Print(Form("diffuser_z0=%.1f.pdf",OFFSET));
     c.Close();
-  
+ 
+    cout << "Time spread is " << getFWHM(&hesc) << " ns (FWHM)." << endl;
+
     outfile.Write();
   }
   outfile.Close();
@@ -141,6 +143,9 @@ int main(int argc, char** argv) {
 // Inputs: none
 // Output: escape direction of photon, seen from 6m sphere
 TVector3 diffuser(double& tracklen) {
+
+  // Scattering length of photons in diffuser medium
+  double scatlen = 10*GetScatteringLength(con_bub); // mean free path [mm]
   
   // Photon position at injection point
   pos = e1;
@@ -158,7 +163,7 @@ TVector3 diffuser(double& tracklen) {
   // Intensity dropoff
   //TF1* inten = new TF1("intensity","[0]*exp(-x/[1])",0,R/10);
   //inten->SetParameter(0,I0);
-  //inten->SetParameter(1,lambda);
+  //inten->SetParameter(1,scatlen);
   
   // Photon tracking
   int step = 0;
@@ -177,7 +182,7 @@ TVector3 diffuser(double& tracklen) {
   while (!exitflask) {
     if (VERBOSE) printf("position (%8.3f %8.3f %8.3f), direction = (%8.3f %8.3f %8.3f)\n",pos.X(),pos.Y(),pos.Z(),dir.X(),dir.Y(),dir.Z());
     double y = gen->Rndm();
-    double dsel = -lambda*log(y);  // randomly selected distance in diffuser [mm]
+    double dsel = -scatlen*log(y);  // randomly selected distance in diffuser [mm]
     double dwall = distance_to_wall(pos,dir); // distance to flask wall [mm]
     double impact = sqrt(y);
     if (dsel < dwall) {

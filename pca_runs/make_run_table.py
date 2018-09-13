@@ -35,7 +35,8 @@ with open(fname) as f:
         pinrms=0.
         for sr in range(0,39):
             #if num == 101852: continue
-            pinval += subRunInfo[sr]['pin_value'].getInteger()
+            try: pinval += subRunInfo[sr]['pin_value'].getInteger()
+            except: pinval += subRunInfo[sr]['pin_value'].getReal()
             try: pinrms += subRunInfo[sr]['pin_rms'].getReal()
             except: pinrms += subRunInfo[sr]['pin_rms'].getInteger()
         pinval /= 40.

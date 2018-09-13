@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
   histos[3] = new TH2D("angle","",NBINS,-1,1,NBINS,-MAXOFFSET,MAXOFFSET);
 
   // Loop over all fibres in list
-  string input = "../pca_runs/TELLIE_PCA_Slave.txt";
+  string input = "../pca_runs/TELLIE_PCA_Jun2018.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;

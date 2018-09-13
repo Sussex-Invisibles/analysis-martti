@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
   const int TEST = (RUN_CLUSTER) ? 0 : 102157;
 
   // Initialise input file
-  string input = "../pca_runs/TELLIE_PCA_Slave.txt";
+  string input = "../pca_runs/TELLIE_PCA_Jun2018.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line;
@@ -104,6 +104,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
     fname = Form("%s/Analysis_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+    f.open(fname.c_str());
+    if (f.good()) break;
+    fname = Form("%s/Calibration_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
     f.open(fname.c_str());
     if (f.good()) break;
   }
@@ -453,7 +456,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   }
 
   // TELLIE fibre/trigger delays & Mark's PCA offsets
-  string delayfile = "TELLIE_delays_Slave.txt";
+  string delayfile = "TELLIE_delays_Jun2018.txt";
   ifstream del(delayfile.c_str());
   if (!del) { cerr<<"ERROR - Failed to open "<<delayfile<<endl; exit(1); }
   int num, triggerDelay;
