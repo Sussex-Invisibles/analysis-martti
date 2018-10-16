@@ -113,6 +113,7 @@ int main(int argc, char** argv) {
     TH2D *hGamTime=NULL, *hnCapPos=NULL, *hnCapPosZ=NULL;
     TH2I *hnCapIso=NULL;
     TH1I *hNHit=NULL;
+    TH2D *hNHitTime=NULL;
     TH2D *hEnergy=NULL, *hDeltaE=NULL;
     
     string outroot = fpath;
@@ -136,6 +137,7 @@ int main(int argc, char** argv) {
       hnCapPosZ = (TH2D*)outfile->Get("hnCapPosZ");
       hnCapIso  = (TH2I*)outfile->Get("hnCapIso");
       hNHit     = (TH1I*)outfile->Get("hNHit");
+      hNHitTime = (TH2D*)outfile->Get("hNHitTime");
       hEnergy   = (TH2D*)outfile->Get("hEnergy");
       hDeltaE   = (TH2D*)outfile->Get("hDeltaE");
     } else {          // if not processed, read input file & generate output
@@ -162,6 +164,7 @@ int main(int argc, char** argv) {
       hnCapPosZ = new TH2D("hnCapPosZ","Neutron capture position",1000,0,100,2000,-500,500);
       hnCapIso  = new TH2I("hnCapIso","Neutron capture isotope",180,0,180,120,0,120);
       hNHit     = new TH1I("hNHit","Cleaned NHit",NBINS,0,9600);
+      hNHitTime = new TH2D("hNHitTime","Event time vs cleaned NHit",2*NBINS,0,9600,4*NBINS,0,480);
       hEnergy   = new TH2D("hEnergy","Reconstructed vs true energy",NBINS,0,2*EMAX,NBINS,0,2*EMAX);
       hDeltaE   = new TH2D("hDeltaE","Difference vs true energy",NBINS,0,2*EMAX,NBINS,-EMAX,EMAX);
       BinLog(hGamTime->GetYaxis(), 0.04); // log axis for timing (0.04 ns - 4 ms)
@@ -191,6 +194,7 @@ int main(int argc, char** argv) {
           RAT::DS::EV evt = ds.GetEV(iEvent);
 
           int trig = evt.GetTrigType();
+          double evt_time = -999;
 
           int nhits_cleaned = evt.GetNhitsCleaned();
           if (nhits_cleaned == 0) continue;
@@ -199,8 +203,10 @@ int main(int argc, char** argv) {
           string lFit = evt.GetDefaultFitName();
           try {
             RAT::DS::FitVertex fitVertex = evt.GetDefaultFitVertex();
-            if (fitVertex.ContainsEnergy() && fitVertex.ValidEnergy())
+            if (fitVertex.ContainsEnergy() && fitVertex.ValidEnergy()) {
               fitEnergy += fitVertex.GetEnergy();
+              evt_time = fitVertex.GetTime();
+            }
           } catch (RAT::DS::FitResult::NoVertexError& e) {
             cout << lFit << " has not reconstructed a vertex. Continuing..." << endl;
             continue;
@@ -208,6 +214,8 @@ int main(int argc, char** argv) {
             cout << lFit << " failed for event " << iEvent << ". Continuing..." << endl;
             continue;
           }
+          if (evt_time == -999) continue;
+          hNHitTime->Fill(nhits_cleaned,evt_time);
         }
         
         double deltaE = fitEnergy - mcEnergy;
@@ -372,6 +380,30 @@ int main(int argc, char** argv) {
     leg->Draw();
     c->Print((imgname+"_2.png").c_str());
     c->Print((imgname+"_2.pdf").c_str());
+    c->Close();
+    
+    // Gamma rays that reach inner AV (absolute)
+    c = new TCanvas("c","",1000,600);
+    c->SetLogy();
+    c->SetGrid();
+    pad = c->DrawFrame(0,5e-4,EMAX,1.5);
+    pad->SetTitle("AmBe #gamma-spectrum in AV;Energy E_{#gamma} [MeV];Fraction of MC events");
+    pad->Draw("");
+    TH1D *hGamAVp = (TH1D*)hGamAV->Clone(); // all events
+    hGamAVp->Add(hGamAVn,-1); // subtract delayed events
+    hGamAVp->SetLineColor(2);
+    hGamAVp->Scale(1e-5);
+    hGamAVp->Draw("same");
+    hGamAVn->SetLineColorAlpha(4,1.0);
+    hGamAVn->SetFillColorAlpha(0,0.0);
+    hGamAVn->Scale(1e-5);
+    hGamAVn->Draw("same");
+    leg = new TLegend(0.59,0.74,0.89,0.89);
+    leg->AddEntry(hGamAVp,"Prompt","l");
+    leg->AddEntry(hGamAVn,"Delayed","l");
+    leg->Draw();
+    c->Print((imgname+"_2_abs.png").c_str());
+    c->Print((imgname+"_2_abs.pdf").c_str());
     c->Close();
     
     // Gamma rays that reach inner AV (relative)
@@ -582,8 +614,8 @@ int main(int argc, char** argv) {
     c->Print((imgname+"_7.png").c_str());
     c->Print((imgname+"_7.pdf").c_str());
     c->Close();
-     
 
+    // NHit distribution
     c = new TCanvas("c","",800,600);
     c->SetGrid();
     c->SetLogy();
@@ -593,6 +625,26 @@ int main(int argc, char** argv) {
     hNHit->Draw("same");
     c->Print((imgname+"_8.png").c_str());
     c->Print((imgname+"_8.pdf").c_str());
+    c->Close();
+
+    // Reconstructed NHit vs time
+    c = new TCanvas("c","",800,600);
+    c->SetGrid();
+    c->SetLogz();
+    c->DrawFrame(0,0,9600,500,"Reconstructed AmBe MC;NHits (cleaned);Event time [ns]");
+    if (hNHitTime)hNHitTime->Draw("colz same");
+    c->Print((imgname+"_9.png").c_str());
+    c->Print((imgname+"_9.pdf").c_str());
+    c->Close();
+
+    // Reconstructed NHit vs time (zoom)
+    c = new TCanvas("c","",800,600);
+    c->SetGrid();
+    c->SetLogz();
+    c->DrawFrame(0,210,6000,250,"Reconstructed AmBe MC (zoom);NHits (cleaned);Event time [ns]");
+    if (hNHitTime)hNHitTime->Draw("colz same");
+    c->Print((imgname+"_9_zoom.png").c_str());
+    c->Print((imgname+"_9_zoom.pdf").c_str());
     c->Close();
 
     // Free memory
