@@ -14,9 +14,9 @@ with open(fname) as f:
         num=int(line.rstrip('\n'))
         run.SetRunID(num)
         db.BeginOfRun(run)
-        info = db.GetLink("TELLIE_RUN") #db.fetch(obj_type="TELLIE_RUN", run)
+        info = db.GetLink("TELLIE_RUN")
         subRunInfo = info.GetJSON("sub_run_info")
-        print num
+        print "***", num, "***"
         channel = subRunInfo[0]['channel'].getInteger()
         # Catch exceptions where DB has no 'fibre' entry
         if   num == 100873: fibre = "FT019A"
@@ -35,6 +35,7 @@ with open(fname) as f:
         pinrms=0.
         for sr in range(0,39):
             #if num == 101852: continue
+            #if num == 117672: print sr
             try: pinval += subRunInfo[sr]['pin_value'].getInteger()
             except: pinval += subRunInfo[sr]['pin_value'].getReal()
             try: pinrms += subRunInfo[sr]['pin_rms'].getReal()
