@@ -4,36 +4,7 @@
 // Compile & run:   clear && g++ -o crates.exe crates.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./crates.exe
 // ---------------------------------------------------------
 
-// C++ stuff
-#include <fstream>
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-
-// ROOT stuff
-#include "TROOT.h"
-#include "TSystem.h"
-#include "TFile.h"
-#include "TH1.h"
-#include "TCanvas.h"
-#include "TMath.h"
-#include "TPad.h"
-#include "TPaveStats.h"
-#include "TStyle.h"
-#include "TLegend.h"
-
-// RAT stuff
-#include "RAT/DU/DSReader.hh"
-#include "RAT/DU/PMTInfo.hh"
-#include "RAT/DU/Utility.hh"
-#include "RAT/DS/Run.hh"
-#include "RAT/DS/Entry.hh"
-#include "RAT/DS/MC.hh"
-
-using namespace std;
-
-// Global constants
-const double pi = TMath::Pi();
+#include "../HelperFunc.C"
 
 // Initialise functions
 float crates(string, int, bool);
@@ -42,7 +13,7 @@ float crates(string, int, bool);
 int main(int argc, char** argv) {
 
   // Crate causing problems
-  const int BAD_CRATE = 4;
+  const int BAD_CRATE = 1;
   
   // Monte-Carlo simulation
   const int IS_MC = 1;
@@ -79,6 +50,7 @@ float crates(string fname, int bad_crate, bool isMC) {
   // Loop over entries
   int count=0, hitpmts=0, badpmts=0, init=0;
   for(int iEntry=0; iEntry<dsreader.GetEntryCount(); iEntry++) {
+    printProgress(iEntry,dsreader.GetEntryCount());
     const RAT::DS::Entry& ds = dsreader.GetEntry(iEntry);
     RAT::DS::MC mc;
     if (isMC) mc = ds.GetMC();  // don't initialise this for real data (crashes)
