@@ -14,6 +14,7 @@
 #include <TCanvas.h>
 #include <TF2.h>
 #include <TEllipse.h>
+#include <TError.h>
 #include <TFile.h>
 #include <TGaxis.h>
 #include <TGraph2D.h>
@@ -39,9 +40,6 @@
 
 // Helpful functions
 #include "Xianguo.C"
-
-// Set output verbosity (kPrint, kInfo, kWarning, kError, kBreak, kSysError, kFatal)
-//gErrorIgnoreLevel = kWarning;
 
 // Include frequently used functions from 'std' (entire namespace is bad practice)
 using std::cerr;
@@ -78,6 +76,7 @@ void DrawCircle(const TVector3&, double, TVector3**, int);
 void FitPromptPeaks(TH2D*, int, float*, float*, TGraph2DErrors*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 string TriggerToString(int);
+double getFWHM(TH1*);
 
 // -----------------------------------------------------------------------------
 /// Display vector as a string
@@ -552,6 +551,15 @@ string TriggerToString( int trigger ) {
     triggerStream << "MISS";
   return triggerStream.str();
 }
+
+// Get FWHM of histogram
+double getFWHM(TH1* hist) {
+  int bin1 = hist->FindFirstBinAbove(hist->GetMaximum()/2.);
+  int bin2 = hist->FindLastBinAbove(hist->GetMaximum()/2.);
+  double fwhm = hist->GetXaxis()->GetBinUpEdge(bin2) - hist->GetXaxis()->GetBinLowEdge(bin1);
+  return fwhm;
+}
+
 // -----------------------------------------------------------------------------
 /// Namespace taken from DataQualityProc class to get flatmap detector view
 namespace func{
