@@ -87,12 +87,12 @@ for index in `seq 1 ${2}`; do
     echo "Deleting files for job #${index}."
     rm ${bashlog}
     rm ${ratlog}
-    rm ${rootfile}
+    #rm ${rootfile}
   fi
   
   # Resubmit jobs
   echo "qsub -jc mps.medium -q mps.q -l h_rt=48:00:00 -t ${index} ${DIR}/Dinucleon_${1}.job"
-  qsub -jc mps.medium -q mps.q -l h_rt=48:00:00 -t ${index} ${DIR}/Dinucleon_${1}.job
+  #qsub -jc mps.medium -q mps.q -l h_rt=48:00:00 -t ${index} ${DIR}/Dinucleon_${1}.job
   
 done
 
