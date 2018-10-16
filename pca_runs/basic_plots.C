@@ -14,13 +14,13 @@ int main() {
 }
 
 void basic_plots() {
-  ifstream in("TELLIE_PCA_Jun2018.txt");
+  ifstream in("TELLIE_PCA_Sep2018.txt");
   string fibre;
   int node, channel, run, ipw, photons, pin, rms;
   float nhit;
   //TFile *f = new TFile("pca.root","RECREATE");
   TH1F *h[6];
-  h[0] = new TH1F("h0","Run number (11xxxx)",30,4000,5500);
+  h[0] = new TH1F("h0","Run number (11xxxx)",30,7550,7850);
   h[1] = new TH1F("h1","Pulse width (IPW setpoint)",30,0,15000);
   h[2] = new TH1F("h2","Photons/pulse (from calibDB)",30,0,3e4);
   h[3] = new TH1F("h3","PIN",30,0,3000);

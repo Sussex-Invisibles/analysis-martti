@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
   }
   
   // Loop over all fibres in list
-  string input = "../pca_runs/TELLIE_PCA_Jun2018.txt";
+  string input = "../pca_runs/TELLIE_PCA_Sep2018.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;

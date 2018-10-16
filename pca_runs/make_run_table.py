@@ -35,7 +35,7 @@ with open(fname) as f:
         pinrms=0.
         for sr in range(0,39):
             #if num == 101852: continue
-            #if num == 117672: print sr
+            #if num == 117672: print subRunInfo[sr]['sub_run_number'].getInteger() 
             try: pinval += subRunInfo[sr]['pin_value'].getInteger()
             except: pinval += subRunInfo[sr]['pin_value'].getReal()
             try: pinrms += subRunInfo[sr]['pin_rms'].getReal()
