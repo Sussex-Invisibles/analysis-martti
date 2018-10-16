@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
     c = new TCanvas("c","",800,600);
     c->SetLogy();
     c->SetGrid();
-    pad = c->DrawFrame(0,0.5,2*EMAX,1.5*maxval);
+    pad = c->DrawFrame(0,0.5,EMAX,2*maxval);
     tstr = Form("MC truth vs reconstructed energy (%s decay);E_{#gamma} [MeV];Events",DECAY.c_str());
     pad->SetTitle(tstr.c_str());
     pad->Draw("");
