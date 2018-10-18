@@ -4,36 +4,14 @@
 // Compile & run:   clear && g++ -o check_offsets.exe check_offsets.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./check_offsets.exe
 // ---------------------------------------------------------
 
-// C++ stuff
-#include <fstream>
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-
-// ROOT stuff
-#include <TCanvas.h>
-#include <TH1.h>
-#include <TH2D.h>
-#include <TMath.h>
-#include <TROOT.h>
-#include <TStyle.h>
-#include <TVector3.h>
-
-// RAT stuff
-#include <RAT/BitManip.hh>
-#include "RAT/DU/DSReader.hh"
-#include <RAT/DU/PMTInfo.hh>
-#include <RAT/DU/Utility.hh>
-
+// Include helper functions
+#include "../HelperFunc.C"
 using namespace std;
 
 // Run time parameters
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
 const int VERBOSE = 1;      // verbosity flag
 const int IS_MC = 0;        // Monte-Carlo flag
-
-// Global constants
-const double pi = TMath::Pi();
 
 // Initialise functions
 int check_offsets(string, int, TH2D**, const RAT::DU::PMTInfo&, bool, bool);
@@ -60,7 +38,7 @@ int main(int argc, char** argv) {
   histos[3] = new TH2D("angle","",NBINS,-1,1,NBINS,-MAXOFFSET,MAXOFFSET);
 
   // Loop over all fibres in list
-  string input = "../pca_runs/TELLIE_PCA_Jun2018.txt";
+  string input = "../pca_runs/TELLIE_PCA_Sep2018.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;

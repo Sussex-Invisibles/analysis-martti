@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
     if (a>amax) amax=a;
     if (b>bmax) bmax=b;
     if (f1>ymax) ymax=f1;
-    if (fibre=="FT047A" || fibre=="FT067A") continue; // skip bad fibres for average
+    //if (fibre=="FT047A" || fibre=="FT067A") continue; // skip bad fibres for average
     aavg+=a;
     bavg+=b;
     yavg+=f;
