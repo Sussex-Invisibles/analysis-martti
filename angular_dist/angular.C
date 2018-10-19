@@ -21,7 +21,7 @@ int angular(string, int, TF1*, bool, bool);
 int main(int argc, char** argv) {
   
   // Test flag (0 = process all runs, else run number)
-  const int TEST = (RUN_CLUSTER) ? 0 : 102157;
+  const int TEST = (RUN_CLUSTER) ? 0 : 117592;
 
   // Initialise input file
   string input = "../pca_runs/TELLIE_PCA_Sep2018.txt";
@@ -333,7 +333,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     pmtfits = new TGraph2DErrors();
     FitPromptPeaks(htime, NPMTS, pmtOccup, pmtAngle, pmtfits);
     if (!pmtfits) { cout << "*** ERROR *** Could not fit PMT prompt peaks!" << endl; return 4; }
-    if (!pmtfits->GetN()) { cout << "*** ERROR *** Graph contains zero points!" << endl; return 4; }
+    if (pmtfits->GetN()==0) { cout << "*** ERROR *** Graph contains zero points!" << endl; return 4; }
     
     double *tx = pmtfits->GetX();   // Constant (A)
     double *ty = pmtfits->GetY();   // Mean value (mu)
@@ -347,6 +347,11 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     int npmts=0;
     for (int iPMT=0; iPMT<NPMTS; iPMT++) {
       if (tx[iPMT]+ty[iPMT]+tz[iPMT]==0) continue;
+      if (ty[iPMT] > 1e3) {
+        cout << "Fitted mean hit time for PMT #" << iPMT << " is (" << ty[iPMT] << " +- " << tey[iPMT] << ") ns! Setting to 0..." << endl;
+        tx[iPMT]=0; ty[iPMT]=0; tz[iPMT]=0;
+        continue;
+      }
       gpmts->SetPoint(npmts, pmtAngle[iPMT], ty[iPMT]);
       gpmts->SetPointError(npmts, 0, tey[iPMT]);
       npmts++;
@@ -355,7 +360,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     // Mean and RMS of entire graph
     double meanhittime = gpmts->GetMean(2);
     double rmshittime = gpmts->GetRMS(2);
-    
+    cout << "Mean hit time = " << meanhittime << " ns, RMS = " << rmshittime << " ns." << endl;
+
     // Investigate PMTs with unusual offsets w.r.t. mean hit time
     string outlogstr = Form("logs/unusual_timing_%d.log", run);
     FILE *outlog = fopen(outlogstr.c_str(),"w");
@@ -455,6 +461,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     cout << "Wrote output to file " << outstr << endl;
   }
 
+  /* Do not apply global offset any more since Mark's AVLOC is not run regularly
   // TELLIE fibre/trigger delays & Mark's PCA offsets
   string delayfile = "TELLIE_delays_Jun2018.txt";
   ifstream del(delayfile.c_str());
@@ -478,6 +485,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     gpmts->GetPoint(i,x,t);
     gpmts->SetPoint(i,x,t-pcaOffset);
   }
+  */
+
   double meanhittime2 = gpmts->GetMean(2);
   int centraltime2 = (int)round(meanhittime2 + 5/2.);
   centraltime2 -= centraltime2 % 5;           // rounded to the nearest multiple of 5
@@ -486,11 +495,13 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     for (int j=0; j<=hprofile->GetNbinsY()+1; j++) {
       hprofile2->SetBinContent(i,j,hprofile->GetBinContent(i,j));
     }
-  } 
+  }
+  /*
   for (int k=0; k<=hmean->GetNbinsX()+1; k++) {
     t = hmean->GetBinContent(k);
     hmean->SetBinContent(k,t-pcaOffset);
   }
+  */
   
   // Fit angular systematic: y = a - b + b/cos(x)
   TCanvas *c1 = new TCanvas("c1","",800,600);
@@ -502,13 +513,13 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   // Fill histograms with time residual
   TH1D *hresid = new TH1D("hresid","",30,-3,3);
   //TH1D *hpulls = new TH1D("hpulls","",40,-20,20);
-  double y,ey,y0;
+  double x,y,ey,y0;
   for (int i=0; i<gpmts->GetN(); i++) {
     gpmts->GetPoint(i,x,y);
     //ey = gpmts->GetErrorY(i);
     y0 = fitResult->Eval(x);
     hresid->Fill(y-y0);
-    //hpulls->Fill((y-y0)/ey);
+    //hpulls->Fill((y-y0)/ey); 
   }
   c1 = new TCanvas("c1","",800,600);
   TF1 *fitresid = new TF1("fitresid","gaus",-3,3);
@@ -561,7 +572,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   //  PLOTTING SECTION
   // ******************
   int minvalY = (int)round(fitResult->GetParameter(0)); // lower limit for times to display
-  minvalY -= minvalY % 5;                               // round down to next multiple of 5
+  //minvalY -= minvalY % 5;                               // round down to next multiple of 5
   
   // Plotting options
   gStyle->SetOptStat(0);

@@ -49,7 +49,7 @@ using std::flush;
 
 // -----------------------------------------------------------------------------
 // Run time parameters
-const int MORE_OUTPUT = 0;                  // additional plots for testing
+const int MORE_OUTPUT = 1;                  // additional plots for testing
 
 // Global constants
 const double pi = TMath::Pi();
@@ -277,15 +277,20 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *occupancy, float *pmtangs, TG
   TF1 *plotted_fit[24] = {NULL};
   TH1D *plotted_hist[24] = {NULL};
   TCanvas *c1 = NULL;
-  
+  TH1D *temp = NULL;
+  TF1 *fitPMT = NULL;
+
   cout << "Fitting PMT prompt peaks..." << endl;
   for (int iPMT=0; iPMT<NPMTS; iPMT++) {
-    if (iPMT % (int)round(NPMTS/100.) == 0) printProgress(iPMT, NPMTS);
+    printProgress(iPMT, NPMTS);
     
     // Reject PMTs outside ROI
     if (occupancy[iPMT]<0.01) continue; // only consider PMTs with >=1% occupancy
     if (pmtangs[iPMT]>24.0) continue;   // only consider PMTs within 2x nominal aperture (12 deg)
-    TH1D *temp = htime->ProjectionY("temp",iPMT+1,iPMT+1,""); // histogram bins in [1,N]
+    temp = htime->ProjectionY("temp",iPMT+1,iPMT+1,""); // histogram bins in [1,N]
+    if (!temp) { cout << "*** WARNING: Could not obtain projection for PMT #" << iPMT << "!" << endl; continue; }
+    if (temp->GetEntries()==0) { cout << "*** WARNING: Projection for PMT #" << iPMT << " is empty!" << endl; continue; }
+    if (temp->GetMean()>1e3) { cout << "*** WARNING: Mean value for PMT #" << iPMT << " is " << temp->GetMean() << "ns! Skipping..." << endl; continue; }
 
     // Define prompt peak range (>20% of max. intensity)
     int lobin = temp->GetMaximumBin();
@@ -295,7 +300,7 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *occupancy, float *pmtangs, TG
     
     // Fit 1D Gaussian to each slice to get prompt hit time
     c1 = new TCanvas("c1","NULL",800,600);  // suppress default Canvas creation
-    TF1 *fitPMT = new TF1("fitPMT", "gaus", temp->GetBinLowEdge(lobin), temp->GetBinLowEdge(hibin+1));
+    fitPMT = new TF1("fitPMT", "gaus", temp->GetBinLowEdge(lobin), temp->GetBinLowEdge(hibin+1));
     fitPMT->SetParameters(temp->GetMaximum(), temp->GetBinCenter(htime->GetMaximumBin()), temp->GetRMS());
     temp->Fit("fitPMT","R,q");  // force range, quiet mode
     c1->Close();
@@ -333,6 +338,8 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *occupancy, float *pmtangs, TG
   } // PMT loop
   
   if (c1) delete c1;
+  if (fitPMT) delete fitPMT;
+  if (temp) delete temp;
   
   // Plot fit results for individual PMT (for proof of concept)
   TCanvas *c0 = NULL;
@@ -350,11 +357,10 @@ void FitPromptPeaks(TH2D *htime, int NPMTS, float *occupancy, float *pmtangs, TG
       plotted_hist[thisbin]->SetTitle(histtitle[thisbin].c_str());
       plotted_hist[thisbin]->GetXaxis()->SetTitle("Hit time offset [ns]");
       plotted_hist[thisbin]->GetYaxis()->SetTitle("Number of events");
-      plotted_hist[thisbin]->GetXaxis()->SetRangeUser(170,220);
-      plotted_hist[thisbin]->GetYaxis()->SetRangeUser(0,900); // linear scale
-      //plotted_hist[thisbin]->GetYaxis()->SetRangeUser(0.5,900); // log scale
-      //plotted_hist[thisbin]->GetXaxis()->SetRangeUser(y[iPMT]-5*z[iPMT],y[iPMT]+5*z[iPMT]);
-      //plotted_hist[thisbin]->GetYaxis()->SetRangeUser(1.5e-3*x[iPMT],1.5*x[iPMT]);
+      float tmpmean = plotted_hist[thisbin]->GetMean();
+      float tmprms  = plotted_hist[thisbin]->GetRMS();
+      plotted_hist[thisbin]->GetXaxis()->SetRangeUser(200,300);
+      plotted_hist[thisbin]->GetYaxis()->SetRangeUser(0,1.5*plotted_hist[thisbin]->GetMaximum());
       plotted_hist[thisbin]->GetXaxis()->SetTitleOffset(1.3);
       plotted_hist[thisbin]->GetYaxis()->SetTitleOffset(1.6);
     }
