@@ -28,7 +28,7 @@ const double ng = 1.530; // refractive index (glass)
 const double r_bub = 2.e-3; // median radius of hollow glass microsphere [cm] - 50% percentile
 const double d_bub = 8.8e-5; // approx. wall thickness of hollow sphere [cm] - specs from 3M
 const double rho_bub = 2.25; // density of borosilicate glass [g/cm³] - specs from 3M
-const double con_bub = 4.84e-3; // density of bubbles in silgel [g/cm³] - TODO use optimum value ~1.57 mg/mL
+const double con_bub = 0.51e-3; // density of bubbles in silgel [g/cm³] - TODO use optimum value ~1.57 mg/mL
 
 // Quartz rod
 const double rodlen = 200.; // length [mm]
