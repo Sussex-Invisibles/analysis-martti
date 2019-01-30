@@ -20,9 +20,12 @@ const double lambda = 4.05e-5; // wavelength [cm]
 // Diffuser ball - TODO REVIEW ALL PARAMETERS
 const double flaskdiam = 106.; // diameter of the diffuser flask [mm]
 const double R = flaskdiam/2.; // radius
-const double na = 1.200; // refractive index (air) - TODO is actually 2:1 mixture of SO2:O2 at 1/3 atm!
+const double na = 1.070; // refractive index (air) - TODO is actually 2:1 mixture of SO2:O2 at 1/3 atm!
 const double ns = 1.404; // refractive index (SilGel)
 const double ng = 1.530; // refractive index (glass)
+// SO2 has n = 1.3047 (20 C) from http://www.microkat.gr/msds/Sulfur%20dioxide.html
+// SO2 has n = 1.3396 (25 C) from https://pubchem.ncbi.nlm.nih.gov/compound/sulfur_dioxide
+// O2 has n = 1.0003 (0 C) from http://www.kayelaby.npl.co.uk/general_physics/2_5/2_5_7.html
 
 // Glass bubbles
 const double r_bub = 2.e-3; // median radius of hollow glass microsphere [cm] - 50% percentile
@@ -467,9 +470,10 @@ double GetScatteringLength(double density) {
   // Scattering cross section of glass microspheres
   // https://en.wikipedia.org/wiki/Anomalous_diffraction_theory
   // https://www.gfdl.noaa.gov/wp-content/uploads/files/user_files/pag/lecture2008/lecture3.pdf
-  double n = ns/na; // refractive index (outer vs inner)
-  double p = 4.*pi*r_bub*(n-1.)/lambda; // phase delay of wave through sphere
-  double Q = 2. - 4./p*sin(p) + 4./(p*p)*(1.-cos(p)); // scattering efficiency (same as extinction efficiency)
+  //double n = ns/na; // refractive index (outer vs inner)
+  //double p = 4.*pi*r_bub*(n-1.)/lambda; // phase delay of wave through sphere
+  //double Q = 2. - 4./p*sin(p) + 4./(p*p)*(1.-cos(p)); // scattering efficiency (same as extinction efficiency)
+  double Q = 1; // artificial (ignore ADT)
   double sigma = pi*r_bub*r_bub*Q; // scattering cross section [cm²]
   if (VERBOSE > 0) cout << "Estimated scattering cross section: " << sigma << " cm^2" << endl;
   

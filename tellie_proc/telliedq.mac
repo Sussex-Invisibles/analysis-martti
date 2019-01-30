@@ -1,0 +1,10 @@
+/rat/db/load geo/snoplus_water.geo
+#/rat/inzdab/load "../SNOP_0000{0}_000.zdab"
+/rat/inzdab/load_default
+/run/initialize
+/rat/proc outroot
+#/rat/procset file "tellieDQ_{0}.root"
+/rat/proc calibratePMT
+/rat/proc dqtellieproc
+/rat/inzdab/read
+exit
