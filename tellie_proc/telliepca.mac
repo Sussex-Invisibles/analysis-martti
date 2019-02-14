@@ -1,5 +1,4 @@
 /rat/db/load geo/snoplus_water.geo
-#/rat/inzdab/load "../SNOP_0000{0}_000.zdab"
 /rat/inzdab/load_default
 /run/initialize
 /rat/proc calibratePMT
