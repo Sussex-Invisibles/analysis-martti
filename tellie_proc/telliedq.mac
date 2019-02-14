@@ -1,10 +1,11 @@
 /rat/db/load geo/snoplus_water.geo
 /rat/inzdab/load_default
 /run/initialize
-/rat/proc outroot
 /rat/proc calibratePMT
 /rat/procset eca 1
 /rat/procset pca 0
 /rat/proc dqtellieproc
+/rat/proc count
+/rat/procset update 10000
 /rat/inzdab/read
 exit
