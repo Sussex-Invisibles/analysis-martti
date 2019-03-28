@@ -141,6 +141,7 @@ int main(int argc, char** argv) {
   c0->cd(3)->SetGrid();
   c0->cd(3)->DrawFrame(amin-2,bmin-10,amax+2,bmax+10,"Fit parameters;Fit parameter a [ns];Fit parameter b [ns]");
   for (int fib=0; fib<95; fib++) {
+    if (!graph[fib]) continue;
     graph[fib]->SetMarkerStyle(7);
     graph[fib]->SetMarkerColor(100-fib);
     graph[fib]->Draw("P same");
@@ -158,6 +159,7 @@ int main(int argc, char** argv) {
   c0->cd(4)->SetGrid();
   c0->cd(4)->DrawFrame(aavg-1,bavg-30,aavg+1,bavg+30,"Fit parameters (zoom);Fit parameter a [ns];Fit parameter b [ns]");
   for (int fib=0; fib<95; fib++) {
+    if (!graph[fib]) continue;
     graph[fib]->SetMarkerStyle(7);
     graph[fib]->SetMarkerColor(100-fib);
     graph[fib]->Draw("P same");
