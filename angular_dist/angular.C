@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
   const int TEST = (RUN_CLUSTER) ? 0 : 117592;
 
   // Initialise input file
-  string input = "../pca_runs/TELLIE_PCA_Sep2018.txt";
+  string input = "../pca_runs/TELLIE_PCA_Mar2019.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line;

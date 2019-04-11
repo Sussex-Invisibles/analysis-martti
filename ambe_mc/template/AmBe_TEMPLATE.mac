@@ -1,0 +1,30 @@
+/rat/physics_list/OmitMuonicProcesses true
+/rat/physics_list/OmitHadronicProcesses false
+/rat/db/set DETECTOR geo_file "geo/snoplus_simple.geo"
+/rat/db/load geo/calib/AmBe_TEMPLATE.geo
+/rat/db/set GEO[AmBeSourceShielding] position [0.0, 0.0, -17.5]
+/rat/db/load nSPECTRUM_NEW.ratdb
+/rat/db/set NOISE_MC noise_flag 1
+/run/initialize
+/rat/tracking/store full
+/rat/tracking/omit e-
+/rat/tracking/omit opticalphoton
+/rat/proc frontend
+/rat/proc trigger
+/rat/proc eventbuilder
+/rat/proc calibratePMT
+/rat/proc count
+/rat/procset update 1
+/rat/proc scintFitter
+/rat/proclast outroot
+/rat/procset file "DIRECTORY/output/AmBe_TEMPLATE_{0}.root"
+/generator/add coincidence       spectrum:point:uniform
+/generator/vtx/set               neutron AlphaN_AmBe
+/generator/pos/set               0 0 0
+/generator/rate/set              1
+/generator/coincidence/add       spectrum:point
+/generator/coincidence/vtx/set   gamma Gamma_AmBe
+/generator/coincidence/pos/set   0 0 0
+/generator/coincidence/fixed     0
+/rat/run/start 1000
+exit
