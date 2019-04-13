@@ -12,10 +12,11 @@
 #include "/home/nirkko/pCloud/PhD/ND280/CommonStyle.H"
 
 // global parameters and constants
-const int NTHROWS = 1e8;
-const int NTHROWSLOWMASS = 1e5;
-const int NSTATS = 1e4; // statistics for limits
+const int NTHROWS = 1e6;
+const int NTHROWSLOWMASS = 1e3;
+const int NSTATS = 1e3; // statistics for limits
 const int NBINS = 4e2;
+const int PAL = 56; // ROOT color palette
 
 // Neutrino mixing parameters (PDG 2018)
 const double S12 = 0.307;
@@ -30,17 +31,25 @@ const double S13 = 2.12e-2;
 const double ES13 = 0.08e-2;
 
 // Get cos^2(theta) values
-const double C12 = 1.-S12;
-const double C13 = 1.-S13;
+//const double C12 = 1.-S12;
+//const double C13 = 1.-S13;
 
 // Global functions and generators
 double mefflimits(double m0, float sigma=1., int index=0);
 double meff(double m0, double alpha, double beta, float sigma=0., int inverted=0);
   
 // Random number generator
-TRandom3* duran = new TRandom3();
+TRandom3* rng = new TRandom3();
 
 int main() {
+
+  // I/O file (either plot from ROOT file, or generate it)
+  std::string fname = "0vbb_phasespace";
+  std::string output = fname+".root";
+  ifstream io(output.c_str());
+  TFile *file = NULL;
+  if (io.good()) file = new TFile(output.c_str(),"READ");
+  else           file = new TFile(output.c_str(),"RECREATE");
   
   // Use T2K style
   CommonStyle();
@@ -53,10 +62,10 @@ int main() {
   gStyle->SetTitleOffset(1.4,"x");
   gStyle->SetTitleOffset(1.3,"y");
   gStyle->SetMarkerStyle(7);
-  gStyle->SetPalette(55);
+  gStyle->SetPalette(PAL);
   
   // Random number seed
-  duran->SetSeed(0);
+  rng->SetSeed(0);
   
   // lightest and effective neutrino masses
   double m0, meffNH, meffIH;
@@ -104,9 +113,9 @@ int main() {
   long throws=0, count=0;
   std::cout << "Filling allowed phase space regions..." << std::endl;
   while (throws<NTHROWS) {
-    m0 = pow(10.,4.*(duran->Rndm()-1.)); // log prior (100% of phase space)
-    alpha = 2*pi*duran->Rndm(); // 0-2 pi (100% of phase space)
-    beta = 2*pi*duran->Rndm(); // 0-2 pi (100% of phase space)
+    m0 = pow(10.,4.*(rng->Rndm()-1.)); // log prior (100% of phase space)
+    alpha = 2*pi*rng->Rndm(); // 0-2 pi (100% of phase space)
+    beta = 2*pi*rng->Rndm(); // 0-2 pi (100% of phase space)
     meffNH = meff(m0,alpha,beta,-1,0);
     meffIH = meff(m0,alpha,beta,-1,1);
     throws++;
@@ -133,13 +142,13 @@ int main() {
   hpsIH->GetXaxis()->SetTitle("m_{0} (eV)");
   hpsIH->GetYaxis()->SetTitle("#LTm_{#beta#beta}#GT (eV)");
   hpsIH->Draw("colz");
-  hpsIH->GetZaxis()->SetRangeUser(2e-9,2e-4);
+  hpsIH->GetZaxis()->SetRangeUser(2e-9,2e-3);
   for (int s=0; s<4; s++) { // contours for IH
     contours[2][s]->Draw("c");
     contours[3][s]->Draw("c");
   }
   hpsNH->Draw("colz same");
-  hpsNH->GetZaxis()->SetRangeUser(2e-9,2e-4);
+  hpsNH->GetZaxis()->SetRangeUser(2e-9,2e-3);
   for (int s=0; s<4; s++) { // contours for NH
     contours[0][s]->Draw("c");
     contours[1][s]->Draw("c");
@@ -159,10 +168,10 @@ int main() {
   long throws2=0, count2=0;
   std::cout << "Filling phase space region for low effective mass..." << std::endl;
   while (count2<NTHROWSLOWMASS) {
-    m0 = pow(10.,(duran->Rndm()-3.)); // log prior (25% of phase space)
-    beta = 2*pi*duran->Rndm(); // 0-2 pi (100% of phase space)
-    alpha = pi*(1.+0.13*sin(beta)+0.1*(duran->Rndm()-0.5)); // 5% of phase space
-    //alpha = pi*(1.+0.4*(duran->Rndm()-0.5)); // 0.8-1.2 pi (20% of phase space)
+    m0 = pow(10.,(rng->Rndm()-3.)); // log prior (25% of phase space)
+    beta = 2*pi*rng->Rndm(); // 0-2 pi (100% of phase space)
+    alpha = pi*(1.+0.13*sin(beta)+0.1*(rng->Rndm()-0.5)); // 5% of phase space
+    //alpha = pi*(1.+0.4*(rng->Rndm()-0.5)); // 0.8-1.2 pi (20% of phase space)
     meffNH = meff(m0,alpha,beta,-1,0);
     throws2++;
     if (meffNH>1e-4) continue;
@@ -241,18 +250,18 @@ double meff(double m0, double alpha, double beta, float sigma, int inverted) {
   // Throw neutrino mixing parameters
   double s12, s13, dm21, dm32;
   if (sigma >= 0) { // fixed sigma, flat priors
-    s12 = S12 + sigma*(2*duran->Rndm()-1.)*ES12;
-    s13 = S13 + sigma*(2*duran->Rndm()-1.)*ES13;
-    dm21 = DM21 + sigma*(2*duran->Rndm()-1.)*EDM21;
+    s12 = S12 + sigma*(2*rng->Rndm()-1.)*ES12;
+    s13 = S13 + sigma*(2*rng->Rndm()-1.)*ES13;
+    dm21 = DM21 + sigma*(2*rng->Rndm()-1.)*EDM21;
     dm32;
-    if (inverted) dm32 = DM32IH + sigma*(2*duran->Rndm()-1.)*EDM32IH;
-    else          dm32 = DM32NH + sigma*(2*duran->Rndm()-1.)*EDM32NH;
+    if (inverted) dm32 = DM32IH + sigma*(2*rng->Rndm()-1.)*EDM32IH;
+    else          dm32 = DM32NH + sigma*(2*rng->Rndm()-1.)*EDM32NH;
   } else { // simulate Gaussian throws
-    s12 = duran->Gaus(S12,ES12);
-    s13 = duran->Gaus(S13,ES13);
-    dm21 = duran->Gaus(DM21,EDM21);
-    if (inverted) dm32 = duran->Gaus(DM32IH,EDM32IH);
-    else          dm32 = duran->Gaus(DM32NH,EDM32NH);
+    s12 = rng->Gaus(S12,ES12);
+    s13 = rng->Gaus(S13,ES13);
+    dm21 = rng->Gaus(DM21,EDM21);
+    if (inverted) dm32 = rng->Gaus(DM32IH,EDM32IH);
+    else          dm32 = rng->Gaus(DM32NH,EDM32NH);
   }
   double c12 = 1.-s12;
   double c13 = 1.-s13;
