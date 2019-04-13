@@ -1,6 +1,8 @@
 // ---------------------------------------------------
-//  Compile and run with: root -l -b -q 0vbb_phasespace.C+g
-//  Author: Martti Nirkko, 22.08.2015 (updated 11.04.2019)
+//  Compile:  g++ -g -O2 -o 0vbb_phasespace.exe 0vbb_phasespace.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux -lGeom
+//  Run:      ./0vbb_phasespace.exe
+//  Info:     Will take 2-3 min to generate distributions. Run a second time to plot.
+//  Author:   Martti Nirkko, April 2019 (based on work done at INSS 2015)
 // ---------------------------------------------------
 // Include helper functions / plotting style
 #include "../include/HelperFunc.C"
@@ -284,8 +286,8 @@ int main() {
     // Save and close
     c1->Update();
     c1->RedrawAxis();
-    c1->Print("0vbb_phasespace.png");
-    c1->Print("0vbb_phasespace.pdf");
+    c1->Print((fname+".png").c_str());
+    c1->Print((fname+".pdf").c_str());
     c1->Close();
     
     // Plot low m_eff region for double beta decay (NH)
@@ -312,8 +314,8 @@ int main() {
     // Draw legend (defined above)
     leg->Draw();
     // Save and close
-    c2->Print("0vbb_phasespace_lowmass.png");
-    c2->Print("0vbb_phasespace_lowmass.pdf");
+    c2->Print((fname+"_lowmass.png").c_str());
+    c2->Print((fname+"_lowmass.pdf").c_str());
     c2->Close();
     
     // Plot Majorana angles for low m_eff region (NH)
@@ -336,8 +338,8 @@ int main() {
     Tl->DrawLatex(1.05,1.62,"#alpha #in [1 #plus 0.13 sin#beta #minus 0.05,");
     Tl->DrawLatex(1.073,1.52,"1 #plus 0.13 sin#beta #plus 0.05]");
     // Save and close
-    c3->Print("0vbb_phasespace_lowmass_2.png");
-    c3->Print("0vbb_phasespace_lowmass_2.pdf");
+    c3->Print((fname+"_lowmass_angles.png").c_str());
+    c3->Print((fname+"_lowmass_angles.pdf").c_str());
     c3->Close();
     
   }
