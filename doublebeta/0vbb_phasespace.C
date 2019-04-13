@@ -5,16 +5,16 @@
 #include <TColor.h>
 #include <TROOT.h>
 
-// Include code by Dr. Xianguo Lu (Oxford) for logarithmically binned axes
+// Include helper functions
 #include "../HelperFunc.C"
 
 // Use official T2K plotting style
-#include "/home/nirkko/pCloud/PhD/ND280/CommonStyle.H"
+#include "../CommonStyle.H"
 
 // global parameters and constants
+const int NSTATS = 2e4; // statistics for limits
 const int NTHROWS = 1e8;
 const int NTHROWSLOWMASS = 1e5;
-const int NSTATS = 1e4; // statistics for limits
 const int NBINS = 4e2;
 
 // Neutrino mixing parameters (PDG 2018)
