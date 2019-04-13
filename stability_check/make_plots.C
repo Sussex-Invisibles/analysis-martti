@@ -1,5 +1,5 @@
 // Includes and helper functions
-#include "../HelperFunc.C"
+#include "../include/HelperFunc.C"
 
 // Main program
 int main(int argc, char** argv) {

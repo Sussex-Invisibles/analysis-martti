@@ -4,7 +4,7 @@
 // Compile & run:   clear && g++ -o crates.exe crates.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./crates.exe
 // ---------------------------------------------------------
 
-#include "../HelperFunc.C"
+#include "../include/HelperFunc.C"
 
 // Initialise functions
 float crates(string, int, bool);

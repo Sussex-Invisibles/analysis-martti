@@ -5,7 +5,7 @@
 // ---------------------------------------------------------
 
 // Include helper functions
-#include "../HelperFunc.C"
+#include "../include/HelperFunc.C"
 using namespace std;
 
 // Run time parameters

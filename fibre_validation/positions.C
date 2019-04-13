@@ -4,26 +4,8 @@
 // Compile & run:   clear && g++ -g -o positions.exe positions.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./positions.exe
 // ---------------------------------------------------------
 
-// C++ stuff
-#include <fstream>
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-
-// ROOT stuff
-#include "TROOT.h"
-#include "TFile.h"
-
-// RAT stuff
-#include "RAT/DU/DSReader.hh"
-#include "RAT/DU/PMTInfo.hh"
-#include "RAT/DU/Utility.hh"
-#include "RAT/DS/Run.hh"
-#include "RAT/DS/Entry.hh"
-#include "RAT/DS/MC.hh"
-
 // Helper functions
-#include "../HelperFunc.C"
+#include "../include/HelperFunc.C"
 
 // Global constants
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)

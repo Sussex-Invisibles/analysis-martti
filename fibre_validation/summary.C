@@ -5,7 +5,7 @@
 // ---------------------------------------------------------
 
 // Helper functions (includes everything else)
-#include "../HelperFunc.C"
+#include "../include/HelperFunc.C"
 
 // Run time parameters
 const int RUN_CLUSTER = 1;      // whether running on cluster (0=local)

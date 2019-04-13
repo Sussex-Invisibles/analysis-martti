@@ -12,6 +12,7 @@
 
 // ROOT stuff
 #include <TCanvas.h>
+#include <TColor.h>
 #include <TF2.h>
 #include <TEllipse.h>
 #include <TError.h>
@@ -77,6 +78,7 @@ void FitPromptPeaks(TH2D*, int, float*, float*, TGraph2DErrors*);
 void FitLightSpot(TGraph2D*, double, double, double*);
 string TriggerToString(int);
 double getFWHM(TH1*);
+void Smooth( TGraph* g, TGraph* h, int width, bool logscale);
 
 // -----------------------------------------------------------------------------
 /// Display vector as a string
@@ -564,6 +566,33 @@ double getFWHM(TH1* hist) {
   int bin2 = hist->FindLastBinAbove(hist->GetMaximum()/2.);
   double fwhm = hist->GetXaxis()->GetBinUpEdge(bin2) - hist->GetXaxis()->GetBinLowEdge(bin1);
   return fwhm;
+}
+
+// Smooth input graph with given bin width (floating window)
+void Smooth(TGraph* g, TGraph* h, int width) {
+  int n = h->GetN();
+  double* x = h->GetX();
+  double* y = h->GetY();
+  double sumX, sumY;
+  int cnt, min, max, b;
+  for (int i=0; i<n; i++) {
+    if (width==0) {
+      g->SetPoint(i,x[i],y[i]);
+      continue;
+    }
+    min = (i<width) ? 0 : i-width;
+    max = (i>n-width) ? n : i+width;
+    sumX = 0.; sumY = 0.; cnt = 0;
+    for (b=min; b<max; b++) {
+      sumX += x[b];
+      sumY += y[b];
+      cnt++;
+    }
+    if (i>=width && i<=n-width)
+      g->SetPoint(i,sumX/cnt,sumY/cnt);
+    else
+      g->SetPoint(i,x[i],y[i]);
+  }
 }
 
 // -----------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 // Author:          Martti Nirkko, 07/08/2017
 // Compile & run:   clear && g++ -g -o trigger_check.exe trigger_check.C `root-config --cflags --libs` -I$RATROOT/include/libpq -I$RATROOT/include -L$RATROOT/lib -lRATEvent_Linux && ./trigger_check.exe
 // ---------------------------------------------------------
-#include "../HelperFunc.C"
+#include "../include/HelperFunc.C"
 #include <iomanip>
 #include <ctime>
 #include <ostream>

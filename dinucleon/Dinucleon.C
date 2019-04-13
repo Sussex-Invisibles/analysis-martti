@@ -5,7 +5,7 @@
 // ---------------------------------------------------------
 
 // Helper functions (includes everything else)
-#include "../HelperFunc.C"
+#include "../include/HelperFunc.C"
 
 // Global parameters
 const int TEST = 0;                    // test flag

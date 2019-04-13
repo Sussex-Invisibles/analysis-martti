@@ -5,7 +5,7 @@
 // ---------------------------------------------------------
 
 // Helper functions (includes everything else)
-#include "../HelperFunc.C"
+#include "../include/HelperFunc.C"
 
 // Global constants
 const int VERBOSE = 1; // verbosity (0-3)
