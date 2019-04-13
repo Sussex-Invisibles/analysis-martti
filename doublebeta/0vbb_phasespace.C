@@ -5,18 +5,18 @@
 #include <TColor.h>
 #include <TROOT.h>
 
-// Include code by Dr. Xianguo Lu (Oxford) for logarithmically binned axes
+// Include helper functions
 #include "../HelperFunc.C"
 
 // Use official T2K plotting style
-#include "/home/nirkko/pCloud/PhD/ND280/CommonStyle.H"
+#include "../CommonStyle.H"
 
 // global parameters and constants
-const int NTHROWS = 1e6;
-const int NTHROWSLOWMASS = 1e3;
-const int NSTATS = 1e3; // statistics for limits
-const int NBINS = 4e2;
-const int PAL = 56; // ROOT color palette
+const int NSTATS = 1e3;           // statistics for contour limits
+const int NTHROWS = 1e6;          // full phase space
+const int NTHROWSLOWMASS = 1e3;   // low m_eff phase space
+const int NBINS = 4e2;            // number of bins
+const int PAL = 56;               // ROOT color palette
 
 // Neutrino mixing parameters (PDG 2018)
 const double S12 = 0.307;
