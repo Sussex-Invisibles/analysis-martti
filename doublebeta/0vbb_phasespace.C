@@ -39,8 +39,8 @@ const double ES13 = 0.08e-2;
 
 // Global functions and generators
 double mefflimits(double m0, float sigma=1., int index=0);
-double meff(double m0, double alpha, double beta, float sigma=0., int inverted=0);
-  
+double meff(double m0, double& msum, double alpha, double beta, float sigma=0., int inverted=0);
+
 // Random number generator
 TRandom3* rng = new TRandom3();
 
@@ -53,10 +53,10 @@ int main() {
   
   // Initialise objects
   TFile *file = NULL;
-  TH2D *hpsNH=NULL, *hpsIH=NULL, *hpsNHlo=NULL, *hangNHlo=NULL;
+  TH2D *hpsNH=NULL, *hpsIH=NULL, *hpsNHs=NULL, *hpsIHs=NULL, *hpsNHlo=NULL, *hangNHlo=NULL;
   TGraph *contours[4][4] = {NULL};
   TGraph *f0=NULL, *f1=NULL;
-  TCanvas *c1=NULL, *c2=NULL, *c3=NULL;
+  TCanvas *c1=NULL, *c2=NULL, *c3=NULL, *c4=NULL;
   
   if (!io.good()) {  // File does not exist
     
@@ -73,6 +73,12 @@ int main() {
     TH2D* hpsNHlo = new TH2D("hpsNHlo","Small effective mass",NBINS,1e-4,1e0,NBINS,1e-8,1e-4);
     BinLog(hpsNHlo->GetXaxis()); BinLog(hpsNHlo->GetYaxis());
     TH2D* hangNHlo = new TH2D("hangNHlo","Majorana hangNHlo",NBINS,0.8,1.2,NBINS,0,2);
+    
+    // Histograms for plotting sum of neutrino masses as x-axis
+    TH2D* hpsNHs = new TH2D("hpsNHs","Normal hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
+    BinLog(hpsNHs->GetXaxis()); BinLog(hpsNHs->GetYaxis());
+    TH2D* hpsIHs = new TH2D("hpsIHs","Inverted hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
+    BinLog(hpsIHs->GetXaxis()); BinLog(hpsIHs->GetYaxis());
     
     // lightest and effective neutrino masses
     double m0, meffNH, meffIH;
@@ -96,6 +102,7 @@ int main() {
     // Majorana angles and global minima
     double alpha, beta;
     double alpha0=0., beta0=0., m0min=1.e6, meffmin=1.e6;
+    double msumNH, msumIH;
   
     // Random number seed
     rng->SetSeed(0);
@@ -107,11 +114,13 @@ int main() {
       m0 = pow(10.,4.*(rng->Rndm()-1.)); // log prior (100% of phase space)
       alpha = 2*pi*rng->Rndm(); // 0-2 pi (100% of phase space)
       beta = 2*pi*rng->Rndm(); // 0-2 pi (100% of phase space)
-      meffNH = meff(m0,alpha,beta,-1,0);
-      meffIH = meff(m0,alpha,beta,-1,1);
+      meffNH = meff(m0,msumNH,alpha,beta,-1,0);
+      meffIH = meff(m0,msumIH,alpha,beta,-1,1);
       throws++;
       hpsNH->Fill(m0, meffNH);
       hpsIH->Fill(m0, meffIH);
+      hpsNHs->Fill(msumNH, meffNH);
+      hpsIHs->Fill(msumIH, meffIH);
       printProgress(throws,NTHROWS);
       if (meffNH>1e-4) continue;
       count++;
@@ -122,6 +131,8 @@ int main() {
     }
     hpsNH->Scale(1./throws);
     hpsIH->Scale(1./throws);
+    hpsNHs->Scale(1./throws);
+    hpsIHs->Scale(1./throws);
     //hpsNHlo->Scale(1./throws);
     //hangNHlo->Scale(1./throws);
     std::cout<<"Generated " << (float)throws << " throws, of which " << throws-count;
@@ -145,7 +156,7 @@ int main() {
       beta = 2*pi*rng->Rndm(); // 0-2 pi (100% of phase space)
       alpha = pi*(1.+0.13*sin(beta)+0.1*(rng->Rndm()-0.5)); // 5% of phase space
       //alpha = pi*(1.+0.4*(rng->Rndm()-0.5)); // 0.8-1.2 pi (20% of phase space)
-      meffNH = meff(m0,alpha,beta,-1,0);
+      meffNH = meff(m0,msumNH,alpha,beta,-1,0);
       throws2++;
       if (meffNH>1e-4) continue;
       hpsNHlo->Fill(m0, meffNH); 
@@ -189,6 +200,8 @@ int main() {
     file = new TFile(output.c_str(),"READ");
     hpsIH = (TH2D*)file->Get("hpsIH");
     hpsNH = (TH2D*)file->Get("hpsNH");
+    hpsIHs = (TH2D*)file->Get("hpsIHs");
+    hpsNHs = (TH2D*)file->Get("hpsNHs");
     hpsNHlo = (TH2D*)file->Get("hpsNHlo");
     hangNHlo = (TH2D*)file->Get("hangNHlo");
     std::string cname;
@@ -342,11 +355,32 @@ int main() {
     c3->Print((fname+"_lowmass_angles.pdf").c_str());
     c3->Close();
     
+    // Plot effective mass vs sum of masses
+    // ------------------------------------------------
+    c4 = new TCanvas("c4","Phase space plot",1200,900);
+    c4->SetLogx(); c4->SetLogy(); c4->SetLogz(); c4->SetGrid();
+    //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
+    c4->DrawFrame(3e-2,1e-4,3e0,1e0,";#Sigma m_{i} (eV);#LTm_{#beta#beta}#GT (eV)");
+    hpsNHs->Draw("colz same");
+    hpsNHs->GetZaxis()->SetRangeUser(2e-6,2e-2);
+    hpsIHs->Draw("colz same");
+    hpsIHs->GetZaxis()->SetRangeUser(2e-6,2e-2);
+    Tl->SetTextSize(0.035);
+    Tl->SetTextColor(0);
+    Tl->DrawLatex(7.0e-2,5.0e-3,"NH");
+    Tl->DrawLatex(1.2e-1,3.0e-2,"IH");
+    // Save and close
+    c4->Print((fname+"_cosmology.png").c_str());
+    c4->Print((fname+"_cosmology.pdf").c_str());
+    c4->Close();
+    
   }
   
   // Free memory
   if (hpsNH) delete hpsNH;
   if (hpsIH) delete hpsIH;
+  if (hpsNHs) delete hpsNHs;
+  if (hpsIHs) delete hpsIHs;
   if (hpsNHlo) delete hpsNHlo;
   if (hangNHlo) delete hangNHlo;
   for (int i=0; i<4; i++) { // min/max for NH/IH
@@ -359,12 +393,13 @@ int main() {
   if (c1) delete c1;
   if (c2) delete c2;
   if (c3) delete c3;
+  if (c4) delete c4;
   
   return 0;
   
 }
 
-double meff(double m0, double alpha, double beta, float sigma, int inverted) {
+double meff(double m0, double& msum, double alpha, double beta, float sigma, int inverted) {
 
   // Throw neutrino mixing parameters
   double s12, s13, dm21, dm32;
@@ -395,10 +430,12 @@ double meff(double m0, double alpha, double beta, float sigma, int inverted) {
     *fac1 *= c12*c13*sqrt(m0*m0-dm32-dm21);   // dm21>0
     *fac3 *= s12*c13*sqrt(m0*m0-dm32);        // dm32<0
     *fac2 *= s13*m0;                          // m3 = m0
+    msum = sqrt(m0*m0-dm32-dm21)+sqrt(m0*m0-dm32)+m0;
   } else {
     *fac1 *= c12*c13*m0;                      // m1 = m0
     *fac3 *= s12*c13*sqrt(m0*m0+dm21);        // dm21>0
     *fac2 *= s13*sqrt(m0*m0+dm21+dm32);       // dm32>0
+    msum = m0+sqrt(m0*m0+dm21)+sqrt(m0*m0+dm21+dm32);
   }
   
   // Add the three components and return absolute value
@@ -413,25 +450,25 @@ double mefflimits(double m0, float s, int index) {
   if (index%2) limit*=-1;
   
   // Find min/max values for NH/IH contours
-  double mass;
+  double mass, msum;
   for (int i=0; i<NSTATS; i++) {
     switch (index) {
       case 1 :  // NH max
-        mass = meff(m0,0,0,s,0);
+        mass = meff(m0,msum,0,0,s,0);
         if (mass>limit) limit=mass;
         break;
       case 2 :  // IH min
-        mass = meff(m0,pi,pi,s,1);
+        mass = meff(m0,msum,pi,pi,s,1);
         if (mass<limit) limit=mass;
         break;
       case 3 :  // IH max
-        mass = meff(m0,0,0,s,1);
+        mass = meff(m0,msum,0,0,s,1);
         if (mass>limit) limit=mass;
         break;
       default : // NH min
-        if      (m0<2.3e-3) mass = meff(m0,pi,0,s,0);
+        if      (m0<2.3e-3) mass = meff(m0,msum,pi,0,s,0);
         else if (m0<6.6e-3) mass = 0;
-        else                mass = meff(m0,pi,pi,s,0);
+        else                mass = meff(m0,msum,pi,pi,s,0);
         if (mass<limit) limit=mass;
         break;
     }
