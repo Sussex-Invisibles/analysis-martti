@@ -362,13 +362,15 @@ int main() {
     //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
     c4->DrawFrame(3e-2,1e-4,3e0,1e0,";#Sigma m_{i} (eV);#LTm_{#beta#beta}#GT (eV)");
     hpsNHs->Draw("colz same");
-    hpsNHs->GetZaxis()->SetRangeUser(2e-6,2e-2);
+    //hpsNHs->GetZaxis()->SetRangeUser(2e-6,2e-2);
+    hpsNHs->GetZaxis()->SetRangeUser(2e-9,2e-2);
     hpsIHs->Draw("colz same");
-    hpsIHs->GetZaxis()->SetRangeUser(2e-6,2e-2);
+    //hpsIHs->GetZaxis()->SetRangeUser(2e-6,2e-2);
+    hpsIHs->GetZaxis()->SetRangeUser(2e-9,2e-2);
     Tl->SetTextSize(0.035);
     Tl->SetTextColor(0);
     Tl->DrawLatex(7.0e-2,5.0e-3,"NH");
-    Tl->DrawLatex(1.2e-1,3.0e-2,"IH");
+    Tl->DrawLatex(1.2e-1,2.7e-2,"IH");
     // Save and close
     c4->Print((fname+"_cosmology.png").c_str());
     c4->Print((fname+"_cosmology.pdf").c_str());
