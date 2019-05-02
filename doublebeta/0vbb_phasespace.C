@@ -56,7 +56,7 @@ int main() {
   TH2D *hpsNH=NULL, *hpsIH=NULL, *hpsNHs=NULL, *hpsIHs=NULL, *hpsNHlo=NULL, *hangNHlo=NULL;
   TGraph *contours[4][4] = {NULL};
   TGraph *f0=NULL, *f1=NULL;
-  TCanvas *c1=NULL, *c2=NULL, *c3=NULL, *c4=NULL;
+  TCanvas *c=NULL;
   
   if (!io.good()) {  // File does not exist
     
@@ -72,7 +72,8 @@ int main() {
     // Histograms for very small effective masses (NH)
     TH2D* hpsNHlo = new TH2D("hpsNHlo","Small effective mass",NBINS,1e-4,1e0,NBINS,1e-8,1e-4);
     BinLog(hpsNHlo->GetXaxis()); BinLog(hpsNHlo->GetYaxis());
-    TH2D* hangNHlo = new TH2D("hangNHlo","Majorana hangNHlo",NBINS,0.8,1.2,NBINS,0,2);
+    //TH2D* hangNHlo = new TH2D("hangNHlo","Majorana hangNHlo",NBINS,0.8,1.2,NBINS,0,2);
+    TH2D* hangNHlo = new TH2D("hangNHlo","Majorana hangNHlo",NBINS,0,1,NBINS,0,1);
     
     // Histograms for plotting sum of neutrino masses as x-axis
     TH2D* hpsNHs = new TH2D("hpsNHs","Normal hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
@@ -84,7 +85,7 @@ int main() {
     double m0, meffNH, meffIH;
     
     // Get maximum lines for allowed phase space region
-    std::cout << "Generating countour limits..." << std::endl;
+    std::cout << "Generating contour limits..." << std::endl;
     std::string cname;
     for (int i=0; i<4; i++) { // min/max for NH/IH
       for (int s=0; s<4; s++) { // sigmas
@@ -112,8 +113,8 @@ int main() {
     std::cout << "Filling allowed phase space regions..." << std::endl;
     while (throws<NTHROWS) {
       m0 = pow(10.,4.*(rng->Rndm()-1.)); // log prior (100% of phase space)
-      alpha = 2*pi*rng->Rndm(); // 0-2 pi (100% of phase space)
-      beta = 2*pi*rng->Rndm(); // 0-2 pi (100% of phase space)
+      alpha = pi*rng->Rndm(); // 0-pi (100% of phase space)
+      beta = pi*rng->Rndm(); // 0-pi (100% of phase space)
       meffNH = meff(m0,msumNH,alpha,beta,-1,0);
       meffIH = meff(m0,msumIH,alpha,beta,-1,1);
       throws++;
@@ -144,18 +145,17 @@ int main() {
     f0 = new TGraph();
     f1 = new TGraph();
     for (int i=0; i<NBINS; i++) {
-      double beta = 2.*i/NBINS;
-      double alpha = 1. + 0.13*sin(beta*pi);  // 5% of phase space
-      f1->SetPoint(i,alpha+0.05,beta);
-      f0->SetPoint(i,alpha-0.05,beta);
+      double beta = (double)i/NBINS;
+      double alpha = 0.5 + 0.065*sin(2.*beta*pi);  // 5% of phase space
+      f1->SetPoint(i,alpha+0.025,beta);
+      f0->SetPoint(i,alpha-0.025,beta);
     }
     f0->SetName("alpha_lo");
     f1->SetName("alpha_hi");
     while (count2<NTHROWSLOWMASS) {
       m0 = pow(10.,(rng->Rndm()-3.)); // log prior (25% of phase space)
-      beta = 2*pi*rng->Rndm(); // 0-2 pi (100% of phase space)
-      alpha = pi*(1.+0.13*sin(beta)+0.1*(rng->Rndm()-0.5)); // 5% of phase space
-      //alpha = pi*(1.+0.4*(rng->Rndm()-0.5)); // 0.8-1.2 pi (20% of phase space)
+      beta = pi*rng->Rndm();
+      alpha = pi*(0.5+0.065*sin(2*beta)+0.05*(rng->Rndm()-0.25)); // 5% of phase space
       meffNH = meff(m0,msumNH,alpha,beta,-1,0);
       throws2++;
       if (meffNH>1e-4) continue;
@@ -223,18 +223,23 @@ int main() {
     
     // SNO+ sensitivity
     double fac=10./1.9; // phase II /I lifetime sensitivity (1e26y)
-    double sx1[4] = {1e-4,1e0,1e0,1e-4};
+    double sx1[4] = {1e-5,1e1,1e1,1e-5};
     double sy1[4] = {99e-3,99e-3,41e-3,41e-3}; // meV (phase I)
     double sy2[4] = {99e-3/fac,99e-3/fac,41e-3/fac,41e-3/fac}; // meV (phase II)
     TGraph *gs1 = new TGraph(4,sx1,sy1);
     TGraph *gs2 = new TGraph(4,sx1,sy2);
     
+    // Cosmology limits
+    double cx[4] = {0.12,0.12,1e1,1e1};
+    double cy[4] = {1e-5,1e1,1e1,1e-5};
+    TGraph *gc = new TGraph(4,cx,cy);
+    
     // Plot full phase space for double beta decay (NH+IH)
     // ---------------------------------------------------
-    c1 = new TCanvas("c1","Phase space plot",1200,900);
-    c1->SetLogx(); c1->SetLogy(); c1->SetLogz(); c1->SetGrid();
+    c = new TCanvas("c","Phase space plot",1200,900);
+    c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
     //hpsIH->SetTitle("#bf{0#nu#beta#beta decay - Type-I seesaw}");
-    c1->DrawFrame(1e-4,1e-4,1e0,1e0,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
+    c->DrawFrame(1e-4,1e-4,1e0,1e0,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
     // Draw SNO+ sensitivity bands (areas only)
     gs1->SetFillColorAlpha(BANDCOL,0.5);
     gs2->SetFillColorAlpha(BANDCOL,0.5);
@@ -273,9 +278,9 @@ int main() {
     // Draw text describing plots
     Tl->SetTextColor(DEFCOL);
     Tl->SetTextSize(0.03);
-    Tl->DrawLatex(1.5e-4,6.4e-1,"#alpha #equiv #alpha_{1}");
-    Tl->DrawLatex(1.5e-4,4.0e-1,"#beta #equiv #alpha_{2}#font[122]{-} 2#delta_{CP}");
-    Tl->DrawLatex(1.5e-4,2.5e-1,"#alpha, #beta #in [0, 2#pi]");
+    //Tl->DrawLatex(1.5e-4,6.4e-1,"#alpha #equiv #phi_{2}");
+    //Tl->DrawLatex(1.5e-4,4.0e-1,"#beta #equiv #phi_{3}#font[122]{+} #delta_{CP}");
+    Tl->DrawLatex(1.5e-4,2.5e-1,"#phi_{2}, #phi_{3} #in [0, #pi)");
     Tl->SetTextSize(0.035);
     Tl->SetTextColor(HIERCOL);
     Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
@@ -297,84 +302,103 @@ int main() {
     gs1->Draw("l");
     gs2->Draw("l");
     // Save and close
-    c1->Update();
-    c1->RedrawAxis();
-    c1->Print((fname+".png").c_str());
-    c1->Print((fname+".pdf").c_str());
-    c1->Close();
+    c->Update();
+    c->RedrawAxis();
+    c->Print((fname+".png").c_str());
+    c->Print((fname+".pdf").c_str());
+    c->Close();
+    
+    // Plot effective mass vs sum of masses (cosmology)
+    // ------------------------------------------------
+    c = new TCanvas("c","Phase space plot",1200,900);
+    c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
+    //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
+    c->DrawFrame(3e-2,1e-4,3e0,1e0,";#Sigma m_{#nu} (eV);#LTm_{#beta#beta}#GT (eV)");
+    // Draw sensitivity bands (areas only)
+    gs1->Draw("f");
+    gs2->Draw("f");
+    gc->SetFillColorAlpha(16,0.5);
+    gc->Draw("f");
+    // Draw allowed phase space
+    hpsNHs->Draw("colz same");
+    hpsNHs->GetZaxis()->SetRangeUser(2e-9,2e-2);
+    hpsIHs->Draw("colz same");
+    hpsIHs->GetZaxis()->SetRangeUser(2e-9,2e-2);
+    // Write SNO+ sensitivities
+    Tl->DrawLatex(1.2,5.8e-2,"SNO+ Phase I");
+    Tl->DrawLatex(1.2,1.1e-2,"SNO+ Phase II");
+    // Write mass ordering
+    Tl->SetTextSize(0.035);
+    Tl->SetTextColor(0);
+    Tl->DrawLatex(7.0e-2,5.0e-3,"NH");
+    Tl->DrawLatex(1.2e-1,2.7e-2,"IH");
+    // Redraw sensitivity bands (lines only)
+    gs1->Draw("l");
+    gs2->Draw("l");
+    gc->SetLineColorAlpha(16,0.75);
+    gc->SetLineStyle(5);
+    gc->SetLineWidth(2);
+    gc->Draw("l");
+    // Save and close
+    c->Print((fname+"_cosmology.png").c_str());
+    c->Print((fname+"_cosmology.pdf").c_str());
+    c->Close();
     
     // Plot low m_eff region for double beta decay (NH)
     // ------------------------------------------------
-    c2 = new TCanvas("c2","Phase space plot",1200,900);
-    c2->SetLogx(); c2->SetLogy(); c2->SetLogz(); c2->SetGrid();
+    c = new TCanvas("c","Phase space plot",1200,900);
+    c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
     //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
-    c2->DrawFrame(1e-4,1e-7,1e0,1e-4,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
+    c->DrawFrame(1e-4,1e-7,1e0,1e-4,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
     hpsNHlo->Draw("colz same");
-    hpsNHlo->GetZaxis()->SetRangeUser(5e-10,2e-7);
+    hpsNHlo->GetZaxis()->SetRangeUser(5e-12,2e-7);
     // Contours are rather jaggy (stats limited) here
     for (int s=0; s<4; s++) { // contours for NH
       contours[0][s]->Draw("l");
       contours[1][s]->Draw("l");
     }
     // Draw text describing plots
+    /*
     Tl->SetTextSize(0.03);
     Tl->SetTextColor(1);
-    Tl->DrawLatex(4e-2,7.00e-5,"#alpha #equiv #alpha_{1}");
-    Tl->DrawLatex(4e-2,5.00e-5,"#beta #equiv #alpha_{2}#font[122]{-} 2#delta_{CP}");
-    Tl->DrawLatex(4e-2,3.57e-5,"#beta #in [0, 2]");
+    Tl->DrawLatex(4e-2,7.00e-5,"#alpha #equiv #phi_{2}");
+    Tl->DrawLatex(4e-2,5.00e-5,"#beta #equiv #phi_{3}#font[122]{+} #delta_{CP}");
+    Tl->DrawLatex(4e-2,3.57e-5,"#beta #in [0, 1)");
     Tl->DrawLatex(4e-2,2.55e-5,"#alpha #in [1 #plus 0.13 sin#beta #minus 0.05,");
     Tl->DrawLatex(6.8e-2,1.82e-5,"1 #plus 0.13 sin#beta #plus 0.05]");
+    */
     // Draw legend (defined above)
     leg->Draw();
     // Save and close
-    c2->Print((fname+"_lowmass.png").c_str());
-    c2->Print((fname+"_lowmass.pdf").c_str());
-    c2->Close();
+    c->Print((fname+"_lowmass.png").c_str());
+    c->Print((fname+"_lowmass.pdf").c_str());
+    c->Close();
     
     // Plot Majorana angles for low m_eff region (NH)
     // ----------------------------------------------
-    c3 = new TCanvas("c3","Majorana angle plot",1200,900);
-    c3->SetLogz(); c3->SetGrid();
+    c = new TCanvas("c","Majorana angle plot",1200,900);
+    c->SetLogz(); c->SetGrid();
     //hangNHlo->SetTitle("#bf{Majorana hangNHlo that lead to m_{#beta#beta} < 10^{-4} eV}");
-    c3->DrawFrame(0.8,0,1.2,2,";#alpha #equiv #alpha_{1} [#pi];#beta #equiv #alpha_{2}#font[122]{-} 2#delta_{CP} [#pi]");
+    c->DrawFrame(0,0,1,1,";#phi_{2} [#pi];#phi_{3} [#pi]");
     hangNHlo->Draw("colz same");
-    hangNHlo->GetZaxis()->SetRangeUser(8e-10,4e-8);
+    //hangNHlo->GetZaxis()->SetRangeUser(8e-12,4e-8);
     // Draw region in which points were generated
     f0->SetLineColor(LINECOL);
     f1->SetLineColor(LINECOL);
     f0->Draw("l");
     f1->Draw("l");
     // Draw text describing plots
+    /*
     Tl->SetTextSize(0.03);
     Tl->SetTextColor(1);
-    Tl->DrawLatex(1.05,1.72,"#beta #in [0, 2]");
+    Tl->DrawLatex(1.05,1.72,"#beta #in [0, 1)");
     Tl->DrawLatex(1.05,1.62,"#alpha #in [1 #plus 0.13 sin#beta #minus 0.05,");
     Tl->DrawLatex(1.073,1.52,"1 #plus 0.13 sin#beta #plus 0.05]");
+    */
     // Save and close
-    c3->Print((fname+"_lowmass_angles.png").c_str());
-    c3->Print((fname+"_lowmass_angles.pdf").c_str());
-    c3->Close();
-    
-    // Plot effective mass vs sum of masses
-    // ------------------------------------------------
-    c4 = new TCanvas("c4","Phase space plot",1200,900);
-    c4->SetLogx(); c4->SetLogy(); c4->SetLogz(); c4->SetGrid();
-    //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
-    c4->DrawFrame(3e-2,1e-4,3e0,1e0,";#Sigma m_{i} (eV);#LTm_{#beta#beta}#GT (eV)");
-    hpsNHs->Draw("colz same");
-    //hpsNHs->GetZaxis()->SetRangeUser(2e-6,2e-2);
-    hpsNHs->GetZaxis()->SetRangeUser(2e-9,2e-2);
-    hpsIHs->Draw("colz same");
-    //hpsIHs->GetZaxis()->SetRangeUser(2e-6,2e-2);
-    hpsIHs->GetZaxis()->SetRangeUser(2e-9,2e-2);
-    Tl->SetTextSize(0.035);
-    Tl->SetTextColor(0);
-    Tl->DrawLatex(7.0e-2,5.0e-3,"NH");
-    Tl->DrawLatex(1.2e-1,2.7e-2,"IH");
-    // Save and close
-    c4->Print((fname+"_cosmology.png").c_str());
-    c4->Print((fname+"_cosmology.pdf").c_str());
-    c4->Close();
+    c->Print((fname+"_lowmass_angles.png").c_str());
+    c->Print((fname+"_lowmass_angles.pdf").c_str());
+    c->Close();
     
   }
   
@@ -392,10 +416,7 @@ int main() {
   }
   if (f0) delete f0;
   if (f1) delete f1;
-  if (c1) delete c1;
-  if (c2) delete c2;
-  if (c3) delete c3;
-  if (c4) delete c4;
+  if (c) delete c;
   
   return 0;
   
@@ -423,25 +444,25 @@ double meff(double m0, double& msum, double alpha, double beta, float sigma, int
   double c13 = 1.-s13;
   
   // Define complex numbers in polar form
-  TComplex *fac1 = new TComplex(1,0,true);
-  TComplex *fac3 = new TComplex(1,alpha,true);
-  TComplex *fac2 = new TComplex(1,beta,true);
+  TComplex *fac1 = new TComplex(1.,0.,true);
+  TComplex *fac2 = new TComplex(1.,2.*alpha,true);
+  TComplex *fac3 = new TComplex(1.,2.*beta,true);
   
   // Multiply by PMNS matrix element and neutrino mass eigenstate
   if (inverted) {
     *fac1 *= c12*c13*sqrt(m0*m0-dm32-dm21);   // dm21>0
-    *fac3 *= s12*c13*sqrt(m0*m0-dm32);        // dm32<0
-    *fac2 *= s13*m0;                          // m3 = m0
+    *fac2 *= s12*c13*sqrt(m0*m0-dm32);        // dm32<0
+    *fac3 *= s13*m0;                          // m3 = m0
     msum = sqrt(m0*m0-dm32-dm21)+sqrt(m0*m0-dm32)+m0;
   } else {
     *fac1 *= c12*c13*m0;                      // m1 = m0
-    *fac3 *= s12*c13*sqrt(m0*m0+dm21);        // dm21>0
-    *fac2 *= s13*sqrt(m0*m0+dm21+dm32);       // dm32>0
+    *fac2 *= s12*c13*sqrt(m0*m0+dm21);        // dm21>0
+    *fac3 *= s13*sqrt(m0*m0+dm21+dm32);       // dm32>0
     msum = m0+sqrt(m0*m0+dm21)+sqrt(m0*m0+dm21+dm32);
   }
   
   // Add the three components and return absolute value
-  TComplex *res = new TComplex(*fac1 + *fac3 + *fac2);
+  TComplex *res = new TComplex(*fac1 + *fac2 + *fac3);
   return res->Abs(*res);
 }
 
@@ -460,7 +481,7 @@ double mefflimits(double m0, float s, int index) {
         if (mass>limit) limit=mass;
         break;
       case 2 :  // IH min
-        mass = meff(m0,msum,pi,pi,s,1);
+        mass = meff(m0,msum,pi/2,pi/2,s,1);
         if (mass<limit) limit=mass;
         break;
       case 3 :  // IH max
@@ -468,9 +489,9 @@ double mefflimits(double m0, float s, int index) {
         if (mass>limit) limit=mass;
         break;
       default : // NH min
-        if      (m0<2.3e-3) mass = meff(m0,msum,pi,0,s,0);
+        if      (m0<2.3e-3) mass = meff(m0,msum,pi/2,0,s,0);
         else if (m0<6.6e-3) mass = 0;
-        else                mass = meff(m0,msum,pi,pi,s,0);
+        else                mass = meff(m0,msum,pi/2,pi/2,s,0);
         if (mass<limit) limit=mass;
         break;
     }
