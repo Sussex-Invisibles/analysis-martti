@@ -38,7 +38,7 @@ const double S13 = 2.12e-2;
 const double ES13 = 0.08e-2;
 
 // Global functions and generators
-double mefflimits(double m0, float sigma=1., int index=0);
+double mefflimits(double m0, double& msumlim, float sigma=1., int index=0);
 double meff(double m0, double& msum, double alpha, double beta, float sigma=0., int inverted=0);
 
 // Random number generator
@@ -53,8 +53,10 @@ int main() {
   
   // Initialise objects
   TFile *file = NULL;
-  TH2D *hpsNH=NULL, *hpsIH=NULL, *hpsNHs=NULL, *hpsIHs=NULL, *hpsNHlo=NULL, *hangNHlo=NULL;
-  TGraph *contours[4][4] = {NULL};
+  TH2D *hpsNH=NULL, *hpsIH=NULL, *hpsNHlo=NULL, *hangNHlo=NULL;
+  TH2D *hpsNHc=NULL, *hpsIHc=NULL, *hpsNHs=NULL, *hpsIHs=NULL;
+  TGraph *contours[4][4] = {NULL}, *contours2[4][4] = {NULL}, *contours3[4][4] = {NULL};
+  TGraph *lines[4] = {NULL};
   TGraph *f0=NULL, *f1=NULL;
   TCanvas *c=NULL;
   
@@ -76,9 +78,15 @@ int main() {
     TH2D* hangNHlo = new TH2D("hangNHlo","Majorana hangNHlo",NBINS,0,1,NBINS,0,1);
     
     // Histograms for plotting sum of neutrino masses as x-axis
-    TH2D* hpsNHs = new TH2D("hpsNHs","Normal hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
+    TH2D* hpsNHc = new TH2D("hpsNHc","Normal hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
+    BinLog(hpsNHc->GetXaxis()); BinLog(hpsNHc->GetYaxis());
+    TH2D* hpsIHc = new TH2D("hpsIHc","Inverted hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
+    BinLog(hpsIHc->GetXaxis()); BinLog(hpsIHc->GetYaxis());
+    
+    // Histograms for plotting sum of neutrino masses as y-axis
+    TH2D* hpsNHs = new TH2D("hpsNHs","Normal hierarchy",NBINS,1e-4,1e0,NBINS,3e-2,3e0);
     BinLog(hpsNHs->GetXaxis()); BinLog(hpsNHs->GetYaxis());
-    TH2D* hpsIHs = new TH2D("hpsIHs","Inverted hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
+    TH2D* hpsIHs = new TH2D("hpsIHs","Inverted hierarchy",NBINS,1e-4,1e0,NBINS,3e-2,3e0);
     BinLog(hpsIHs->GetXaxis()); BinLog(hpsIHs->GetYaxis());
     
     // lightest and effective neutrino masses
@@ -87,17 +95,42 @@ int main() {
     // Get maximum lines for allowed phase space region
     std::cout << "Generating contour limits..." << std::endl;
     std::string cname;
+    double mefflim, msumlim;
     for (int i=0; i<4; i++) { // min/max for NH/IH
       for (int s=0; s<4; s++) { // sigmas
         contours[i][s] = new TGraph();
+        contours2[i][s] = new TGraph();
+        contours3[i][s] = new TGraph();
         for (int b=0; b<=NBINS; b++) {
           m0 = hpsNH->GetXaxis()->GetBinCenter(b);
-          contours[i][s]->SetPoint(b,m0,mefflimits(m0,s,i));
+          mefflim = mefflimits(m0,msumlim,s,i);
+          contours[i][s]->SetPoint(b,m0,mefflim);
+          contours2[i][s]->SetPoint(b,msumlim,mefflim);
+          contours3[i][s]->SetPoint(b,m0,msumlim);
           printProgress(i*4*NBINS+s*NBINS+b,16*NBINS);
         }
         cname = Form("contours_%d_%d",i,s);
         contours[i][s]->SetName(cname.c_str());
+        cname = Form("contours2_%d_%d",i,s);
+        contours2[i][s]->SetName(cname.c_str());
+        cname = Form("contours3_%d_%d",i,s);
+        contours3[i][s]->SetName(cname.c_str());
       }
+    }
+    
+    // Get interesting lines for specific Majorana angles (NH only)
+    double dummy;
+    for (int i=0; i<4; i++) lines[i] = new TGraph();
+    for (int b=0; b<=1e4; b++) {
+      m0 = hpsNH->GetXaxis()->GetBinCenter(b);
+      lines[0]->SetPoint(b,m0,meff(m0,dummy,0,0,0,0));
+      lines[1]->SetPoint(b,m0,meff(m0,dummy,0,pi/2,0,0));
+      lines[2]->SetPoint(b,m0,meff(m0,dummy,pi/2,0,0,0));
+      lines[3]->SetPoint(b,m0,meff(m0,dummy,pi/2,pi/2,0,0));
+    }
+    for (int i=0; i<4; i++) {
+      cname = Form("lines_%d",i);
+      lines[i]->SetName(cname.c_str());
     }
     
     // Majorana angles and global minima
@@ -120,8 +153,10 @@ int main() {
       throws++;
       hpsNH->Fill(m0, meffNH);
       hpsIH->Fill(m0, meffIH);
-      hpsNHs->Fill(msumNH, meffNH);
-      hpsIHs->Fill(msumIH, meffIH);
+      hpsNHc->Fill(msumNH, meffNH);
+      hpsIHc->Fill(msumIH, meffIH);
+      hpsNHs->Fill(m0, msumNH);
+      hpsIHs->Fill(m0, msumIH);
       printProgress(throws,NTHROWS);
       if (meffNH>1e-4) continue;
       count++;
@@ -132,6 +167,8 @@ int main() {
     }
     hpsNH->Scale(1./throws);
     hpsIH->Scale(1./throws);
+    hpsNHc->Scale(1./throws);
+    hpsIHc->Scale(1./throws);
     hpsNHs->Scale(1./throws);
     hpsIHs->Scale(1./throws);
     //hpsNHlo->Scale(1./throws);
@@ -175,8 +212,11 @@ int main() {
     for (int i=0; i<4; i++) { // min/max for NH/IH
       for (int s=0; s<4; s++) { // sigmas
         contours[i][s]->Write();
+        contours2[i][s]->Write();
+        contours3[i][s]->Write();
       }
     }
+    for (int i=0; i<4; i++) lines[i]->Write();
     f0->Write();
     f1->Write();
         
@@ -200,17 +240,38 @@ int main() {
     file = new TFile(output.c_str(),"READ");
     hpsIH = (TH2D*)file->Get("hpsIH");
     hpsNH = (TH2D*)file->Get("hpsNH");
+    hpsIHc = (TH2D*)file->Get("hpsIHc");
+    hpsNHc = (TH2D*)file->Get("hpsNHc");
     hpsIHs = (TH2D*)file->Get("hpsIHs");
     hpsNHs = (TH2D*)file->Get("hpsNHs");
     hpsNHlo = (TH2D*)file->Get("hpsNHlo");
     hangNHlo = (TH2D*)file->Get("hangNHlo");
     std::string cname;
+    TGraph *temp = NULL;
     for (int i=0; i<4; i++) { // min/max for NH/IH
+    
+      cname = Form("lines_%d",i);
+      lines[i] = (TGraph*)file->Get(cname.c_str());
+      //lines[i] = new TGraph();
+      //Smooth(lines[i],temp,5);
+      
       for (int s=0; s<4; s++) { // sigmas
+      
         cname = Form("contours_%d_%d",i,s);
-        TGraph *temp = (TGraph*)file->Get(cname.c_str());
+        temp = (TGraph*)file->Get(cname.c_str());
         contours[i][s] = new TGraph();
         Smooth(contours[i][s],temp,5);
+        
+        cname = Form("contours2_%d_%d",i,s);
+        temp = (TGraph*)file->Get(cname.c_str());
+        contours2[i][s] = new TGraph();
+        Smooth(contours2[i][s],temp,5);
+        
+        cname = Form("contours3_%d_%d",i,s);
+        temp = (TGraph*)file->Get(cname.c_str());
+        contours3[i][s] = new TGraph();
+        Smooth(contours3[i][s],temp,5);
+        
         if(temp) delete temp;
       }
     }
@@ -233,6 +294,9 @@ int main() {
     double cx[4] = {0.12,0.12,1e1,1e1};
     double cy[4] = {1e-5,1e1,1e1,1e-5};
     TGraph *gc = new TGraph(4,cx,cy);
+    double sx[4] = {1e-5,1e1,1e1,1e-5};
+    double sy[4] = {0.12,0.12,1e1,1e1};
+    TGraph *gs = new TGraph(4,sx,sy);
     
     // Plot full phase space for double beta decay (NH+IH)
     // ---------------------------------------------------
@@ -268,7 +332,7 @@ int main() {
       }
     }
     // Draw legend for contours
-    TLegend *leg = new TLegend(0.16,0.16,0.33,0.32,"#bf{PDG 2018}");
+    TLegend *leg = new TLegend(0.17,0.78,0.34,0.94,"#bf{PDG 2018}");
     for (int s=0; s<4; s++) {
       std::string legstr = Form("%d #sigma",s);
       leg->AddEntry(contours[0][s],legstr.c_str(),"l");
@@ -276,11 +340,11 @@ int main() {
     leg->SetFillStyle(0);
     leg->Draw();
     // Draw text describing plots
-    Tl->SetTextColor(DEFCOL);
-    Tl->SetTextSize(0.03);
+    //Tl->SetTextColor(DEFCOL);
+    //Tl->SetTextSize(0.03);
     //Tl->DrawLatex(1.5e-4,6.4e-1,"#alpha #equiv #phi_{2}");
     //Tl->DrawLatex(1.5e-4,4.0e-1,"#beta #equiv #phi_{3}#font[122]{+} #delta_{CP}");
-    Tl->DrawLatex(1.5e-4,2.5e-1,"#phi_{2}, #phi_{3} #in [0, #pi)");
+    //Tl->DrawLatex(1.5e-4,2.5e-1,"#phi_{2}, #phi_{3} #in [0, #pi)");
     Tl->SetTextSize(0.035);
     Tl->SetTextColor(HIERCOL);
     Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
@@ -308,6 +372,46 @@ int main() {
     c->Print((fname+".pdf").c_str());
     c->Close();
     
+    // Plot phase space for double beta decay (minimalistic)
+    // -----------------------------------------------------
+    c = new TCanvas("c","Phase space plot",1200,900);
+    c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
+    //hpsIH->SetTitle("#bf{0#nu#beta#beta decay - Type-I seesaw}");
+    c->DrawFrame(1e-4,1e-4,1e0,1e0,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
+    // Draw allowed phase space for IH
+    hpsIH->Draw("colz same");
+    hpsIH->GetZaxis()->SetRangeUser(2e-9,2e-4);
+    // Draw allowed phase space for NH
+    hpsNH->Draw("colz same");
+    hpsNH->GetZaxis()->SetRangeUser(2e-9,2e-4);
+    Tl->SetTextSize(0.035);
+    Tl->SetTextColor(HIERCOL);
+    Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
+    Tl->DrawLatex(1.5e-4,2.0e-3,"NH");
+    // Save a first time
+    c->Update();
+    c->RedrawAxis();
+    c->Print((fname+"_minimal.png").c_str());
+    c->Print((fname+"_minimal.pdf").c_str());
+    // Draw lines of interest for NH
+    for (int i=0; i<4; i++) {
+      lines[i]->SetLineWidth(2);
+      lines[i]->SetLineColor(kOrange+i);
+      lines[i]->Draw();
+    }
+    TLegend *leglines = new TLegend(0.17,0.79,0.32,0.94,"#bf{Majorana phases}");
+    leglines->AddEntry(lines[0],"#phi_{2}=0#lower[-0.2]{#circ}, #phi_{3}=0#lower[-0.2]{#circ}","l");
+    leglines->AddEntry(lines[1],"#phi_{2}=0#lower[-0.2]{#circ}, #phi_{3}=90#lower[-0.2]{#circ}","l");
+    leglines->AddEntry(lines[2],"#phi_{2}=90#lower[-0.2]{#circ}, #phi_{3}=0#lower[-0.2]{#circ}","l");
+    leglines->AddEntry(lines[3],"#phi_{2}=90#lower[-0.2]{#circ}, #phi_{3}=90#lower[-0.2]{#circ}","l");
+    leglines->Draw();
+    // Save again and close
+    c->Update();
+    c->RedrawAxis();
+    c->Print((fname+"_phenom.png").c_str());
+    c->Print((fname+"_phenom.pdf").c_str());
+    c->Close();
+    
     // Plot effective mass vs sum of masses (cosmology)
     // ------------------------------------------------
     c = new TCanvas("c","Phase space plot",1200,900);
@@ -320,13 +424,46 @@ int main() {
     gc->SetFillColorAlpha(16,0.5);
     gc->Draw("f");
     // Draw allowed phase space
-    hpsNHs->Draw("colz same");
-    hpsNHs->GetZaxis()->SetRangeUser(2e-9,2e-2);
-    hpsIHs->Draw("colz same");
-    hpsIHs->GetZaxis()->SetRangeUser(2e-9,2e-2);
-    // Write SNO+ sensitivities
-    Tl->DrawLatex(1.2,5.8e-2,"SNO+ Phase I");
-    Tl->DrawLatex(1.2,1.1e-2,"SNO+ Phase II");
+    hpsNHc->Draw("colz same");
+    hpsNHc->GetZaxis()->SetRangeUser(2e-9,2e-2);
+    for (int i=0; i<2; i++) { // contours for NH
+      for (int s=0; s<4; s++) { // contours for NH
+        //contours2[i][s]->SetLineStyle(CONTSTY[s]);
+        contours2[i][s]->SetLineColor(CONTCOL+s);
+        contours2[i][s]->SetLineWidth(CONTWDT);
+        contours2[i][s]->Draw("l");
+      }
+    }
+    hpsIHc->Draw("colz same");
+    hpsIHc->GetZaxis()->SetRangeUser(2e-9,2e-2);
+    for (int i=2; i<4; i++) { // contours for IH
+      for (int s=0; s<4; s++) { // contours for IH
+        //contours2[i][s]->SetLineStyle(CONTSTY[s]);
+        contours2[i][s]->SetLineColor(CONTCOL+s);
+        contours2[i][s]->SetLineWidth(CONTWDT);
+        contours2[i][s]->Draw("l");
+      }
+    }
+    // Close contours at x-cutoff by joining min/max graphs
+    TLine join(0,0,1,1); // dummy constructor
+    for (int i=0; i<2; i++) {
+      for (int s=0; s<4; s++) {
+        join.SetLineColor(CONTCOL+s);
+        join.SetLineWidth(CONTWDT);
+        join.DrawLine(contours2[2*i][s]->GetX()[0],contours2[2*i][s]->GetY()[0],
+                      contours2[2*i+1][s]->GetX()[0],contours2[2*i][s]->GetY()[0]);
+        join.DrawLine(contours2[2*i+1][s]->GetX()[0],contours2[2*i][s]->GetY()[0],
+                      contours2[2*i+1][s]->GetX()[0],contours2[2*i+1][s]->GetY()[0]);
+      }
+    }
+    // Draw legend for contours
+    leg->Draw();
+    // Write SNO+ sensitivities and cosmology limits
+    Tl->SetTextSize(0.025);
+    Tl->SetTextColor(TEXTCOL);
+    Tl->DrawLatex(3.5e-2,5.8e-2,"SNO+ Phase I");
+    Tl->DrawLatex(3.5e-2,1.1e-2,"SNO+ Phase II");
+    Tl->DrawLatex(1.4e-1,1.3e-4,"#color[13]{PLANCK 2018}");
     // Write mass ordering
     Tl->SetTextSize(0.035);
     Tl->SetTextColor(0);
@@ -342,6 +479,68 @@ int main() {
     // Save and close
     c->Print((fname+"_cosmology.png").c_str());
     c->Print((fname+"_cosmology.pdf").c_str());
+    c->Close();
+    
+    // Plot lightest mass vs sum of masses (cosmology)
+    // ------------------------------------------------
+    c = new TCanvas("c","Phase space plot",1200,900);
+    c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
+    //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
+    c->DrawFrame(1e-4,3e-2,1e0,3e0,";m_{0} (eV);#Sigma m_{#nu} (eV)");
+    // Draw sensitivity bands (areas only)
+    gs->SetFillColorAlpha(16,0.5);
+    gs->Draw("f");
+    // Draw degenerate region (line)
+    TLine deg(1e-2,3e-2,1e0,3e0);
+    deg.SetLineWidth(3);
+    deg.SetLineColorAlpha(2,0.25);
+    deg.Draw("l");
+    Tl->SetTextSize(0.025);
+    Tl->SetTextColorAlpha(2,0.5);
+    Tl->DrawLatex(1.5e-2,3.5e-2,"#Sigma m_{#nu} = 3m_{0}");
+    // Draw allowed phase space
+    hpsNHs->Draw("colz same");
+    hpsNHs->GetZaxis()->SetRangeUser(2e-6,2e-3);
+    /*
+    for (int i=0; i<2; i++) { // contours for NH
+      for (int s=0; s<4; s++) { // contours for NH
+        //contours3[i][s]->SetLineStyle(CONTSTY[s]);
+        contours3[i][s]->SetLineColor(CONTCOL+s);
+        contours3[i][s]->SetLineWidth(CONTWDT);
+        contours3[i][s]->Draw("l");
+      }
+    }
+    */
+    hpsIHs->Draw("colz same");
+    hpsIHs->GetZaxis()->SetRangeUser(2e-6,2e-3);
+    /*
+    for (int i=2; i<4; i++) { // contours for IH
+      for (int s=0; s<4; s++) { // contours for IH
+        //contours3[i][s]->SetLineStyle(CONTSTY[s]);
+        contours3[i][s]->SetLineColor(CONTCOL+s);
+        contours3[i][s]->SetLineWidth(CONTWDT);
+        contours3[i][s]->Draw("l");
+      }
+    }
+    */
+    // Draw legend for contours (they don't really help here)
+    //leg->Draw();
+    // Write cosmology limits
+    Tl->SetTextSize(0.025);
+    Tl->DrawLatex(1.4e-4,1.3e-1,"#color[13]{PLANCK 2018}");
+    // Write mass ordering
+    Tl->SetTextSize(0.035);
+    Tl->SetTextColor(HIERCOL);
+    Tl->DrawLatex(1.4e-4,4.8e-2,"NH");
+    Tl->DrawLatex(1.4e-4,8.0e-2,"IH");
+    // Redraw sensitivity bands (lines only)
+    gs->SetLineColorAlpha(16,0.75);
+    gs->SetLineStyle(5);
+    gs->SetLineWidth(2);
+    gs->Draw("l");
+    // Save and close
+    c->Print((fname+"_sum.png").c_str());
+    c->Print((fname+"_sum.pdf").c_str());
     c->Close();
     
     // Plot low m_eff region for double beta decay (NH)
@@ -405,6 +604,8 @@ int main() {
   // Free memory
   if (hpsNH) delete hpsNH;
   if (hpsIH) delete hpsIH;
+  if (hpsNHc) delete hpsNHc;
+  if (hpsIHc) delete hpsIHc;
   if (hpsNHs) delete hpsNHs;
   if (hpsIHs) delete hpsIHs;
   if (hpsNHlo) delete hpsNHlo;
@@ -412,6 +613,7 @@ int main() {
   for (int i=0; i<4; i++) { // min/max for NH/IH
     for (int s=0; s<4; s++) { // sigmas
       if (contours[i][s]) delete contours[i][s];
+      if (contours2[i][s]) delete contours2[i][s];
     }
   }
   if (f0) delete f0;
@@ -466,11 +668,14 @@ double meff(double m0, double& msum, double alpha, double beta, float sigma, int
   return res->Abs(*res);
 }
 
-double mefflimits(double m0, float s, int index) {
+double mefflimits(double m0, double& msumlim, float s, int index) {
 
   // Initialise very large limits
   double limit = 1e6;
+  msumlim = 1e6;
   if (index%2) limit*=-1;
+  else msumlim*=-1;
+  if (index==0 && m0<2.3e-3) msumlim = 1e6;
   
   // Find min/max values for NH/IH contours
   double mass, msum;
@@ -479,19 +684,29 @@ double mefflimits(double m0, float s, int index) {
       case 1 :  // NH max
         mass = meff(m0,msum,0,0,s,0);
         if (mass>limit) limit=mass;
+        if (msum<msumlim) msumlim=msum;
         break;
       case 2 :  // IH min
         mass = meff(m0,msum,pi/2,pi/2,s,1);
         if (mass<limit) limit=mass;
+        if (msum>msumlim) msumlim=msum;
         break;
       case 3 :  // IH max
         mass = meff(m0,msum,0,0,s,1);
         if (mass>limit) limit=mass;
+        if (msum<msumlim) msumlim=msum;
         break;
       default : // NH min
-        if      (m0<2.3e-3) mass = meff(m0,msum,pi/2,0,s,0);
-        else if (m0<6.6e-3) mass = 0;
-        else                mass = meff(m0,msum,pi/2,pi/2,s,0);
+        if (m0<2.3e-3) {
+          mass = meff(m0,msum,pi/2,0,s,0);
+          if (msum<msumlim) msumlim=msum;
+        } else if (m0<6.6e-3) {
+          mass = 0;
+          msumlim = 6.5e-2;
+        } else {
+          mass = meff(m0,msum,pi/2,pi/2,s,0);
+          if (msum>msumlim) msumlim=msum;
+        }
         if (mass<limit) limit=mass;
         break;
     }
