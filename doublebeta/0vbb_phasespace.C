@@ -38,8 +38,8 @@ const double S13 = 2.12e-2;
 const double ES13 = 0.08e-2;
 
 // Global functions and generators
+double meff(double m0, double& msum, double& mtrit, double alpha, double beta, float sigma=0., int inverted=0);
 double mefflimits(double m0, double& msumlim, float sigma=1., int index=0);
-double meff(double m0, double& msum, double alpha, double beta, float sigma=0., int inverted=0);
 
 // Random number generator
 TRandom3* rng = new TRandom3();
@@ -54,7 +54,7 @@ int main() {
   // Initialise objects
   TFile *file = NULL;
   TH2D *hpsNH=NULL, *hpsIH=NULL, *hpsNHlo=NULL, *hangNHlo=NULL;
-  TH2D *hpsNHc=NULL, *hpsIHc=NULL, *hpsNHs=NULL, *hpsIHs=NULL;
+  TH2D *hpsNHc=NULL, *hpsIHc=NULL, *hpsNHs=NULL, *hpsIHs=NULL, *hpsNHt=NULL, *hpsIHt=NULL;
   TGraph *contours[4][4] = {NULL}, *contours2[4][4] = {NULL}, *contours3[4][4] = {NULL};
   TGraph *lines[4] = {NULL};
   TGraph *f0=NULL, *f1=NULL;
@@ -66,28 +66,33 @@ int main() {
     file = new TFile(output.c_str(),"RECREATE");
     
     // Histograms for normal and inverted hierarchy
-    TH2D* hpsNH = new TH2D("hpsNH","Normal hierarchy",NBINS,1e-4,1e0,NBINS,1e-4,1e0);
+    hpsNH = new TH2D("hpsNH","Normal hierarchy",NBINS,1e-4,1e0,NBINS,1e-4,1e0);
     BinLog(hpsNH->GetXaxis()); BinLog(hpsNH->GetYaxis());
-    TH2D* hpsIH = new TH2D("hpsIH","Inverted hierarchy",NBINS,1e-4,1e0,NBINS,1e-4,1e0);
+    hpsIH = new TH2D("hpsIH","Inverted hierarchy",NBINS,1e-4,1e0,NBINS,1e-4,1e0);
     BinLog(hpsIH->GetXaxis()); BinLog(hpsIH->GetYaxis());
     
     // Histograms for very small effective masses (NH)
-    TH2D* hpsNHlo = new TH2D("hpsNHlo","Small effective mass",NBINS,1e-4,1e0,NBINS,1e-8,1e-4);
+    hpsNHlo = new TH2D("hpsNHlo","Small effective mass",NBINS,1e-4,1e0,NBINS,1e-8,1e-4);
     BinLog(hpsNHlo->GetXaxis()); BinLog(hpsNHlo->GetYaxis());
-    //TH2D* hangNHlo = new TH2D("hangNHlo","Majorana hangNHlo",NBINS,0.8,1.2,NBINS,0,2);
-    TH2D* hangNHlo = new TH2D("hangNHlo","Majorana hangNHlo",NBINS,0,1,NBINS,0,1);
+    hangNHlo = new TH2D("hangNHlo","Majorana hangNHlo",NBINS,0,1,NBINS,0,1);
     
     // Histograms for plotting sum of neutrino masses as x-axis
-    TH2D* hpsNHc = new TH2D("hpsNHc","Normal hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
+    hpsNHc = new TH2D("hpsNHc","Normal hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
     BinLog(hpsNHc->GetXaxis()); BinLog(hpsNHc->GetYaxis());
-    TH2D* hpsIHc = new TH2D("hpsIHc","Inverted hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
+    hpsIHc = new TH2D("hpsIHc","Inverted hierarchy",NBINS,3e-2,3e0,NBINS,1e-4,1e0);
     BinLog(hpsIHc->GetXaxis()); BinLog(hpsIHc->GetYaxis());
     
     // Histograms for plotting sum of neutrino masses as y-axis
-    TH2D* hpsNHs = new TH2D("hpsNHs","Normal hierarchy",NBINS,1e-4,1e0,NBINS,3e-2,3e0);
+    hpsNHs = new TH2D("hpsNHs","Normal hierarchy",NBINS,1e-4,1e0,10*NBINS,3e-2,3e0);
     BinLog(hpsNHs->GetXaxis()); BinLog(hpsNHs->GetYaxis());
-    TH2D* hpsIHs = new TH2D("hpsIHs","Inverted hierarchy",NBINS,1e-4,1e0,NBINS,3e-2,3e0);
+    hpsIHs = new TH2D("hpsIHs","Inverted hierarchy",NBINS,1e-4,1e0,10*NBINS,3e-2,3e0);
     BinLog(hpsIHs->GetXaxis()); BinLog(hpsIHs->GetYaxis());
+    
+    // Histograms for effective neutrino mass for tritium decay as y-axis
+    hpsNHt = new TH2D("hpsNHt","Normal hierarchy",NBINS,1e-4,1e0,10*NBINS,1e-3,1e0);
+    BinLog(hpsNHt->GetXaxis()); BinLog(hpsNHt->GetYaxis());
+    hpsIHt = new TH2D("hpsIHt","Inverted hierarchy",NBINS,1e-4,1e0,10*NBINS,1e-3,1e0);
+    BinLog(hpsIHt->GetXaxis()); BinLog(hpsIHt->GetYaxis());
     
     // lightest and effective neutrino masses
     double m0, meffNH, meffIH;
@@ -123,20 +128,20 @@ int main() {
     for (int i=0; i<4; i++) lines[i] = new TGraph();
     for (int b=0; b<=1e4; b++) {
       m0 = hpsNH->GetXaxis()->GetBinCenter(b);
-      lines[0]->SetPoint(b,m0,meff(m0,dummy,0,0,0,0));
-      lines[1]->SetPoint(b,m0,meff(m0,dummy,0,pi/2,0,0));
-      lines[2]->SetPoint(b,m0,meff(m0,dummy,pi/2,0,0,0));
-      lines[3]->SetPoint(b,m0,meff(m0,dummy,pi/2,pi/2,0,0));
+      lines[0]->SetPoint(b,m0,meff(m0,dummy,dummy,0,0,0,0));
+      lines[1]->SetPoint(b,m0,meff(m0,dummy,dummy,0,pi/2,0,0));
+      lines[2]->SetPoint(b,m0,meff(m0,dummy,dummy,pi/2,0,0,0));
+      lines[3]->SetPoint(b,m0,meff(m0,dummy,dummy,pi/2,pi/2,0,0));
     }
     for (int i=0; i<4; i++) {
       cname = Form("lines_%d",i);
       lines[i]->SetName(cname.c_str());
     }
     
-    // Majorana angles and global minima
+    // Majorana angles and global minima (actually using phi2, phi3 convention)
     double alpha, beta;
     double alpha0=0., beta0=0., m0min=1.e6, meffmin=1.e6;
-    double msumNH, msumIH;
+    double msumNH, msumIH, mtritNH, mtritIH;
   
     // Random number seed
     rng->SetSeed(0);
@@ -148,8 +153,8 @@ int main() {
       m0 = pow(10.,4.*(rng->Rndm()-1.)); // log prior (100% of phase space)
       alpha = pi*rng->Rndm(); // 0-pi (100% of phase space)
       beta = pi*rng->Rndm(); // 0-pi (100% of phase space)
-      meffNH = meff(m0,msumNH,alpha,beta,-1,0);
-      meffIH = meff(m0,msumIH,alpha,beta,-1,1);
+      meffNH = meff(m0,msumNH,mtritNH,alpha,beta,-1,0);
+      meffIH = meff(m0,msumIH,mtritIH,alpha,beta,-1,1);
       throws++;
       hpsNH->Fill(m0, meffNH);
       hpsIH->Fill(m0, meffIH);
@@ -157,6 +162,8 @@ int main() {
       hpsIHc->Fill(msumIH, meffIH);
       hpsNHs->Fill(m0, msumNH);
       hpsIHs->Fill(m0, msumIH);
+      hpsNHt->Fill(m0, mtritNH);
+      hpsIHt->Fill(m0, mtritIH);
       printProgress(throws,NTHROWS);
       if (meffNH>1e-4) continue;
       count++;
@@ -171,6 +178,8 @@ int main() {
     hpsIHc->Scale(1./throws);
     hpsNHs->Scale(1./throws);
     hpsIHs->Scale(1./throws);
+    hpsNHt->Scale(1./throws);
+    hpsIHt->Scale(1./throws);
     //hpsNHlo->Scale(1./throws);
     //hangNHlo->Scale(1./throws);
     std::cout<<"Generated " << (float)throws << " throws, of which " << throws-count;
@@ -193,7 +202,7 @@ int main() {
       m0 = pow(10.,(rng->Rndm()-3.)); // log prior (25% of phase space)
       beta = pi*rng->Rndm();
       alpha = pi*(0.5+0.065*sin(2*beta)+0.05*(rng->Rndm()-0.25)); // 5% of phase space
-      meffNH = meff(m0,msumNH,alpha,beta,-1,0);
+      meffNH = meff(m0,msumNH,mtritNH,alpha,beta,-1,0);
       throws2++;
       if (meffNH>1e-4) continue;
       hpsNHlo->Fill(m0, meffNH); 
@@ -238,12 +247,14 @@ int main() {
   
     // Read from ROOT output file
     file = new TFile(output.c_str(),"READ");
-    hpsIH = (TH2D*)file->Get("hpsIH");
     hpsNH = (TH2D*)file->Get("hpsNH");
-    hpsIHc = (TH2D*)file->Get("hpsIHc");
+    hpsIH = (TH2D*)file->Get("hpsIH");
     hpsNHc = (TH2D*)file->Get("hpsNHc");
-    hpsIHs = (TH2D*)file->Get("hpsIHs");
+    hpsIHc = (TH2D*)file->Get("hpsIHc");
     hpsNHs = (TH2D*)file->Get("hpsNHs");
+    hpsIHs = (TH2D*)file->Get("hpsIHs");
+    hpsNHt = (TH2D*)file->Get("hpsNHt");
+    hpsIHt = (TH2D*)file->Get("hpsIHt");
     hpsNHlo = (TH2D*)file->Get("hpsNHlo");
     hangNHlo = (TH2D*)file->Get("hangNHlo");
     std::string cname;
@@ -291,12 +302,15 @@ int main() {
     TGraph *gs2 = new TGraph(4,sx1,sy2);
     
     // Cosmology limits
-    double cx[4] = {0.12,0.12,1e1,1e1};
-    double cy[4] = {1e-5,1e1,1e1,1e-5};
-    TGraph *gc = new TGraph(4,cx,cy);
-    double sx[4] = {1e-5,1e1,1e1,1e-5};
-    double sy[4] = {0.12,0.12,1e1,1e1};
-    TGraph *gs = new TGraph(4,sx,sy);
+    double cx[4] = {0.12,0.12};
+    double cy[4] = {1e-5,1e1};
+    TGraph *gc = new TGraph(2,cx,cy);
+    TGraph *gs = new TGraph(2,cy,cx);
+    
+    // KATRIN sensitivity
+    double tx[4] = {1e-5,1e1};
+    double ty[4] = {0.2,0.2};
+    TGraph *gt = new TGraph(2,tx,ty);
     
     // Plot full phase space for double beta decay (NH+IH)
     // ---------------------------------------------------
@@ -340,11 +354,6 @@ int main() {
     leg->SetFillStyle(0);
     leg->Draw();
     // Draw text describing plots
-    //Tl->SetTextColor(DEFCOL);
-    //Tl->SetTextSize(0.03);
-    //Tl->DrawLatex(1.5e-4,6.4e-1,"#alpha #equiv #phi_{2}");
-    //Tl->DrawLatex(1.5e-4,4.0e-1,"#beta #equiv #phi_{3}#font[122]{+} #delta_{CP}");
-    //Tl->DrawLatex(1.5e-4,2.5e-1,"#phi_{2}, #phi_{3} #in [0, #pi)");
     Tl->SetTextSize(0.035);
     Tl->SetTextColor(HIERCOL);
     Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
@@ -421,8 +430,6 @@ int main() {
     // Draw sensitivity bands (areas only)
     gs1->Draw("f");
     gs2->Draw("f");
-    gc->SetFillColorAlpha(16,0.5);
-    gc->Draw("f");
     // Draw allowed phase space
     hpsNHc->Draw("colz same");
     hpsNHc->GetZaxis()->SetRangeUser(2e-9,2e-2);
@@ -463,7 +470,7 @@ int main() {
     Tl->SetTextColor(TEXTCOL);
     Tl->DrawLatex(3.5e-2,5.8e-2,"SNO+ Phase I");
     Tl->DrawLatex(3.5e-2,1.1e-2,"SNO+ Phase II");
-    Tl->DrawLatex(1.4e-1,1.3e-4,"#color[13]{PLANCK 2018}");
+    Tl->DrawLatex(1.3e-1,1.3e-4,"#color[13]{PLANCK 2018}");
     // Write mass ordering
     Tl->SetTextSize(0.035);
     Tl->SetTextColor(0);
@@ -472,7 +479,7 @@ int main() {
     // Redraw sensitivity bands (lines only)
     gs1->Draw("l");
     gs2->Draw("l");
-    gc->SetLineColorAlpha(16,0.75);
+    gc->SetLineColorAlpha(13,0.8);
     gc->SetLineStyle(5);
     gc->SetLineWidth(2);
     gc->Draw("l");
@@ -487,44 +494,19 @@ int main() {
     c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
     //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
     c->DrawFrame(1e-4,3e-2,1e0,3e0,";m_{0} (eV);#Sigma m_{#nu} (eV)");
-    // Draw sensitivity bands (areas only)
-    gs->SetFillColorAlpha(16,0.5);
-    gs->Draw("f");
     // Draw degenerate region (line)
     TLine deg(1e-2,3e-2,1e0,3e0);
     deg.SetLineWidth(3);
-    deg.SetLineColorAlpha(2,0.25);
+    deg.SetLineColorAlpha(2,0.5);
     deg.Draw("l");
     Tl->SetTextSize(0.025);
-    Tl->SetTextColorAlpha(2,0.5);
+    Tl->SetTextColorAlpha(2,0.8);
     Tl->DrawLatex(1.5e-2,3.5e-2,"#Sigma m_{#nu} = 3m_{0}");
     // Draw allowed phase space
     hpsNHs->Draw("colz same");
-    hpsNHs->GetZaxis()->SetRangeUser(2e-6,2e-3);
-    /*
-    for (int i=0; i<2; i++) { // contours for NH
-      for (int s=0; s<4; s++) { // contours for NH
-        //contours3[i][s]->SetLineStyle(CONTSTY[s]);
-        contours3[i][s]->SetLineColor(CONTCOL+s);
-        contours3[i][s]->SetLineWidth(CONTWDT);
-        contours3[i][s]->Draw("l");
-      }
-    }
-    */
+    hpsNHs->GetZaxis()->SetRangeUser(2e-7,2e-4);
     hpsIHs->Draw("colz same");
-    hpsIHs->GetZaxis()->SetRangeUser(2e-6,2e-3);
-    /*
-    for (int i=2; i<4; i++) { // contours for IH
-      for (int s=0; s<4; s++) { // contours for IH
-        //contours3[i][s]->SetLineStyle(CONTSTY[s]);
-        contours3[i][s]->SetLineColor(CONTCOL+s);
-        contours3[i][s]->SetLineWidth(CONTWDT);
-        contours3[i][s]->Draw("l");
-      }
-    }
-    */
-    // Draw legend for contours (they don't really help here)
-    //leg->Draw();
+    hpsIHs->GetZaxis()->SetRangeUser(2e-7,2e-4);
     // Write cosmology limits
     Tl->SetTextSize(0.025);
     Tl->DrawLatex(1.4e-4,1.3e-1,"#color[13]{PLANCK 2018}");
@@ -533,14 +515,44 @@ int main() {
     Tl->SetTextColor(HIERCOL);
     Tl->DrawLatex(1.4e-4,4.8e-2,"NH");
     Tl->DrawLatex(1.4e-4,8.0e-2,"IH");
-    // Redraw sensitivity bands (lines only)
-    gs->SetLineColorAlpha(16,0.75);
+    // Draw sensitivity line
+    gs->SetLineColorAlpha(13,0.8);
     gs->SetLineStyle(5);
     gs->SetLineWidth(2);
     gs->Draw("l");
     // Save and close
     c->Print((fname+"_sum.png").c_str());
     c->Print((fname+"_sum.pdf").c_str());
+    c->Close();
+    
+    // Plot lightest mass vs effective mass (tritium)
+    // ----------------------------------------------
+    c = new TCanvas("c","Phase space plot",1200,900);
+    c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
+    //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
+    c->DrawFrame(1e-4,1e-3,1e0,1e0,";m_{0} (eV);#LTm_{#nu_{e}}#GT (eV)");
+    // Draw allowed phase space
+    hpsNHt->Draw("colz same");
+    hpsNHt->GetZaxis()->SetRangeUser(3.2e-7,3.2e-4);
+    hpsIHt->Draw("colz same");
+    hpsIHt->GetZaxis()->SetRangeUser(3.2e-7,3.2e-4);
+    // Write KATRIN sensitivity
+    Tl->SetTextSize(0.025);
+    Tl->SetTextColor(TEXTCOL);
+    Tl->DrawLatex(1.4e-4,2.3e-1,"KATRIN (3 years)");
+    // Write mass ordering
+    Tl->SetTextSize(0.035);
+    Tl->SetTextColor(HIERCOL);
+    Tl->DrawLatex(1.4e-4,1.1e-2,"NH");
+    Tl->DrawLatex(1.4e-4,6.0e-2,"IH");
+    // Draw sensitivity line
+    gt->SetLineColorAlpha(LINECOL,0.75);
+    gt->SetLineStyle(5);
+    gt->SetLineWidth(2);
+    gt->Draw("l");
+    // Save and close
+    c->Print((fname+"_tritium.png").c_str());
+    c->Print((fname+"_tritium.pdf").c_str());
     c->Close();
     
     // Plot low m_eff region for double beta decay (NH)
@@ -556,16 +568,6 @@ int main() {
       contours[0][s]->Draw("l");
       contours[1][s]->Draw("l");
     }
-    // Draw text describing plots
-    /*
-    Tl->SetTextSize(0.03);
-    Tl->SetTextColor(1);
-    Tl->DrawLatex(4e-2,7.00e-5,"#alpha #equiv #phi_{2}");
-    Tl->DrawLatex(4e-2,5.00e-5,"#beta #equiv #phi_{3}#font[122]{+} #delta_{CP}");
-    Tl->DrawLatex(4e-2,3.57e-5,"#beta #in [0, 1)");
-    Tl->DrawLatex(4e-2,2.55e-5,"#alpha #in [1 #plus 0.13 sin#beta #minus 0.05,");
-    Tl->DrawLatex(6.8e-2,1.82e-5,"1 #plus 0.13 sin#beta #plus 0.05]");
-    */
     // Draw legend (defined above)
     leg->Draw();
     // Save and close
@@ -586,14 +588,6 @@ int main() {
     f1->SetLineColor(LINECOL);
     f0->Draw("l");
     f1->Draw("l");
-    // Draw text describing plots
-    /*
-    Tl->SetTextSize(0.03);
-    Tl->SetTextColor(1);
-    Tl->DrawLatex(1.05,1.72,"#beta #in [0, 1)");
-    Tl->DrawLatex(1.05,1.62,"#alpha #in [1 #plus 0.13 sin#beta #minus 0.05,");
-    Tl->DrawLatex(1.073,1.52,"1 #plus 0.13 sin#beta #plus 0.05]");
-    */
     // Save and close
     c->Print((fname+"_lowmass_angles.png").c_str());
     c->Print((fname+"_lowmass_angles.pdf").c_str());
@@ -608,6 +602,8 @@ int main() {
   if (hpsIHc) delete hpsIHc;
   if (hpsNHs) delete hpsNHs;
   if (hpsIHs) delete hpsIHs;
+  if (hpsNHt) delete hpsNHt;
+  if (hpsIHt) delete hpsIHt;
   if (hpsNHlo) delete hpsNHlo;
   if (hangNHlo) delete hangNHlo;
   for (int i=0; i<4; i++) { // min/max for NH/IH
@@ -624,7 +620,7 @@ int main() {
   
 }
 
-double meff(double m0, double& msum, double alpha, double beta, float sigma, int inverted) {
+double meff(double m0, double& msum, double& mtrit, double alpha, double beta, float sigma, int inverted) {
 
   // Throw neutrino mixing parameters
   double s12, s13, dm21, dm32;
@@ -645,23 +641,26 @@ double meff(double m0, double& msum, double alpha, double beta, float sigma, int
   double c12 = 1.-s12;
   double c13 = 1.-s13;
   
-  // Define complex numbers in polar form
-  TComplex *fac1 = new TComplex(1.,0.,true);
-  TComplex *fac2 = new TComplex(1.,2.*alpha,true);
-  TComplex *fac3 = new TComplex(1.,2.*beta,true);
-  
-  // Multiply by PMNS matrix element and neutrino mass eigenstate
+  // Define squared mass eigenstates
+  double m1sq, m2sq, m3sq;
   if (inverted) {
-    *fac1 *= c12*c13*sqrt(m0*m0-dm32-dm21);   // dm21>0
-    *fac2 *= s12*c13*sqrt(m0*m0-dm32);        // dm32<0
-    *fac3 *= s13*m0;                          // m3 = m0
-    msum = sqrt(m0*m0-dm32-dm21)+sqrt(m0*m0-dm32)+m0;
+    m1sq = m0*m0-dm32-dm21;   // dm21 > 0
+    m2sq = m0*m0-dm32;        // dm32 < 0
+    m3sq = m0*m0;             // m3 = m0
   } else {
-    *fac1 *= c12*c13*m0;                      // m1 = m0
-    *fac2 *= s12*c13*sqrt(m0*m0+dm21);        // dm21>0
-    *fac3 *= s13*sqrt(m0*m0+dm21+dm32);       // dm32>0
-    msum = m0+sqrt(m0*m0+dm21)+sqrt(m0*m0+dm21+dm32);
+    m1sq = m0*m0;             // m1 = m0
+    m2sq = m0*m0+dm21;        // dm21 > 0
+    m3sq = m0*m0+dm21+dm32;   // dm32 > 0
   }
+  
+  // Calculate sum of nu masses and effective nu mass from tritium decay
+  msum = sqrt(m1sq) + sqrt(m2sq) + sqrt(m3sq);
+  mtrit = sqrt(c12*c13*m1sq + s12*c13*m2sq + s13*m3sq);
+  
+  // Define complex numbers for 0vbb decay (in polar form)
+  TComplex *fac1 = new TComplex(c12*c13*sqrt(m1sq),0.,true);
+  TComplex *fac2 = new TComplex(s12*c13*sqrt(m2sq),2.*alpha,true);
+  TComplex *fac3 = new TComplex(s13*sqrt(m3sq),2.*beta,true);
   
   // Add the three components and return absolute value
   TComplex *res = new TComplex(*fac1 + *fac2 + *fac3);
@@ -678,33 +677,33 @@ double mefflimits(double m0, double& msumlim, float s, int index) {
   if (index==0 && m0<2.3e-3) msumlim = 1e6;
   
   // Find min/max values for NH/IH contours
-  double mass, msum;
+  double mass, msum, mtrit;
   for (int i=0; i<NSTATS; i++) {
     switch (index) {
       case 1 :  // NH max
-        mass = meff(m0,msum,0,0,s,0);
+        mass = meff(m0,msum,mtrit,0,0,s,0);
         if (mass>limit) limit=mass;
         if (msum<msumlim) msumlim=msum;
         break;
       case 2 :  // IH min
-        mass = meff(m0,msum,pi/2,pi/2,s,1);
+        mass = meff(m0,msum,mtrit,pi/2,pi/2,s,1);
         if (mass<limit) limit=mass;
         if (msum>msumlim) msumlim=msum;
         break;
       case 3 :  // IH max
-        mass = meff(m0,msum,0,0,s,1);
+        mass = meff(m0,msum,mtrit,0,0,s,1);
         if (mass>limit) limit=mass;
         if (msum<msumlim) msumlim=msum;
         break;
       default : // NH min
         if (m0<2.3e-3) {
-          mass = meff(m0,msum,pi/2,0,s,0);
+          mass = meff(m0,msum,mtrit,pi/2,0,s,0);
           if (msum<msumlim) msumlim=msum;
         } else if (m0<6.6e-3) {
           mass = 0;
           msumlim = 6.5e-2;
         } else {
-          mass = meff(m0,msum,pi/2,pi/2,s,0);
+          mass = meff(m0,msum,mtrit,pi/2,pi/2,s,0);
           if (msum>msumlim) msumlim=msum;
         }
         if (mass<limit) limit=mass;
