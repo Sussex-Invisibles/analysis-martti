@@ -9,9 +9,9 @@
 #include "../include/CommonStyle.H"
 
 // Global constants
-const int NSTATS = 1e3;           // statistics for contour limits
-const int NTHROWS = 1e7;          // full phase space
-const int NTHROWSLOWMASS = 1e4;   // low m_eff phase space
+const int NSTATS = 1e4;           // statistics for contour limits
+const int NTHROWS = 1e8;          // full phase space
+const int NTHROWSLOWMASS = 1e5;   // low m_eff phase space
 const int NBINS = 4e2;            // number of bins
 
 // Global plot options
