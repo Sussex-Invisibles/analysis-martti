@@ -497,6 +497,7 @@ int main() {
     // Draw degenerate region (line)
     TLine deg(1e-2,3e-2,1e0,3e0);
     deg.SetLineWidth(3);
+    deg.SetLineStyle(7);
     deg.SetLineColorAlpha(2,0.5);
     deg.Draw("l");
     Tl->SetTextSize(0.025);
@@ -531,6 +532,11 @@ int main() {
     c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
     //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
     c->DrawFrame(1e-4,1e-3,1e0,1e0,";m_{0} (eV);#LTm_{#nu_{e}}#GT (eV)");
+    // Draw degenerate region (line)
+    deg.DrawLine(1e-3,1e-3,1e0,1e0);
+    Tl->SetTextSize(0.025);
+    Tl->SetTextColorAlpha(2,0.8);
+    Tl->DrawLatex(2e-3,1.4e-3,"#LTm_{#nu_{e}}#GT = m_{0}");
     // Draw allowed phase space
     hpsNHt->Draw("colz same");
     hpsNHt->GetZaxis()->SetRangeUser(3.2e-7,3.2e-4);
