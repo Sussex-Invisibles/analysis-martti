@@ -457,10 +457,10 @@ int main() {
       for (int s=0; s<4; s++) {
         join.SetLineColor(CONTCOL+s);
         join.SetLineWidth(CONTWDT);
-        join.DrawLine(contours2[2*i][s]->GetX()[0],contours2[2*i][s]->GetY()[0],
-                      contours2[2*i+1][s]->GetX()[0],contours2[2*i][s]->GetY()[0]);
-        join.DrawLine(contours2[2*i+1][s]->GetX()[0],contours2[2*i][s]->GetY()[0],
-                      contours2[2*i+1][s]->GetX()[0],contours2[2*i+1][s]->GetY()[0]);
+        join.DrawLine(contours2[2*i][s]->GetX()[1],contours2[2*i][s]->GetY()[1],
+                      contours2[2*i+1][s]->GetX()[1],contours2[2*i][s]->GetY()[1]);
+        join.DrawLine(contours2[2*i+1][s]->GetX()[1],contours2[2*i][s]->GetY()[1],
+                      contours2[2*i+1][s]->GetX()[1],contours2[2*i+1][s]->GetY()[1]);
       }
     }
     // Draw legend for contours
