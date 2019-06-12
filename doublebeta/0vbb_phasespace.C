@@ -386,24 +386,24 @@ double meff(double m0, double alpha, double beta, float sigma, int inverted) {
   double c13 = 1.-s13;
   
   // Define complex numbers in polar form
-  TComplex *fac1 = new TComplex(1,0,true);
-  TComplex *fac3 = new TComplex(1,alpha,true);
-  TComplex *fac2 = new TComplex(1,beta,true);
+  TComplex fac1(1,0,true);
+  TComplex fac3(1,alpha,true);
+  TComplex fac2(1,beta,true);
   
   // Multiply by PMNS matrix element and neutrino mass eigenstate
   if (inverted) {
-    *fac1 *= c12*c13*sqrt(m0*m0-dm32-dm21);   // dm21>0
-    *fac3 *= s12*c13*sqrt(m0*m0-dm32);        // dm32<0
-    *fac2 *= s13*m0;                          // m3 = m0
+    fac1 *= c12*c13*sqrt(m0*m0-dm32-dm21);   // dm21>0
+    fac3 *= s12*c13*sqrt(m0*m0-dm32);        // dm32<0
+    fac2 *= s13*m0;                          // m3 = m0
   } else {
-    *fac1 *= c12*c13*m0;                      // m1 = m0
-    *fac3 *= s12*c13*sqrt(m0*m0+dm21);        // dm21>0
-    *fac2 *= s13*sqrt(m0*m0+dm21+dm32);       // dm32>0
+    fac1 *= c12*c13*m0;                      // m1 = m0
+    fac3 *= s12*c13*sqrt(m0*m0+dm21);        // dm21>0
+    fac2 *= s13*sqrt(m0*m0+dm21+dm32);       // dm32>0
   }
   
   // Add the three components and return absolute value
-  TComplex *res = new TComplex(*fac1 + *fac3 + *fac2);
-  return res->Abs(*res);
+  TComplex res(fac1 + fac3 + fac2);
+  return res.Abs(res);
 }
 
 double mefflimits(double m0, float s, int index) {
