@@ -294,10 +294,11 @@ int main() {
     Tl->SetTextSize(0.041);
     
     // SNO+ sensitivity
-    double fac=10./2.1; // phase II/I lifetime sensitivity (1e26y)
+    double fac = sqrt(10./2.1); // phase II/I lifetime sensitivity (1e26y)
     double sx1[4] = {1e-5,1e1,1e1,1e-5};
     double sy1[4] = {89e-3,89e-3,37e-3,37e-3}; // meV (phase I)
-    double sy2[4] = {89e-3/fac,89e-3/fac,37e-3/fac,37e-3/fac}; // meV (phase II)
+    double sy2[4] = {0};
+    for (int k=0; k<4; k++) sy2[k] = sy1[k]/fac; // meV (phase II)
     TGraph *gs1 = new TGraph(4,sx1,sy1);
     TGraph *gs2 = new TGraph(4,sx1,sy2);
     
@@ -364,7 +365,7 @@ int main() {
     Tl->SetTextSize(0.025);
     Tl->SetTextColor(TEXTCOL);
     Tl->DrawLatex(2e-4,6.0e-2,"SNO+ Phase I (T_{1/2} > 2.1 #times 10^{26} y)");
-    Tl->DrawLatex(2e-4,1.0e-2,"SNO+ Phase II (T_{1/2} > 10^{27} y)");
+    Tl->DrawLatex(1.5e-1,2.4e-2,"SNO+ Phase II");
     // Redraw sensitivity bands (lines only)
     gs1->SetLineColorAlpha(LINECOL,0.75);
     gs2->SetLineColorAlpha(LINECOL,0.75);
@@ -468,8 +469,8 @@ int main() {
     // Write SNO+ sensitivities and cosmology limits
     Tl->SetTextSize(0.025);
     Tl->SetTextColor(TEXTCOL);
-    Tl->DrawLatex(3.5e-2,5.0e-2,"SNO+ Phase I");
-    Tl->DrawLatex(3.5e-2,1.1e-2,"SNO+ Phase II");
+    Tl->DrawLatex(3.5e-2,5.2e-2,"SNO+ Phase I");
+    Tl->DrawLatex(3.5e-2,2.4e-2,"SNO+ Phase II");
     Tl->DrawLatex(1.3e-1,1.3e-4,"#color[13]{PLANCK 2018}");
     // Write mass ordering
     Tl->SetTextSize(0.035);
