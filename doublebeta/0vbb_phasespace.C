@@ -409,11 +409,11 @@ int main() {
       lines[i]->SetLineColor(kOrange+i);
       lines[i]->Draw();
     }
-    TLegend *leglines = new TLegend(0.17,0.79,0.32,0.94,"#bf{Majorana phases}");
-    leglines->AddEntry(lines[0],"#phi_{2}=0#lower[-0.2]{#circ}, #phi_{3}=0#lower[-0.2]{#circ}","l");
-    leglines->AddEntry(lines[1],"#phi_{2}=0#lower[-0.2]{#circ}, #phi_{3}=90#lower[-0.2]{#circ}","l");
-    leglines->AddEntry(lines[2],"#phi_{2}=90#lower[-0.2]{#circ}, #phi_{3}=0#lower[-0.2]{#circ}","l");
-    leglines->AddEntry(lines[3],"#phi_{2}=90#lower[-0.2]{#circ}, #phi_{3}=90#lower[-0.2]{#circ}","l");
+    TLegend *leglines = new TLegend(0.17,0.79,0.31,0.94,"#bf{Majorana phases}");
+    leglines->AddEntry(lines[0],"#varphi_{2}=0#lower[-0.2]{#circ}, #varphi_{3}=0#lower[-0.2]{#circ}","l");
+    leglines->AddEntry(lines[1],"#varphi_{2}=0#lower[-0.2]{#circ}, #varphi_{3}=90#lower[-0.2]{#circ}","l");
+    leglines->AddEntry(lines[2],"#varphi_{2}=90#lower[-0.2]{#circ}, #varphi_{3}=0#lower[-0.2]{#circ}","l");
+    leglines->AddEntry(lines[3],"#varphi_{2}=90#lower[-0.2]{#circ}, #varphi_{3}=90#lower[-0.2]{#circ}","l");
     leglines->Draw();
     // Save again and close
     c->Update();
@@ -587,7 +587,7 @@ int main() {
     c = new TCanvas("c","Majorana angle plot",1200,900);
     c->SetLogz(); c->SetGrid();
     //hangNHlo->SetTitle("#bf{Majorana hangNHlo that lead to m_{#beta#beta} < 10^{-4} eV}");
-    c->DrawFrame(0,0,1,1,";#phi_{2} [#pi];#phi_{3} [#pi]");
+    c->DrawFrame(0,0,1,1,";#varphi_{2} [#pi];#varphi_{3} [#pi]");
     hangNHlo->Draw("colz same");
     //hangNHlo->GetZaxis()->SetRangeUser(8e-12,4e-8);
     // Draw region in which points were generated
