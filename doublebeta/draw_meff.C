@@ -109,8 +109,8 @@ int main() {
   Tl.DrawLatex(0.15,0.2,"#color[4]{m_{#beta#beta}}");
   Tl.DrawLatex(0.25,3.65,"#bf{Normal hierarchy}");
   Tl.DrawLatex(0.25,3.35,"m_{0} = 5 meV");
-  Tl.DrawLatex(0.25,3.05,"#phi_{2} = 0.42 #pi");
-  Tl.DrawLatex(0.25,2.75,"#phi_{3} = 0.66 #pi");
+  Tl.DrawLatex(0.25,3.05,"#varphi_{2} = 0.42 #pi");
+  Tl.DrawLatex(0.25,2.75,"#varphi_{3} = 0.66 #pi");
   
   // Inverted hierarchy
   c.cd(2)->SetGrid();
@@ -125,8 +125,8 @@ int main() {
   Tl.DrawLatex(8.5,5.2,"#color[4]{m_{#beta#beta}}");
   Tl.DrawLatex(2.5,36.5,"#bf{Inverted hierarchy}");
   Tl.DrawLatex(2.5,33.5,"m_{0} = 5 meV");
-  Tl.DrawLatex(2.5,30.5,"#phi_{2} = 0.42 #pi");
-  Tl.DrawLatex(2.5,27.5,"#phi_{3} = 0.66 #pi");
+  Tl.DrawLatex(2.5,30.5,"#varphi_{2} = 0.42 #pi");
+  Tl.DrawLatex(2.5,27.5,"#varphi_{3} = 0.66 #pi");
   c.Print("draw_meff.png");
   c.Print("draw_meff.pdf");
   c.Close();
