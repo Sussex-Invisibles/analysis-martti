@@ -9,9 +9,9 @@
 #include "../include/CommonStyle.H"
 
 // Global constants
-const int NSTATS = 1e4;           // statistics for contour limits
-const int NTHROWS = 1e8;          // full phase space
-const int NTHROWSLOWMASS = 1e5;   // low m_eff phase space
+const int NSTATS = 1e5;           // statistics for contour limits
+const int NTHROWS = 1e9;          // full phase space
+const int NTHROWSLOWMASS = 1e6;   // low m_eff phase space
 const int NBINS = 4e2;            // number of bins
 
 // Global plot options
@@ -326,7 +326,7 @@ int main() {
     gs2->Draw("f");
     // Draw allowed phase space for IH
     hpsIH->Draw("colz same");
-    hpsIH->GetZaxis()->SetRangeUser(2e-9,2e-4);
+    hpsIH->GetZaxis()->SetRangeUser(2e-10,2e-4);
     for (int i=2; i<4; i++) { // contours for IH
       for (int s=0; s<4; s++) { // contours for IH
         //contours[i][s]->SetLineStyle(CONTSTY[s]);
@@ -337,7 +337,7 @@ int main() {
     }
     // Draw allowed phase space for NH
     hpsNH->Draw("colz same");
-    hpsNH->GetZaxis()->SetRangeUser(2e-9,2e-4);
+    hpsNH->GetZaxis()->SetRangeUser(2e-10,2e-4);
     for (int i=0; i<2; i++) { // contours for NH
       for (int s=0; s<4; s++) { // contours for NH
         //contours[i][s]->SetLineStyle(CONTSTY[s]);
@@ -390,10 +390,10 @@ int main() {
     c->DrawFrame(1e-4,1e-4,1e0,1e0,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
     // Draw allowed phase space for IH
     hpsIH->Draw("colz same");
-    hpsIH->GetZaxis()->SetRangeUser(2e-9,2e-4);
+    hpsIH->GetZaxis()->SetRangeUser(2e-10,2e-4);
     // Draw allowed phase space for NH
     hpsNH->Draw("colz same");
-    hpsNH->GetZaxis()->SetRangeUser(2e-9,2e-4);
+    hpsNH->GetZaxis()->SetRangeUser(2e-10,2e-4);
     Tl->SetTextSize(0.035);
     Tl->SetTextColor(HIERCOL);
     Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
@@ -433,7 +433,7 @@ int main() {
     gs2->Draw("f");
     // Draw allowed phase space
     hpsNHc->Draw("colz same");
-    hpsNHc->GetZaxis()->SetRangeUser(2e-9,2e-2);
+    hpsNHc->GetZaxis()->SetRangeUser(2e-10,2e-2);
     for (int i=0; i<2; i++) { // contours for NH
       for (int s=0; s<4; s++) { // contours for NH
         //contours2[i][s]->SetLineStyle(CONTSTY[s]);
@@ -443,7 +443,7 @@ int main() {
       }
     }
     hpsIHc->Draw("colz same");
-    hpsIHc->GetZaxis()->SetRangeUser(2e-9,2e-2);
+    hpsIHc->GetZaxis()->SetRangeUser(2e-10,2e-2);
     for (int i=2; i<4; i++) { // contours for IH
       for (int s=0; s<4; s++) { // contours for IH
         //contours2[i][s]->SetLineStyle(CONTSTY[s]);
