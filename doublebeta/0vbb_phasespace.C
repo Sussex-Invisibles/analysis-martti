@@ -7,6 +7,7 @@
 // Include helper functions / plotting style
 #include "../include/HelperFunc.C"
 #include "../include/CommonStyle.H"
+#include <TArrow.h>
 
 // Global constants
 const int NSTATS = 1e5;           // statistics for contour limits
@@ -44,6 +45,7 @@ double mefflimits(double m0, double& msumlim, float sigma=1., int index=0);
 // Random number generator
 TRandom3* rng = new TRandom3();
 
+// *****************************************************************************
 int main() {
 
   // I/O file (either plot from ROOT file, or generate it)
@@ -289,18 +291,56 @@ int main() {
     f0 = (TGraph*)file->Get("alpha_lo");
     f1 = (TGraph*)file->Get("alpha_hi");
     
+    // ------------------
+    //  PLOTTING SECTION
+    // ------------------
+    
     // Text in figures
     TLatex *Tl = new TLatex();
     Tl->SetTextSize(0.041);
     
     // SNO+ sensitivity
     double fac = sqrt(10./2.1); // phase II/I lifetime sensitivity (1e26y)
-    double sx1[4] = {1e-5,1e1,1e1,1e-5};
-    double sy1[4] = {89e-3,89e-3,37e-3,37e-3}; // meV (phase I)
+    double sx[4] = {1e-5,1e1,1e1,1e-5};
+    double sy1[4] = {89e-3,89e-3,37e-3,37e-3}; // eV (phase I)
     double sy2[4] = {0};
-    for (int k=0; k<4; k++) sy2[k] = sy1[k]/fac; // meV (phase II)
-    TGraph *gs1 = new TGraph(4,sx1,sy1);
-    TGraph *gs2 = new TGraph(4,sx1,sy2);
+    for (int k=0; k<4; k++) sy2[k] = sy1[k]/fac; // eV (phase II)
+    TGraph *gs1 = new TGraph(4,sx,sy1);
+    TGraph *gs2 = new TGraph(4,sx,sy2);
+    
+    // DBD results (eV)
+    double rgerda[4] = {0.2,0.2,0.4,0.4};
+    double rklzen[4] = {0.061,0.061,0.165,0.165};
+    double rcuore[4] = {0.27,0.27,0.76,0.76};
+    double rnemo[4] = {0.33,0.33,0.62,0.62};
+    double rtotal[4] = {0.061,0.061,0.76,0.76};
+    
+    // DBD sensitivities
+    double sklzen[4] = {0.04,0.04,0.108,0.108};
+    double ssnemo[4] = {0.2,0.2,0.4,0.4};
+    double ssnop[4] = {0.037,0.037,0.089,0.089};
+    double snext[4] = {0.08,0.08,0.16,0.16};
+    double stotal[4] = {0.037,0.037,0.4,0.4};
+    
+    // Future sensitivities
+    double ftotal[4] = {0.0057,0.0057,0.017,0.017};
+    
+    // Graphs
+    TGraph *gres = new TGraph(4,sx,rklzen);
+    TGraph *gsen = new TGraph(4,sx,ssnop);
+    TGraph *gfut = new TGraph(4,sx,ftotal);
+    gres->SetLineStyle(5);
+    gres->SetLineWidth(2);
+    gres->SetLineColorAlpha(kGreen,0.75);
+    gres->SetFillColorAlpha(kGreen,0.5);
+    gsen->SetLineStyle(5);
+    gsen->SetLineWidth(2);
+    gsen->SetLineColorAlpha(kOrange,0.75);
+    gsen->SetFillColorAlpha(kOrange,0.5);
+    gfut->SetLineStyle(5);
+    gfut->SetLineWidth(2);
+    gfut->SetLineColorAlpha(kRed,0.75);
+    gfut->SetFillColorAlpha(kRed,0.5);
     
     // Cosmology limits
     double cx[4] = {0.12,0.12};
@@ -380,6 +420,68 @@ int main() {
     c->RedrawAxis();
     c->Print((fname+".png").c_str());
     c->Print((fname+".pdf").c_str());
+    c->Close();
+    
+    // Plot full phase space for double beta decay (NH+IH)
+    // ---------------------------------------------------
+    c = new TCanvas("c","Phase space plot",1200,900);
+    c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
+    //hpsIH->SetTitle("#bf{0#nu#beta#beta decay - Type-I seesaw}");
+    c->DrawFrame(1e-4,1e-4,1e0,1e0,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
+    // Draw allowed phase space for IH
+    //hpsIH->Draw("colz same");
+    //hpsIH->GetZaxis()->SetRangeUser(2e-10,2e-4);
+    for (int i=2; i<4; i++) { // contours for IH
+      for (int s=0; s<4; s++) { // contours for IH
+        //contours[i][s]->SetLineStyle(CONTSTY[s]);
+        contours[i][s]->SetLineColor(CONTCOL+s);
+        contours[i][s]->SetLineWidth(CONTWDT);
+        contours[i][s]->Draw("l");
+      }
+    }
+    // Draw allowed phase space for NH
+    //hpsNH->Draw("colz same");
+    //hpsNH->GetZaxis()->SetRangeUser(2e-10,2e-4);
+    for (int i=0; i<2; i++) { // contours for NH
+      for (int s=0; s<4; s++) { // contours for NH
+        //contours[i][s]->SetLineStyle(CONTSTY[s]);
+        contours[i][s]->SetLineColor(CONTCOL+s);
+        contours[i][s]->SetLineWidth(CONTWDT);
+        contours[i][s]->Draw("l");
+      }
+    }
+    // Draw text describing plots
+    Tl->SetTextSize(0.035);
+    Tl->SetTextColor(HIERCOL);
+    Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
+    Tl->DrawLatex(1.5e-4,2.0e-3,"NH");
+    // Sensitivity bands
+    //gres->Draw("lf");
+    //gsen->Draw("lf");
+    //gfut->Draw("lf");
+    // Sensitivity arrows
+    TArrow *arr = new TArrow(0,0,1,1,0.01,"|->");
+    arr->SetLineWidth(2);
+    arr->SetLineColor(2);
+    arr->DrawArrow(3.125e-1,0.76,3.125e-1,0.2); // GERDA I, CUORE-0, NEMO3
+    arr->DrawArrow(6.25e-2,0.165,6.25e-2,0.061); // Kamland-Zen I-II
+    arr->DrawArrow(1.25e-2,0.089,1.25e-2,0.037); // SNO+ I, Kamland-Zen 800
+    arr->DrawArrow(2.5e-3,0.06,2.5e-3,0.018); // SNO+ II, PandaX-III, CUPID, AMoRE
+    arr->DrawArrow(5e-4,0.0177,5e-4,0.0057); // nEXO
+    // Describe bands
+    Tl->SetTextSize(0.025);
+    Tl->SetTextColor(2);
+    Tl->DrawLatex(2e-2,0.6,"CUORE-0, GERDA, NEMO3");
+    Tl->SetTextAlign(21);
+    Tl->DrawLatex(6.25e-2,0.19,"Kamland-Zen I-II");
+    Tl->DrawLatex(8e-3,0.105,"Kamland-Zen 800, SNO+ I, SuperNEMO");
+    Tl->DrawLatex(1.25e-3,0.07,"AMoRE, CUPID, PandaX-III, SNO+ II");
+    Tl->DrawLatex(5e-4,0.02,"nEXO");
+    // Save and close
+    c->Update();
+    c->RedrawAxis();
+    c->Print((fname+"_sensitivities.png").c_str());
+    c->Print((fname+"_sensitivities.pdf").c_str());
     c->Close();
     
     // Plot phase space for double beta decay (minimalistic)
@@ -627,8 +729,10 @@ int main() {
   
 }
 
-double meff(double m0, double& msum, double& mtrit, double alpha, double beta, float sigma, int inverted) {
-
+// *****************************************************************************
+double meff(double m0, double& msum, double& mtrit, double alpha, double beta, 
+            float sigma, int inverted) {
+  
   // Throw neutrino mixing parameters
   double s12, s13, dm21, dm32;
   if (sigma >= 0) { // fixed sigma, flat priors
@@ -674,6 +778,7 @@ double meff(double m0, double& msum, double& mtrit, double alpha, double beta, f
   return res.Abs(res);
 }
 
+// *****************************************************************************
 double mefflimits(double m0, double& msumlim, float s, int index) {
 
   // Initialise very large limits
