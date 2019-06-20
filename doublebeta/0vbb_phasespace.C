@@ -429,8 +429,8 @@ int main() {
     //hpsIH->SetTitle("#bf{0#nu#beta#beta decay - Type-I seesaw}");
     c->DrawFrame(1e-4,1e-4,1e0,1e0,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
     // Draw allowed phase space for IH
-    //hpsIH->Draw("colz same");
-    //hpsIH->GetZaxis()->SetRangeUser(2e-10,2e-4);
+    hpsIH->Draw("colz same");
+    hpsIH->GetZaxis()->SetRangeUser(2e-10,2e-4);
     for (int i=2; i<4; i++) { // contours for IH
       for (int s=0; s<4; s++) { // contours for IH
         //contours[i][s]->SetLineStyle(CONTSTY[s]);
@@ -440,8 +440,8 @@ int main() {
       }
     }
     // Draw allowed phase space for NH
-    //hpsNH->Draw("colz same");
-    //hpsNH->GetZaxis()->SetRangeUser(2e-10,2e-4);
+    hpsNH->Draw("colz same");
+    hpsNH->GetZaxis()->SetRangeUser(2e-10,2e-4);
     for (int i=0; i<2; i++) { // contours for NH
       for (int s=0; s<4; s++) { // contours for NH
         //contours[i][s]->SetLineStyle(CONTSTY[s]);
@@ -476,7 +476,7 @@ int main() {
     Tl->DrawLatex(6.25e-2,0.19,"Kamland-Zen I-II");
     Tl->DrawLatex(8e-3,0.105,"Kamland-Zen 800, SNO+ I, SuperNEMO");
     Tl->DrawLatex(1.25e-3,0.07,"AMoRE, CUPID, PandaX-III, SNO+ II");
-    Tl->DrawLatex(5e-4,0.02,"nEXO");
+    Tl->DrawLatex(3.2e-4,0.0105,"nEXO");
     // Save and close
     c->Update();
     c->RedrawAxis();
