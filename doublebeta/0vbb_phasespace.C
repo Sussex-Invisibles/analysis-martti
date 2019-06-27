@@ -463,15 +463,15 @@ int main() {
     TArrow *arr = new TArrow(0,0,1,1,0.01,"|->");
     arr->SetLineWidth(2);
     arr->SetLineColor(2);
-    arr->DrawArrow(3.125e-1,0.76,3.125e-1,0.2); // GERDA I, CUORE-0, NEMO3
-    arr->DrawArrow(6.25e-2,0.165,6.25e-2,0.061); // Kamland-Zen I-II
-    arr->DrawArrow(1.25e-2,0.089,1.25e-2,0.037); // SNO+ I, Kamland-Zen 800
-    arr->DrawArrow(2.5e-3,0.06,2.5e-3,0.018); // SNO+ II, PandaX-III, CUPID, AMoRE
-    arr->DrawArrow(5e-4,0.0177,5e-4,0.0057); // nEXO
+    arr->DrawArrow(3.125e-1,0.76,3.125e-1,0.2);
+    arr->DrawArrow(6.25e-2,0.165,6.25e-2,0.061);
+    arr->DrawArrow(1.25e-2,0.089,1.25e-2,0.037);
+    arr->DrawArrow(2.5e-3,0.06,2.5e-3,0.018);
+    arr->DrawArrow(5e-4,0.0177,5e-4,0.0057);
     // Describe bands
     Tl->SetTextSize(0.025);
     Tl->SetTextColor(2);
-    Tl->DrawLatex(2e-2,0.6,"CUORE-0, GERDA, NEMO3");
+    Tl->DrawLatex(2e-2,0.6,"CUORE, EXO-200, GERDA, NEMO3");
     Tl->SetTextAlign(21);
     Tl->DrawLatex(6.25e-2,0.19,"Kamland-Zen I-II");
     Tl->DrawLatex(8e-3,0.105,"Kamland-Zen 800, SNO+ I, SuperNEMO");
