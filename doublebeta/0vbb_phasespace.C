@@ -323,6 +323,8 @@ int main() {
     double stotal[4] = {0.037,0.037,0.4,0.4};
     
     // Future sensitivities
+    double fnexo[4] = {0.0057,0.0057,0.017,0.017};
+    double fsnop[4] = {0.017,0.017,0.041,0.041};
     double ftotal[4] = {0.0057,0.0057,0.017,0.017};
     
     // Graphs
@@ -331,8 +333,8 @@ int main() {
     TGraph *gfut = new TGraph(4,sx,ftotal);
     gres->SetLineStyle(5);
     gres->SetLineWidth(2);
-    gres->SetLineColorAlpha(kGreen,0.75);
-    gres->SetFillColorAlpha(kGreen,0.5);
+    gres->SetLineColorAlpha(kGreen+2,0.75);
+    gres->SetFillColorAlpha(kGreen+2,0.5);
     gsen->SetLineStyle(5);
     gsen->SetLineWidth(2);
     gsen->SetLineColorAlpha(kOrange,0.75);
@@ -359,11 +361,6 @@ int main() {
     c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
     //hpsIH->SetTitle("#bf{0#nu#beta#beta decay - Type-I seesaw}");
     c->DrawFrame(1e-4,1e-4,1e0,1e0,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
-    // Draw SNO+ sensitivity bands (areas only)
-    gs1->SetFillColorAlpha(BANDCOL,0.5);
-    gs2->SetFillColorAlpha(BANDCOL,0.5);
-    gs1->Draw("f");
-    gs2->Draw("f");
     // Draw allowed phase space for IH
     hpsIH->Draw("colz same");
     hpsIH->GetZaxis()->SetRangeUser(2e-10,2e-4);
@@ -402,6 +399,56 @@ int main() {
     // Evince seems to have trouble displaying uppercase delta (font not embedded)
     //Tl->DrawLatex(1.5e-4,2.5e-2,"#Deltam_{32}^{2} < 0");
     //Tl->DrawLatex(1.5e-4,2.0e-3,"#Deltam_{32}^{2} > 0");
+    // Save and close
+    c->Update();
+    c->RedrawAxis();
+    c->Print((fname+".png").c_str());
+    c->Print((fname+".pdf").c_str());
+    c->Close();
+    
+    // Same plot with SNO+ sensitivity bands
+    // ---------------------------------------------------
+    c = new TCanvas("c","Phase space plot",1200,900);
+    c->SetLogx(); c->SetLogy(); c->SetLogz(); c->SetGrid();
+    //hpsIH->SetTitle("#bf{0#nu#beta#beta decay - Type-I seesaw}");
+    c->DrawFrame(1e-4,1e-4,1e0,1e0,";m_{0} (eV);#LTm_{#beta#beta}#GT (eV)");
+    // Draw SNO+ sensitivity bands (areas only)
+    gs1->SetFillColorAlpha(BANDCOL,0.5);
+    gs2->SetFillColorAlpha(BANDCOL,0.5);
+    gs1->Draw("f");
+    gs2->Draw("f");
+    // Draw allowed phase space for IH
+    hpsIH->Draw("colz same");
+    hpsIH->GetZaxis()->SetRangeUser(2e-10,2e-4);
+    for (int i=2; i<4; i++) { // contours for IH
+      for (int s=0; s<4; s++) { // contours for IH
+        //contours[i][s]->SetLineStyle(CONTSTY[s]);
+        contours[i][s]->SetLineColor(CONTCOL+s);
+        contours[i][s]->SetLineWidth(CONTWDT);
+        contours[i][s]->Draw("l");
+      }
+    }
+    // Draw allowed phase space for NH
+    hpsNH->Draw("colz same");
+    hpsNH->GetZaxis()->SetRangeUser(2e-10,2e-4);
+    for (int i=0; i<2; i++) { // contours for NH
+      for (int s=0; s<4; s++) { // contours for NH
+        //contours[i][s]->SetLineStyle(CONTSTY[s]);
+        contours[i][s]->SetLineColor(CONTCOL+s);
+        contours[i][s]->SetLineWidth(CONTWDT);
+        contours[i][s]->Draw("l");
+      }
+    }
+    // Draw legend for contours
+    leg->Draw();
+    // Draw text describing plots
+    Tl->SetTextSize(0.035);
+    Tl->SetTextColor(HIERCOL);
+    Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
+    Tl->DrawLatex(1.5e-4,2.0e-3,"NH");
+    // Evince seems to have trouble displaying uppercase delta (font not embedded)
+    //Tl->DrawLatex(1.5e-4,2.5e-2,"#Deltam_{32}^{2} < 0");
+    //Tl->DrawLatex(1.5e-4,2.0e-3,"#Deltam_{32}^{2} > 0");
     Tl->SetTextSize(0.025);
     Tl->SetTextColor(TEXTCOL);
     Tl->DrawLatex(2e-4,6.0e-2,"SNO+ Phase I (T_{1/2} > 2.1 #times 10^{26} y)");
@@ -418,8 +465,8 @@ int main() {
     // Save and close
     c->Update();
     c->RedrawAxis();
-    c->Print((fname+".png").c_str());
-    c->Print((fname+".pdf").c_str());
+    c->Print((fname+"_snoplus.png").c_str());
+    c->Print((fname+"_snoplus.pdf").c_str());
     c->Close();
     
     // Plot full phase space for double beta decay (NH+IH)
@@ -455,28 +502,35 @@ int main() {
     Tl->SetTextColor(HIERCOL);
     Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
     Tl->DrawLatex(1.5e-4,2.0e-3,"NH");
-    // Sensitivity bands
-    //gres->Draw("lf");
-    //gsen->Draw("lf");
-    //gfut->Draw("lf");
     // Sensitivity arrows
-    TArrow *arr = new TArrow(0,0,1,1,0.01,"|->");
-    arr->SetLineWidth(2);
-    arr->SetLineColor(2);
-    arr->DrawArrow(3.125e-1,0.76,3.125e-1,0.2);
-    arr->DrawArrow(6.25e-2,0.165,6.25e-2,0.061);
-    arr->DrawArrow(1.25e-2,0.089,1.25e-2,0.037);
-    arr->DrawArrow(2.5e-3,0.06,2.5e-3,0.018);
-    arr->DrawArrow(5e-4,0.0177,5e-4,0.0057);
+    TArrow *arr1 = new TArrow(0,0,1,1,0.01,"|->");
+    TArrow *arr2 = new TArrow(0,0,1,1,0.01,"|->");
+    TArrow *arr3 = new TArrow(0,0,1,1,0.01,"|->");
+    arr1->SetLineWidth(2);
+    arr2->SetLineWidth(2);
+    arr3->SetLineWidth(2);
+    arr1->SetLineColor(kGreen+2);   // completed
+    arr2->SetLineColor(kOrange+2);  // construction
+    arr3->SetLineColor(kRed+1);     // proposed
+    arr1->DrawArrow(3.125e-1,0.76,3.125e-1,0.11); // EXO-200, GERDA I, CUORE-0, NEMO3
+    arr1->DrawArrow(6.25e-2,0.165,6.25e-2,0.061); // Kamland-Zen I-II
+    arr2->DrawArrow(1.25e-2,0.1,1.25e-2,0.037); // SNO+ I, Kamland-Zen 800
+    arr3->DrawArrow(2.5e-3,0.06,2.5e-3,0.017); // SNO+ II, PandaX-III, CUPID, AMoRE
+    arr3->DrawArrow(5e-4,0.0177,5e-4,0.0057); // nEXO, LEGEND-1000
     // Describe bands
-    Tl->SetTextSize(0.025);
-    Tl->SetTextColor(2);
-    Tl->DrawLatex(2e-2,0.6,"CUORE, EXO-200, GERDA, NEMO3");
-    Tl->SetTextAlign(21);
-    Tl->DrawLatex(6.25e-2,0.19,"Kamland-Zen I-II");
-    Tl->DrawLatex(8e-3,0.105,"Kamland-Zen 800, SNO+ I, SuperNEMO");
-    Tl->DrawLatex(1.25e-3,0.07,"AMoRE, CUPID, PandaX-III, SNO+ II");
-    Tl->DrawLatex(3.2e-4,0.0105,"nEXO");
+    Tl->SetTextSize(0.022);
+    Tl->SetTextColor(kGreen+2);
+    Tl->DrawLatex(1.7e-4,0.6,"Completed");
+    Tl->DrawLatex(1.15e-2,0.6,"CUORE-0, EXO-200, GERDA, NEMO3");
+    Tl->DrawLatex(2e-2,0.19,"KamLAND-Zen I-II");
+    Tl->SetTextColor(kOrange+2);
+    Tl->DrawLatex(1.7e-4,0.4,"Upcoming");
+    Tl->DrawLatex(1.2e-3,0.11,"KamLAND-Zen 800, SNO+ I, SuperNEMO");
+    Tl->SetTextColor(kRed+1);
+    Tl->DrawLatex(1.7e-4,0.27,"Proposed");
+    Tl->DrawLatex(4e-4,0.073,"AMoRE, CUPID, KamLAND2-Zen,");
+    Tl->DrawLatex(4e-4,0.057,"PandaX-III, SNO+ II");
+    Tl->DrawLatex(1.2e-4,7.5e-3,"LEGEND-1000, nEXO");
     // Save and close
     c->Update();
     c->RedrawAxis();
@@ -531,8 +585,7 @@ int main() {
     //hpsNHlo->SetTitle("#bf{0#nu#beta#beta decay - allowed phase space}");
     c->DrawFrame(3e-2,1e-4,3e0,1e0,";#Sigma m_{#nu} (eV);#LTm_{#beta#beta}#GT (eV)");
     // Draw sensitivity bands (areas only)
-    gs1->Draw("f");
-    gs2->Draw("f");
+    gres->Draw("f");
     // Draw allowed phase space
     hpsNHc->Draw("colz same");
     hpsNHc->GetZaxis()->SetRangeUser(2e-10,2e-2);
@@ -570,9 +623,8 @@ int main() {
     leg->Draw();
     // Write SNO+ sensitivities and cosmology limits
     Tl->SetTextSize(0.025);
-    Tl->SetTextColor(TEXTCOL);
-    Tl->DrawLatex(3.5e-2,5.2e-2,"SNO+ Phase I");
-    Tl->DrawLatex(3.5e-2,2.4e-2,"SNO+ Phase II");
+    Tl->SetTextColor(kGreen+4);
+    Tl->DrawLatex(4.2e-2,9e-2,"KamLAND-Zen");
     Tl->DrawLatex(1.3e-1,1.3e-4,"#color[13]{PLANCK 2018}");
     // Write mass ordering
     Tl->SetTextSize(0.035);
@@ -580,8 +632,7 @@ int main() {
     Tl->DrawLatex(7.0e-2,5.0e-3,"NH");
     Tl->DrawLatex(1.2e-1,2.7e-2,"IH");
     // Redraw sensitivity bands (lines only)
-    gs1->Draw("l");
-    gs2->Draw("l");
+    gres->Draw("l");
     gc->SetLineColorAlpha(13,0.8);
     gc->SetLineStyle(5);
     gc->SetLineWidth(2);
