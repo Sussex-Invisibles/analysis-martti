@@ -105,8 +105,8 @@ void printProgress(int it, int n) {
     else                        cout << " ";  // not yet processed
   }
   int perc = (int)round(100.*prog);
-  cout << "] " << perc << "%\r" << flush;
-  if (it == n-1) cout << endl;
+  if (it < n-1) cout << "] " << perc << "%\r" << flush;
+  else          cout << "] " << perc << "%\r" << endl;
 }
 
 // -----------------------------------------------------------------------------
