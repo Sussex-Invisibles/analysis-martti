@@ -32,8 +32,9 @@ int main() {
     // Initialise RAT
     RAT::DU::DSReader dsreader(fname);
     RAT::DU::Utility::Get()->BeginOfRun();
-    RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
     RAT::DU::GroupVelocity gv = RAT::DU::Utility::Get()->GetGroupVelocity();
+    RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
+    lpc.SetELLIEEvent(true); // event originates outside AV (see PR #2621)
     const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     const int NPMTS = pmtinfo.GetCount();
     cout << NPMTS << " PMTs found" << endl;

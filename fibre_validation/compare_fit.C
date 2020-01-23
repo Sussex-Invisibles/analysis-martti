@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
       const double ENERGY   = RAT::util::WavelengthToEnergy(5e-4); // photon energy [MeV]
       const double LOCALITY = 10.0;   // accepted tolerance [mm] for LightPathCalculator
       RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
-      //lpc.BeginOfRun(); // TODO - find out if this is required
+      lpc.SetELLIEEvent(true); // event originates outside AV (see PR #2621)
       lpc.CalcByPosition(fibrePos, fitPos, ENERGY, LOCALITY);
       TVector3 fitDir = lpc.GetInitialLightVec(); // fitted direction of fibre
       double angDiff = fibreDir.Angle(fitDir)*180./pi; // difference to RATDB (should be small)
