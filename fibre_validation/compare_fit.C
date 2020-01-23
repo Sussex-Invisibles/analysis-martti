@@ -11,13 +11,13 @@
 int main(int argc, char** argv) {
   
   // Global parameters
-  const int NPCAS = 6;
+  const int NPCAS = 7;
   const int NFIBRES = 95;
   
   // Files to load
   string fpath = Form("%s/pCloud/PostDoc/Calibration/TELLIE/Fibre_validation/",getenv("HOME"));
   string fname = "TELLIE_FITRESULTS_";
-  string set[NPCAS] = {"2017-11","2018-03","2018-06","2018-09","2018-12","2019-03"};
+  string set[NPCAS] = {"2017-11","2018-03","2018-06","2018-09","2018-12","2019-03","2019-12"};
   
   // Graph showing all PMTs
   RAT::DU::DSReader dsreader("../../data/Analysis_r0000102315_s000_p000.root");
