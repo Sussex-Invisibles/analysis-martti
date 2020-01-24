@@ -97,10 +97,10 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   // Check files for given run
   if(!TEST && VERBOSE) printf("*****\n");
   printf("Checking files for run %d... ", run);
-  string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
+  //string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
   //string fpath = "/its/home/mn372/Software/SNOP/work/downloaded";
   //string fpath = "/lustre/scratch/epp/neutrino/snoplus/TELLIE/TELLIE_PCA_RUNS_PROCESSED";
-  //string fpath = "/its/home/mr514/DEC_2019/calib";
+  string fpath = "/its/home/mr514/DEC_2019/calib";
   string fname = "";
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
