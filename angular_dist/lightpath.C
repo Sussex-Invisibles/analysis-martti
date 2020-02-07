@@ -67,7 +67,7 @@ int main() {
     
       // Initialise histograms
       hname = Form("hang_%d",l);
-      hang[l] = new TH2D(hname.c_str(),"",NBINS,0,100,NBINS,-1.5,0.5);
+      hang[l] = new TH2D(hname.c_str(),"",NBINS,0,100,NBINS,0,100);
       hname = Form("htyp_%d",l);
       htyp[l] = new TH2D(hname.c_str(),"",NBINS,0,100,8,0,8);
       hname = Form("hdis_%d",l);
@@ -128,16 +128,22 @@ int main() {
         TVector3 startDir = lpc.GetInitialLightVec();
         double thetaLPC = fibreDir.Angle(startDir)*180./pi; // angle w.r.t. fibre
         
+        /*
+        if (fabs(thetaLPC-thetaLine)>10) {
+          cout << "PMT #" << it << " has angles " << thetaLine << " - " << thetaLPC << " = " << thetaLPC-thetaLine << " degrees!" << endl;
+        }
+        */
+        
         // Fill histograms
-        hang[l]->Fill(thetaLPC,thetaLPC-thetaLine);
-        hdis[l]->Fill(thetaLPC,(distInInnerAV+distInAV+distInWater)/1e3);
-        htof[l]->Fill(thetaLPC,transitTime);
-        hbin[l]->Fill(thetaLPC,thetaAtPMT);
-        hbkt[l]->Fill(thetaLPC,bucketTime);
-        htyp[l]->Fill(thetaLPC,k);
-        hinner[l]->Fill(thetaLPC,distInInnerAV/1e3);
-        hinAV[l]->Fill(thetaLPC,distInAV/1e3);
-        hwater[l]->Fill(thetaLPC,distInWater/1e3);
+        hang[l]->Fill(thetaLine,thetaLPC);
+        hdis[l]->Fill(thetaLine,(distInInnerAV+distInAV+distInWater)/1e3);
+        htof[l]->Fill(thetaLine,transitTime);
+        hbin[l]->Fill(thetaLine,thetaAtPMT);
+        hbkt[l]->Fill(thetaLine,bucketTime);
+        htyp[l]->Fill(thetaLine,k);
+        hinner[l]->Fill(thetaLine,distInInnerAV/1e3);
+        hinAV[l]->Fill(thetaLine,distInAV/1e3);
+        hwater[l]->Fill(thetaLine,distInWater/1e3);
       }
       
       // Output LPC success rate
@@ -152,11 +158,15 @@ int main() {
     gStyle->SetTitleOffset(1.2, "y");
     TCanvas *c = NULL;
     
+    TText lpType(0,0,"");
+    lpType.SetTextSize(0.048);
+    lpType.SetTextColor(kRed+2);
+    
     c = new TCanvas("c","",1600,1200);
     c->Divide(3,2);
     // Angle comparison
     c->cd(1)->SetGrid();
-    c->cd(1)->DrawFrame(0,-1.3,100,0.1,"Angle comparison;(LightPathCalc) PMT angle from fibre [deg];Difference to straight line [deg]");
+    c->cd(1)->DrawFrame(0,0,100,100,"Angle comparison;(StraightLine) PMT angle from fibre [deg];LightPath initial direction from fibre [deg]");
     for (int l=NLOC-1; l>=0; l--) {
       hang[l]->SetMarkerStyle(6);
       hang[l]->SetMarkerColor(col[l]);
@@ -164,12 +174,12 @@ int main() {
       hang[l]->Draw("scat same");
     }
     // Legend on first plot only
-    TLegend leg(0.64,0.16,0.94,0.42);
+    TLegend leg(0.16,0.62,0.56,0.95);
     for (int l=0; l<NLOC; l++) leg.AddEntry(hang[l],Form("Locality %d mm",locality[l]),"lp");
     leg.Draw();
     // Angle comparison
     c->cd(2)->SetGrid();
-    c->cd(2)->DrawFrame(0,0,100,100,"Angle comparison;(LightPathCalc) PMT angle from fibre [deg];Incoming angle at PMT [deg]");
+    c->cd(2)->DrawFrame(0,0,100,100,"Angle comparison;(StraightLine) PMT angle from fibre [deg];Incoming angle at PMT [deg]");
     for (int l=NLOC-1; l>=0; l--) {
       hbin[l]->SetMarkerStyle(6);
       hbin[l]->SetMarkerColor(col[l]);
@@ -178,7 +188,7 @@ int main() {
     }
     // Distance comparison
     c->cd(3)->SetGrid();
-    c->cd(3)->DrawFrame(0,0,100,18,"Distance comparison;(LightPathCalc) PMT angle from fibre [deg];Total light path length [m]");
+    c->cd(3)->DrawFrame(0,0,100,20,"Distance comparison;(StraightLine) PMT angle from fibre [deg];Total light path length [m]");
     for (int l=NLOC-1; l>=0; l--) {
       hdis[l]->SetMarkerStyle(6);
       hdis[l]->SetMarkerColor(col[l]);
@@ -187,16 +197,17 @@ int main() {
     }
     // Light path type
     c->cd(4)->SetGrid();
-    c->cd(4)->DrawFrame(0,0,100,8,"Type comparison;(LightPathCalc) PMT angle from fibre [deg];Light path type [ ]");
+    c->cd(4)->DrawFrame(0,0,100,8,"Type comparison;(StraightLine) PMT angle from fibre [deg];Light path type [ ]");
     for (int l=NLOC-1; l>=0; l--) {
       htyp[l]->SetMarkerStyle(6);
       htyp[l]->SetMarkerColor(col[l]);
       htyp[l]->SetLineColor(col[l]);
       htyp[l]->Draw("scat same");
     }
+    for (int m=0; m<8; m++) lpType.DrawText(5,m+0.35,lightPathType[m].c_str());
     // Bucket time comparison
     c->cd(5)->SetGrid();
-    c->cd(5)->DrawFrame(0,0.4,100,0.75,"Bucket time comparison;(LightPathCalc) PMT angle from fibre [deg];PMT bucket time [ns]");
+    c->cd(5)->DrawFrame(0,0.4,100,0.75,"Bucket time comparison;(StraightLine) PMT angle from fibre [deg];PMT bucket time [ns]");
     for (int l=NLOC-1; l>=0; l--) {
       hbkt[l]->SetMarkerStyle(6);
       hbkt[l]->SetMarkerColor(col[l]);
@@ -205,7 +216,7 @@ int main() {
     }
     // Transit time comparison
     c->cd(6)->SetGrid();
-    c->cd(6)->DrawFrame(0,0,100,80,"Transit time comparison;(LightPathCalc) PMT angle from fibre [deg];Transit time [ns]");
+    c->cd(6)->DrawFrame(0,0,100,100,"Transit time comparison;(StraightLine) PMT angle from fibre [deg];Transit time [ns]");
     for (int l=NLOC-1; l>=0; l--) {
       htof[l]->SetMarkerStyle(6);
       htof[l]->SetMarkerColor(col[l]);
@@ -222,16 +233,17 @@ int main() {
     c->Divide(3,2);
     // Angle comparison
     c->cd(1)->SetGrid();
-    c->cd(1)->DrawFrame(0,-0.06,24,0.01,"Angle comparison;(LightPathCalc) PMT angle from fibre [deg];Difference to straight line [deg]");
+    c->cd(1)->DrawFrame(30,30,60,50,"Angle comparison;(StraightLine) PMT angle from fibre [deg];LightPath initial direction from fibre [deg]");
     for (int l=NLOC-1; l>=0; l--) {
       hang[l]->SetMarkerStyle(6);
       hang[l]->SetMarkerColor(col[l]);
       hang[l]->SetLineColor(col[l]);
       hang[l]->Draw("scat same");
     }
+    //leg.Draw();
     // PMT angle
     c->cd(2)->SetGrid();
-    c->cd(2)->DrawFrame(0,0,24,30,"Angle comparison;(LightPathCalc) PMT angle from fibre [deg];Incoming angle at PMT [deg]");
+    c->cd(2)->DrawFrame(30,20,60,60,"Angle comparison;(StraightLine) PMT angle from fibre [deg];Incoming angle at PMT [deg]");
     for (int l=NLOC-1; l>=0; l--) {
       hbin[l]->SetMarkerStyle(6);
       hbin[l]->SetMarkerColor(col[l]);
@@ -240,7 +252,7 @@ int main() {
     }
     // Total light path
     c->cd(3)->SetGrid();
-    c->cd(3)->DrawFrame(0,14.8,24,17,"Distance comparison;(LightPathCalc) PMT angle from fibre [deg];Total light path length [m]");
+    c->cd(3)->DrawFrame(30,10,60,16,"Distance comparison;(StraightLine) PMT angle from fibre [deg];Total light path length [m]");
     for (int l=NLOC-1; l>=0; l--) {
       hdis[l]->SetMarkerStyle(6);
       hdis[l]->SetMarkerColor(col[l]);
@@ -249,7 +261,7 @@ int main() {
     }
     // Light path type
     c->cd(4)->SetGrid();
-    c->cd(4)->DrawFrame(0,0,24,8,"Type comparison;(LightPathCalc) PMT angle from fibre [deg];Light path type [ ]");
+    c->cd(4)->DrawFrame(30,0,60,8,"Type comparison;(StraightLine) PMT angle from fibre [deg];Light path type [ ]");
     for (int l=NLOC-1; l>=0; l--) {
       htyp[l]->SetMarkerStyle(6);
       htyp[l]->SetMarkerColor(col[l]);
@@ -258,7 +270,7 @@ int main() {
     }
     // Bucket time
     c->cd(5)->SetGrid();
-    c->cd(5)->DrawFrame(0,0.45,24,0.53,"Bucket time comparison;(LightPathCalc) PMT angle from fibre [deg];PMT bucket time [ns]");
+    c->cd(5)->DrawFrame(30,0.45,60,0.75,"Bucket time comparison;(StraightLine) PMT angle from fibre [deg];PMT bucket time [ns]");
     for (int l=NLOC-1; l>=0; l--) {
       hbkt[l]->SetMarkerStyle(6);
       hbkt[l]->SetMarkerColor(col[l]);
@@ -267,7 +279,7 @@ int main() {
     }
     // Transit time
     c->cd(6)->SetGrid();
-    c->cd(6)->DrawFrame(0,67,24,77,"Transit time comparison;(LightPathCalc) PMT angle from fibre [deg];Transit time [ns]");
+    c->cd(6)->DrawFrame(30,40,60,70,"Transit time comparison;(StraightLine) PMT angle from fibre [deg];Transit time [ns]");
     for (int l=NLOC-1; l>=0; l--) {
       htof[l]->SetMarkerStyle(6);
       htof[l]->SetMarkerColor(col[l]);
@@ -284,17 +296,17 @@ int main() {
     c->Divide(2,2);
     // Angle comparison
     c->cd(1)->SetGrid();
-    c->cd(1)->DrawFrame(0,0,100,13,"Angle comparison;(LightPathCalc) PMT angle from fibre [deg];Path in inner AV [m]");
+    c->cd(1)->DrawFrame(0,0,100,13,"Angle comparison;(StraightLine) PMT angle from fibre [deg];Path in inner AV [m]");
     for (int l=0; l<NLOC; l++) {
       hinner[l]->SetMarkerStyle(6);
       hinner[l]->SetMarkerColor(col[l]);
       hinner[l]->SetLineColor(col[l]);
       hinner[l]->Draw("scat same");
     }
-    leg.Draw();
+    //leg.DrawLegend(0.58,0.88,0.58,0.88);
     // Angle comparison
     c->cd(2)->SetGrid();
-    c->cd(2)->DrawFrame(0,0,100,2,"Angle comparison;(LightPathCalc) PMT angle from fibre [deg];Path in AV [m]");
+    c->cd(2)->DrawFrame(0,0,100,2,"Angle comparison;(StraightLine) PMT angle from fibre [deg];Path in AV [m]");
     for (int l=0; l<NLOC; l++) {
       hinAV[l]->SetMarkerStyle(6);
       hinAV[l]->SetMarkerColor(col[l]);
@@ -303,7 +315,7 @@ int main() {
     }
     // Angle comparison
     c->cd(3)->SetGrid();
-    c->cd(3)->DrawFrame(0,0,100,13,"Angle comparison;(LightPathCalc) PMT angle from fibre [deg];Path in ext. water [m]");
+    c->cd(3)->DrawFrame(0,0,100,13,"Angle comparison;(StraightLine) PMT angle from fibre [deg];Path in ext. water [m]");
     for (int l=0; l<NLOC; l++) {
       hwater[l]->SetMarkerStyle(6);
       hwater[l]->SetMarkerColor(col[l]);
@@ -312,7 +324,7 @@ int main() {
     }
     // Angle comparison
     c->cd(4)->SetGrid();
-    c->cd(4)->DrawFrame(0,0,100,18,"Angle comparison;(LightPathCalc) PMT angle from fibre [deg];Total path length [m]");
+    c->cd(4)->DrawFrame(0,0,100,20,"Angle comparison;(StraightLine) PMT angle from fibre [deg];Total path length [m]");
     for (int l=0; l<NLOC; l++) {
       hdis[l]->SetMarkerStyle(6);
       hdis[l]->SetMarkerColor(col[l]);
