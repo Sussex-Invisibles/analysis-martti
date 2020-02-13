@@ -51,15 +51,25 @@ int main() {
     // Declare variables
     int pmtcount[NLOC] = {0};
     int goodLP[NLOC] = {0};
+    
     TH2D *hang[NLOC] = {NULL};
     TH2D *htyp[NLOC] = {NULL};
     TH2D *hdis[NLOC] = {NULL};
     TH2D *htof[NLOC] = {NULL};
     TH2D *hbin[NLOC] = {NULL};
     TH2D *hbkt[NLOC] = {NULL};
+    
     TH2D *hinner[NLOC] = {NULL};
     TH2D *hinAV[NLOC] = {NULL};
     TH2D *hwater[NLOC] = {NULL};
+    
+    TH1D *hdisSL[NLOC] = {NULL};
+    TH1D *hdisLP[NLOC] = {NULL};
+    TH1D *hangAV[NLOC] = {NULL};
+    TH1D *hangLP[NLOC] = {NULL};
+    TH1D *hcosAV[NLOC] = {NULL};
+    TH1D *hcosLP[NLOC] = {NULL};
+    
     string hname = "";
     
     // Loop over different values for locality
@@ -86,6 +96,19 @@ int main() {
       hname = Form("hwater_%d",l);
       hwater[l] = new TH2D(hname.c_str(),"",NBINS,0,100,NBINS,0,20);
       
+      hname = Form("hdisSL_%d",l);
+      hdisSL[l] = new TH1D(hname.c_str(),"",100,0,20);
+      hname = Form("hdisLP_%d",l);
+      hdisLP[l] = new TH1D(hname.c_str(),"",100,0,20);
+      hname = Form("hangAV_%d",l);
+      hangAV[l] = new TH1D(hname.c_str(),"",100,0,180);
+      hname = Form("hangLP_%d",l);
+      hangLP[l] = new TH1D(hname.c_str(),"",100,0,180);
+      hname = Form("hcosAV_%d",l);
+      hcosAV[l] = new TH1D(hname.c_str(),"",100,-1,1);
+      hname = Form("hcosLP_%d",l);
+      hcosLP[l] = new TH1D(hname.c_str(),"",100,-1,1);
+      
       // Loop over PMTs
       for (int it=0; it<NPMTS; it++) {
       
@@ -96,10 +119,11 @@ int main() {
         // Get PMT information
         TVector3 pmtPos = pmtinfo.GetPosition(it);       // position [mm]
         TVector3 pmtDir = pmtinfo.GetDirection(it);      // direction
+        double pmtAng = fibrePos.Angle(pmtPos)*180./pi;  // angle w.r.t. fibre position
         
         // Get straight line for reference
         TVector3 lineDir = (pmtPos-fibrePos).Unit();      // straight line assumption
-        double thetaLine = fibreDir.Angle(lineDir)*180./pi; // angle w.r.t. fibre
+        double thetaLine = fibreDir.Angle(lineDir)*180./pi; // angle w.r.t. fibre direction
         
         // Calculate light path
         lpc.CalcByPosition(fibrePos,pmtPos,ENERGY,locality[l]);
@@ -118,6 +142,7 @@ int main() {
         double distInAV = lpc.GetDistInAV();
         double distInWater = lpc.GetDistInWater();
         double transitTime = gv.CalcByDistance(distInInnerAV, distInAV, distInWater, ENERGY);
+        double totalDist = distInInnerAV + distInAV + distInWater;
         
         // Get light bucket time (as done in DQLaserBallProc->cc)
         TVector3 endDir = lpc.GetIncidentVecOnPMT();        // end direction at PMT
@@ -136,7 +161,7 @@ int main() {
         
         // Fill histograms
         hang[l]->Fill(thetaLine,thetaLPC);
-        hdis[l]->Fill(thetaLine,(distInInnerAV+distInAV+distInWater)/1e3);
+        hdis[l]->Fill(thetaLine,totalDist/1e3);
         htof[l]->Fill(thetaLine,transitTime);
         hbin[l]->Fill(thetaLine,thetaAtPMT);
         hbkt[l]->Fill(thetaLine,bucketTime);
@@ -144,6 +169,12 @@ int main() {
         hinner[l]->Fill(thetaLine,distInInnerAV/1e3);
         hinAV[l]->Fill(thetaLine,distInAV/1e3);
         hwater[l]->Fill(thetaLine,distInWater/1e3);
+        hdisSL[l]->Fill((pmtPos-fibrePos).Mag()/1e3);
+        hdisLP[l]->Fill(totalDist/1e3);
+        hangAV[l]->Fill(pmtAng);
+        hangLP[l]->Fill(thetaLine);
+        hcosAV[l]->Fill(cos(fibrePos.Angle(pmtPos)));
+        hcosLP[l]->Fill(cos(fibreDir.Angle(lineDir)));
       }
       
       // Output LPC success rate
@@ -225,7 +256,7 @@ int main() {
     }
     // Save and close
     c->Print("lightpath.png");
-    c->Print("lightpath.pdf");
+    //c->Print("lightpath.pdf");
     c->Close();
     
     // Zoomed in version of same thing
@@ -288,7 +319,7 @@ int main() {
     }
     // Save and close
     c->Print("lightpath_zoom.png");
-    c->Print("lightpath_zoom.pdf");
+    //c->Print("lightpath_zoom.pdf");
     c->Close();
     
     // Comparison of different path lengths
@@ -333,7 +364,64 @@ int main() {
     }
     // Save and close
     c->Print("lightpath_dist.png");
-    c->Print("lightpath_dist.pdf");
+    //c->Print("lightpath_dist.pdf");
+    c->Close();
+    
+    // Distance and angular distributions (1D)
+    c = new TCanvas("c","",1600,1200);
+    c->Divide(3,2);
+    // Distance from straight line
+    c->cd(1)->SetGrid();
+    c->cd(1)->DrawFrame(0,0,20,1.5*hdisLP[0]->GetMaximum(),";Absolute distance (Fibre #leftrightarrow PMT) d_{PMT} [m];");
+    for (int l=NLOC-1; l>=0; l--) {
+      hdisSL[l]->SetLineColorAlpha(col[l],0.5);
+      hdisSL[l]->SetLineWidth(2);
+      hdisSL[l]->Draw("same");
+    }
+    leg.Draw();
+    // Angle seen from AV [deg]
+    c->cd(2)->SetGrid();
+    c->cd(2)->DrawFrame(0,0,180,1.5*hangAV[0]->GetMaximum(),";Angle seen from AV centre (Fibre #leftrightarrow PMT) #theta [deg];");
+    for (int l=NLOC-1; l>=0; l--) {
+      hangAV[l]->SetLineColorAlpha(col[l],0.5);
+      hangAV[l]->SetLineWidth(2);
+      hangAV[l]->Draw("same");
+    }
+    // Angle seen from fibre [deg]
+    c->cd(3)->SetGrid();
+    c->cd(3)->DrawFrame(0,0,180,1.5*hangLP[0]->GetMaximum(),";Angle seen from fibre (Fibre #leftrightarrow PMT) #theta [deg];");
+    for (int l=NLOC-1; l>=0; l--) {
+      hangLP[l]->SetLineColorAlpha(col[l],0.5);
+      hangLP[l]->SetLineWidth(2);
+      hangLP[l]->Draw("same");
+    }
+    // Distance from LightPathCalculator
+    c->cd(4)->SetGrid();
+    c->cd(4)->DrawFrame(0,0,20,1.5*hdisLP[0]->GetMaximum(),";LightPath distance (Fibre #leftrightarrow PMT) l_{LPC} [m];");
+    for (int l=NLOC-1; l>=0; l--) {
+      hdisLP[l]->SetLineColorAlpha(col[l],0.5);
+      hdisLP[l]->SetLineWidth(2);
+      hdisLP[l]->Draw("same");
+    }
+    // Angle seen from AV cos(theta)
+    c->cd(5)->SetGrid();
+    c->cd(5)->DrawFrame(-1,0,1,1.5*hcosAV[0]->GetMaximum(),";Angle seen from AV centre (Fibre #leftrightarrow PMT) cos(#theta) [];");
+    for (int l=NLOC-1; l>=0; l--) {
+      hcosAV[l]->SetLineColorAlpha(col[l],0.5);
+      hcosAV[l]->SetLineWidth(2);
+      hcosAV[l]->Draw("same");
+    }
+    // Angle seen from fibre cos(theta)
+    c->cd(6)->SetGrid();
+    c->cd(6)->DrawFrame(-1,0,1,1.5*hcosLP[0]->GetMaximum(),";Angle seen from fibre (Fibre #leftrightarrow PMT) cos(#theta) [];");
+    for (int l=NLOC-1; l>=0; l--) {
+      hcosLP[l]->SetLineColorAlpha(col[l],0.5);
+      hcosLP[l]->SetLineWidth(2);
+      hcosLP[l]->Draw("same");
+    }
+    // Save and close
+    c->Print("lightpath_param.png");
+    //c->Print("lightpath_param.pdf");
     c->Close();
     
     // Free memory
@@ -348,6 +436,11 @@ int main() {
       if (hinner[l]) delete hinner[l];
       if (hinAV[l]) delete hinAV[l];
       if (hwater[l]) delete hwater[l];
+      if (hdisLP[l]) delete hdisLP[l];
+      if (hangAV[l]) delete hangAV[l];
+      if (hangLP[l]) delete hangLP[l];
+      if (hcosAV[l]) delete hcosAV[l];
+      if (hcosLP[l]) delete hcosLP[l];
     }
     return 0;
 }
