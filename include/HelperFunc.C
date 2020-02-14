@@ -501,62 +501,64 @@ void DrawCircle(const TVector3& center, double angle, TVector3** dots, int NDOTS
 // -----------------------------------------------------------------------------
 string TriggerToString( int trigger ) {
   std::stringstream triggerStream;
+  triggerStream << "[ ";
   if( trigger == 0x0 )
-    triggerStream << "ORPH";
+    triggerStream << "ORPH ";
   if( trigger & 0x01 )
-    triggerStream << "100L,";
+    triggerStream << "100L ";
   if( trigger & 0x02 )
-    triggerStream << "100M,";
+    triggerStream << "100M ";
   if( trigger & 0x04 )
-    triggerStream << "10HL,";
+    triggerStream << "10HL ";
   if( trigger & 0x08 )
-    triggerStream << "20,";
+    triggerStream << "20 ";
   if( trigger & 0x10 )
-    triggerStream << "20L,";
+    triggerStream << "20L ";
   if( trigger & 0x20 )
-    triggerStream << "ESUML,";
+    triggerStream << "ESUML ";
   if( trigger & 0x40 )
-    triggerStream << "ESUMH,";
+    triggerStream << "ESUMH ";
   if( trigger & 0x80 )
-    triggerStream << "OWL,";
+    triggerStream << "OWL ";
   if( trigger & 0x100 )
-    triggerStream << "OWLL,";
+    triggerStream << "OWLL ";
   if( trigger & 0x200 )
-    triggerStream << "OWLH,";
+    triggerStream << "OWLH ";
   if( trigger & 0x400 )
-    triggerStream << "PUL,";
+    triggerStream << "PUL ";
   if( trigger & 0x800 )
-    triggerStream << "PRE,";
+    triggerStream << "PRE ";
   if( trigger & 0x1000 )
-    triggerStream << "PED,";
+    triggerStream << "PED ";
   if( trigger & 0x2000 )
-    triggerStream << "PONG,";
+    triggerStream << "PONG ";
   if( trigger & 0x4000 )
-    triggerStream << "SYNC,";
+    triggerStream << "SYNC ";
   if( trigger & 0x8000 )
-    triggerStream << "EXT,";
+    triggerStream << "EXT ";
   if( trigger & 0x10000 )
-    triggerStream << "EXT2,";
+    triggerStream << "EXT2 ";
   if( trigger & 0x20000 )
-    triggerStream << "EXT3,";
+    triggerStream << "EXT3 ";
   if( trigger & 0x40000 )
-    triggerStream << "EXT4,";
+    triggerStream << "EXT4 ";
   if( trigger & 0x80000 )
-    triggerStream << "EXT5,";
+    triggerStream << "EXT5 ";
   if( trigger & 0x100000 )
-    triggerStream << "EXT6,";
+    triggerStream << "EXT6 ";
   if( trigger & 0x200000 )
-    triggerStream << "EXT7,";
+    triggerStream << "EXT7 ";
   if( trigger & 0x400000 )
-    triggerStream << "EXT8,";
+    triggerStream << "EXT8 ";
   if( trigger & 0x800000 )
-    triggerStream << "SPRaw,";
+    triggerStream << "SPRaw ";
   if( trigger & 0x1000000 )
-    triggerStream << "NCD,";
+    triggerStream << "NCD ";
   if( trigger & 0x2000000 )
-    triggerStream << "SoftGT,";
+    triggerStream << "SoftGT ";
   if( trigger & 0x4000000 )
-    triggerStream << "MISS";
+    triggerStream << "MISS ";
+  triggerStream << "]";
   return triggerStream.str();
 }
 
