@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
   const int TEST = (RUN_CLUSTER) ? 0 : 117592;
 
   // Initialise input file
-  string input = "../pca_runs/TELLIE_PCA_Mar2019.txt";
+  string input = "../pca_runs/TELLIE_PCA_Dec2019.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line;
@@ -99,7 +99,8 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
   printf("Checking files for run %d... ", run);
   //string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
   //string fpath = "/its/home/mn372/Software/SNOP/work/downloaded";
-  string fpath = "/lustre/scratch/epp/neutrino/snoplus/TELLIE/TELLIE_PCA_RUNS_PROCESSED";
+  //string fpath = "/lustre/scratch/epp/neutrino/snoplus/TELLIE/TELLIE_PCA_RUNS_PROCESSED";
+  string fpath = "/its/home/mr514/DEC_2019/calib";
   string fname = "";
   ifstream f;
   for (int pass=3;pass>=0;pass--) {
@@ -107,6 +108,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
     f.open(fname.c_str());
     if (f.good()) break;
     fname = Form("%s/Calibration_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+    f.open(fname.c_str());
+    if (f.good()) break;
+    fname = Form("%s/Calib_0000%d_00%d.root",fpath.c_str(),run,pass);
     f.open(fname.c_str());
     if (f.good()) break;
   }
@@ -156,12 +160,9 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
 
     // Initialise RAT
     RAT::DU::DSReader dsreader(fname);
-    //RAT::DU::Utility::Get()->BeginOfRun();
-    RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
-    //lpc.BeginOfRun(); // TODO - find out if this is needed too!
     RAT::DU::GroupVelocity gv = RAT::DU::Utility::Get()->GetGroupVelocity();
-    //gv.BeginOfRun(); // TODO - find out if this is needed too!
-    //const RAT::DU::ChanHWStatus& chs = RAT::DU::Utility::Get()->GetChanHWStatus();
+    RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
+    lpc.SetELLIEEvent(true); // event originates outside AV (see PR #2621)
     const RAT::DU::PMTCalStatus& pmtStatus = RAT::DU::Utility::Get()->GetPMTCalStatus();
     const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     const int NPMTS = pmtinfo.GetCount();
@@ -217,10 +218,11 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
       fitpos.SetXYZ(dirx,diry,dirz);
       if (fitpos.Mag()!=0) break;
     }
-    TVector3 fitdir = (fitpos-fibrePos).Unit(); // TODO - use LightPathCalculator to get the fitted fibre direction!
-    cout << "Fit direction (straight) : " << printVector(fitdir) << endl;
-    //TVector3 fitdirlpc = lpc.VectorToSphereEdge(fibrePos, fibreDir, 8700, true); // function is private...
-    //cout << "Fit direction (LightPath): " << printVector(fitdirlpc) << endl;
+    TVector3 fitdirOld = (fitpos-fibrePos).Unit(); // assume straight line
+    cout << "Fit direction (straight) : " << printVector(fitdirOld) << endl;
+    lpc.CalcByPosition(fibrePos, fitpos, ENERGY, LOCALITY);
+    TVector3 fitdir = lpc.GetInitialLightVec();    // use LightPathCalculator
+    cout << "Fit direction (LightPath): " << printVector(fitdir) << endl;
     if (fitpos.Mag()==0) {
       cerr << "*** ERROR - Could not load fit position!" << endl;
       exit(1);
@@ -463,7 +465,7 @@ int angular(string fibre, int run, TF1 *fitResult, bool isMC=false, bool TEST=fa
 
   /* Do not apply global offset any more since Mark's AVLOC is not run regularly
   // TELLIE fibre/trigger delays & Mark's PCA offsets
-  string delayfile = "TELLIE_delays_Jun2018.txt";
+  string delayfile = "TELLIE_delays.txt";
   ifstream del(delayfile.c_str());
   if (!del) { cerr<<"ERROR - Failed to open "<<delayfile<<endl; exit(1); }
   int num, triggerDelay;

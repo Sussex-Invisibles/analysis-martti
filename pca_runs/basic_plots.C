@@ -14,18 +14,18 @@ int main() {
 }
 
 void basic_plots() {
-  ifstream in("TELLIE_PCA_Sep2018.txt");
+  ifstream in("TELLIE_PCA_Dec2019.txt");
   string fibre;
   int node, channel, run, ipw, photons, pin, rms;
   float nhit;
   //TFile *f = new TFile("pca.root","RECREATE");
   TH1F *h[6];
-  h[0] = new TH1F("h0","Run number (11xxxx)",30,7550,7850);
+  h[0] = new TH1F("h0","Run number (25xxxx)",30,3778,4078);
   h[1] = new TH1F("h1","Pulse width (IPW setpoint)",30,0,15000);
   h[2] = new TH1F("h2","Photons/pulse (from calibDB)",30,0,3e4);
-  h[3] = new TH1F("h3","PIN",30,0,3000);
+  h[3] = new TH1F("h3","PIN",50,0,5000);
   h[4] = new TH1F("h4","RMS",50,0,250);
-  h[5] = new TH1F("h5","EXTA-NHit (mean)",30,30,60);
+  h[5] = new TH1F("h5","EXTA-NHit (mean)",40,20,60);
   //TH2F *h2d = new TH2F("h2d","NHit vs PIN",100,0,3000,100,0,60);
   //TNtuple *ntuple = new TNtuple("ntuple","data from ascii file","channel:run:ipw:photons:nhit");
   string line;
@@ -34,7 +34,7 @@ void basic_plots() {
   while (1) {
      in >> node >> fibre >> channel >> run >> ipw >> photons >> pin >> rms >> nhit;
      if (!in.good()) break;
-     if(run>0)     h[0]->Fill(run-110000);
+     if(run>0)     h[0]->Fill(run-250000);
      if(ipw>0)     h[1]->Fill(ipw);
      if(photons>0) h[2]->Fill(photons);
      if(pin>0)     h[3]->Fill(pin);

@@ -5,7 +5,7 @@
 // ---------------------------------------------------------
 
 // Helper functions (includes everything else)
-#include "../HelperFunc.C"
+#include "../include/HelperFunc.C"
 
 // Global constants
 const int RUN_CLUSTER = 1;  // whether running on cluster (0=local)
@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
   }
   
   // Loop over all fibres in list
-  string input = "../pca_runs/TELLIE_PCA_Mar2019.txt";
+  string input = "../pca_runs/TELLIE_PCA_Dec2019.txt";
   ifstream in(input.c_str());
   if (!in) { cerr<<"Failed to open "<<input<<endl; exit(1); }
   string line, fibre;
@@ -91,7 +91,8 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
   printf("Checking files for run %d... ", run);
   //string fpath = Form("%s/Software/SNOP/work/data",getenv("HOME"));
   //string fpath = "/its/home/mn372/Software/SNOP/work/downloaded";
-  string fpath = "/lustre/scratch/epp/neutrino/snoplus/TELLIE/TELLIE_PCA_RUNS_PROCESSED";
+  //string fpath = "/lustre/scratch/epp/neutrino/snoplus/TELLIE/TELLIE_PCA_RUNS_PROCESSED";
+  string fpath = "/its/home/mr514/DEC_2019/calib";
   string fname, out, root, img;
   string mcopt = "";
   ifstream ff;
@@ -110,6 +111,9 @@ void fibre_validation(string fibre, int channel, int run, int ipw, int photons, 
       ff.open(fname.c_str());
       if (ff.good()) break;
       fname = Form("%s/Calibration_r0000%d_s000_p00%d.root",fpath.c_str(),run,pass);
+      ff.open(fname.c_str());
+      if (ff.good()) break;
+      fname = Form("%s/Calib_0000%d_00%d.root",fpath.c_str(),run,pass);
       ff.open(fname.c_str());
       if (ff.good()) break;
     }

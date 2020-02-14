@@ -11,13 +11,13 @@
 int main(int argc, char** argv) {
   
   // Global parameters
-  const int NPCAS = 6;
+  const int NPCAS = 7;
   const int NFIBRES = 95;
   
   // Files to load
   string fpath = Form("%s/pCloud/PostDoc/Calibration/TELLIE/Fibre_validation/",getenv("HOME"));
   string fname = "TELLIE_FITRESULTS_";
-  string set[NPCAS] = {"2017-11","2018-03","2018-06","2018-09","2018-12","2019-03"};
+  string set[NPCAS] = {"2017-11","2018-03","2018-06","2018-09","2018-12","2019-03","2019-12"};
   
   // Graph showing all PMTs
   RAT::DU::DSReader dsreader("../../data/Analysis_r0000102315_s000_p000.root");
@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
       const double ENERGY   = RAT::util::WavelengthToEnergy(5e-4); // photon energy [MeV]
       const double LOCALITY = 10.0;   // accepted tolerance [mm] for LightPathCalculator
       RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
-      //lpc.BeginOfRun(); // TODO - find out if this is required
+      lpc.SetELLIEEvent(true); // event originates outside AV (see PR #2621)
       lpc.CalcByPosition(fibrePos, fitPos, ENERGY, LOCALITY);
       TVector3 fitDir = lpc.GetInitialLightVec(); // fitted direction of fibre
       double angDiff = fibreDir.Angle(fitDir)*180./pi; // difference to RATDB (should be small)
