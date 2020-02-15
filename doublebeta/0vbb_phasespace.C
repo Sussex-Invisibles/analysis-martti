@@ -384,7 +384,7 @@ int main() {
       }
     }
     // Draw legend for contours
-    TLegend *leg = new TLegend(0.17,0.78,0.34,0.94,"#bf{PDG 2018}");
+    TLegend *leg = new TLegend(0.70,0.15,0.90,0.40,"#bf{PDG 2018}");
     for (int s=0; s<4; s++) {
       std::string legstr = Form("%d #sigma",s);
       leg->AddEntry(contours[0][s],legstr.c_str(),"l");
@@ -392,10 +392,10 @@ int main() {
     leg->SetFillStyle(0);
     leg->Draw();
     // Draw text describing plots
-    Tl->SetTextSize(0.035);
+    Tl->SetTextSize(0.045);
     Tl->SetTextColor(HIERCOL);
-    Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
-    Tl->DrawLatex(1.5e-4,2.0e-3,"NH");
+    Tl->DrawLatex(1.5e-4,2.2e-2,"IH");
+    Tl->DrawLatex(1.5e-4,1.8e-3,"NH");
     // Evince seems to have trouble displaying uppercase delta (font not embedded)
     //Tl->DrawLatex(1.5e-4,2.5e-2,"#Deltam_{32}^{2} < 0");
     //Tl->DrawLatex(1.5e-4,2.0e-3,"#Deltam_{32}^{2} > 0");
@@ -442,17 +442,18 @@ int main() {
     // Draw legend for contours
     leg->Draw();
     // Draw text describing plots
-    Tl->SetTextSize(0.035);
+    Tl->SetTextSize(0.045);
     Tl->SetTextColor(HIERCOL);
-    Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
-    Tl->DrawLatex(1.5e-4,2.0e-3,"NH");
+    Tl->DrawLatex(1.5e-4,2.2e-2,"IH");
+    Tl->DrawLatex(1.5e-4,1.8e-3,"NH");
     // Evince seems to have trouble displaying uppercase delta (font not embedded)
     //Tl->DrawLatex(1.5e-4,2.5e-2,"#Deltam_{32}^{2} < 0");
     //Tl->DrawLatex(1.5e-4,2.0e-3,"#Deltam_{32}^{2} > 0");
-    Tl->SetTextSize(0.025);
+    Tl->SetTextSize(0.035);
     Tl->SetTextColor(TEXTCOL);
-    Tl->DrawLatex(2e-4,6.0e-2,"SNO+ Phase I (T_{1/2} > 2.1 #times 10^{26} y)");
-    Tl->DrawLatex(1.5e-1,2.4e-2,"SNO+ Phase II");
+    //Tl->DrawLatex(2e-4,6.0e-2,"SNO+ Phase I (T_{1/2} > 2.1 #times 10^{26} y)");
+    Tl->DrawLatex(1.5e-4,5.8e-2,"SNO+ Phase I");
+    Tl->DrawLatex(1.3e-1,2.2e-2,"SNO+ Phase II");
     // Redraw sensitivity bands (lines only)
     gs1->SetLineColorAlpha(LINECOL,0.75);
     gs2->SetLineColorAlpha(LINECOL,0.75);
@@ -497,11 +498,13 @@ int main() {
         contours[i][s]->Draw("l");
       }
     }
+    // Draw legend for contours
+    leg->Draw();
     // Draw text describing plots
-    Tl->SetTextSize(0.035);
+    Tl->SetTextSize(0.045);
     Tl->SetTextColor(HIERCOL);
-    Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
-    Tl->DrawLatex(1.5e-4,2.0e-3,"NH");
+    Tl->DrawLatex(1.5e-4,2.2e-2,"IH");
+    Tl->DrawLatex(1.5e-4,1.8e-3,"NH");
     // Sensitivity arrows
     TArrow *arr1 = new TArrow(0,0,1,1,0.01,"|->");
     TArrow *arr2 = new TArrow(0,0,1,1,0.01,"|->");
@@ -550,10 +553,10 @@ int main() {
     // Draw allowed phase space for NH
     hpsNH->Draw("colz same");
     hpsNH->GetZaxis()->SetRangeUser(2e-10,2e-4);
-    Tl->SetTextSize(0.035);
+    Tl->SetTextSize(0.045);
     Tl->SetTextColor(HIERCOL);
-    Tl->DrawLatex(1.5e-4,2.5e-2,"IH");
-    Tl->DrawLatex(1.5e-4,2.0e-3,"NH");
+    Tl->DrawLatex(1.5e-4,2.2e-2,"IH");
+    Tl->DrawLatex(1.5e-4,1.8e-3,"NH");
     // Save a first time
     c->Update();
     c->RedrawAxis();
@@ -627,7 +630,7 @@ int main() {
     Tl->DrawLatex(4.2e-2,9e-2,"KamLAND-Zen");
     Tl->DrawLatex(1.3e-1,1.3e-4,"#color[13]{PLANCK 2018}");
     // Write mass ordering
-    Tl->SetTextSize(0.035);
+    Tl->SetTextSize(0.045);
     Tl->SetTextColor(0);
     Tl->DrawLatex(7.0e-2,5.0e-3,"NH");
     Tl->DrawLatex(1.2e-1,2.7e-2,"IH");
@@ -666,7 +669,7 @@ int main() {
     Tl->SetTextSize(0.025);
     Tl->DrawLatex(1.4e-4,1.3e-1,"#color[13]{PLANCK 2018}");
     // Write mass ordering
-    Tl->SetTextSize(0.035);
+    Tl->SetTextSize(0.045);
     Tl->SetTextColor(HIERCOL);
     Tl->DrawLatex(1.4e-4,4.8e-2,"NH");
     Tl->DrawLatex(1.4e-4,8.0e-2,"IH");
@@ -701,7 +704,7 @@ int main() {
     Tl->SetTextColor(TEXTCOL);
     Tl->DrawLatex(1.4e-4,2.3e-1,"KATRIN (3 years)");
     // Write mass ordering
-    Tl->SetTextSize(0.035);
+    Tl->SetTextSize(0.045);
     Tl->SetTextColor(HIERCOL);
     Tl->DrawLatex(1.4e-4,1.1e-2,"NH");
     Tl->DrawLatex(1.4e-4,6.0e-2,"IH");
