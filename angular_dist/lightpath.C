@@ -27,7 +27,8 @@ int main() {
 
     // Select a TELLIE file/fibre
     string fname = "../../data/Calibration_r0000204420_s000_p000.root";
-    string fibre = "FT008A";
+    string fibre = "FT008A"; // TELLIE
+    //string fibre = "FA108"; // AMELLIE
     
     // Initialise RAT
     RAT::DU::DSReader dsreader(fname);
@@ -47,6 +48,13 @@ int main() {
     TVector3 fibreDir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction of fibre
     //TVector3 lightPos = fibrePos + 2*fibrePos.Mag()*fibreDir;                // projected light spot centre
     cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrePos) << ", dir " << printVector(fibreDir) << endl;
+    
+    // Project to 2D - TODO projection function changes 3D input vector?!
+    TVector3 newFibrePos(fibrePos);
+    TVector2 fibrePosFlat;
+    RAT::SphereToIcosahedron(newFibrePos, fibrePosFlat, 1, 2.12);
+    TGraph *fibreMarker = new TGraph();
+    fibreMarker->SetPoint(0,fibrePosFlat.X(),fibrePosFlat.Y());
     
     // Declare variables
     int pmtcount[NLOC] = {0};
@@ -69,6 +77,9 @@ int main() {
     TH1D *hangLP[NLOC] = {NULL};
     TH1D *hcosAV[NLOC] = {NULL};
     TH1D *hcosLP[NLOC] = {NULL};
+    
+    TGraph *allPMTs[NLOC] = {NULL};
+    TGraph *badPMTs[NLOC] = {NULL};
     
     string hname = "";
     
@@ -109,6 +120,9 @@ int main() {
       hname = Form("hcosLP_%d",l);
       hcosLP[l] = new TH1D(hname.c_str(),"",100,-1,1);
       
+      allPMTs[l] = new TGraph();
+      badPMTs[l] = new TGraph();
+      
       // Loop over PMTs
       for (int it=0; it<NPMTS; it++) {
       
@@ -127,8 +141,28 @@ int main() {
         
         // Calculate light path
         lpc.CalcByPosition(fibrePos,pmtPos,ENERGY,locality[l]);
-        if (!lpc.GetPathValid()) continue;
+        
+        // Project PMT position onto flatmap
+        TVector2 pmtPosFlat;
+        TVector3 newPmtPos = pmtinfo.GetPosition(it);
+        //std::cout << "PMT #" << it << " before " << printVector(newPmtPos);
+        RAT::SphereToIcosahedron(newPmtPos, pmtPosFlat, 1, 2.12);
+        //std::cout << " and after " << printVector(newPmtPos) << std::endl;
+        allPMTs[l]->SetPoint(allPMTs[l]->GetN(), pmtPosFlat.X(), pmtPosFlat.Y());
+        
+        if (!lpc.GetPathValid()) {
+          badPMTs[l]->SetPoint(badPMTs[l]->GetN(), pmtPosFlat.X(), pmtPosFlat.Y());
+          std::cout << "*** WARNING - No valid light path found! ";
+          std::cout << "PMT #" << it << " at angle " << pmtAng << std::endl;
+          continue;
+        }
         goodLP[l]++;
+        
+        // Warning for problematic fit results
+        if (std::isnan(lpc.GetLightPathEndPos().Mag())) {
+          std::cout << "*** WARNING - Valid light path with NaN entries! ";
+          std::cout << "PMT #" << it << " at angle " << pmtAng << std::endl;
+        }
         
         // Get light path type
         string type = lpc.GetLightPathType();
@@ -192,6 +226,24 @@ int main() {
     TText lpType(0,0,"");
     lpType.SetTextSize(0.048);
     lpType.SetTextColor(kRed+2);
+    
+    c = new TCanvas("c","",640,1280);
+    c->Divide(1,5);
+    for (int l=0; l<NLOC; l++) {
+      c->cd(l+1)->DrawFrame(0,0,1,0.45,Form(";LPC failures with locality %d mm;",locality[l]));
+      allPMTs[l]->SetMarkerStyle(6);
+      allPMTs[l]->SetMarkerColor(19);
+      allPMTs[l]->Draw("P same");
+      fibreMarker->SetMarkerStyle(34);
+      fibreMarker->SetMarkerColor(1);
+      fibreMarker->Draw("P same");
+      if (badPMTs[l]->GetN()==0) continue;
+      badPMTs[l]->SetMarkerStyle(6);
+      badPMTs[l]->SetMarkerColor(col[l]);
+      badPMTs[l]->Draw("P same");
+    }
+    c->Print("lightpath_fails.png");
+    c->Close();
     
     c = new TCanvas("c","",1600,1200);
     c->Divide(3,2);
@@ -426,6 +478,7 @@ int main() {
     
     // Free memory
     if (c) delete c;
+    if (fibreMarker) delete fibreMarker;
     for (int l=0; l<NLOC; l++) {
       if (hang[l]) delete hang[l];
       if (hbin[l]) delete hbin[l];
@@ -441,6 +494,8 @@ int main() {
       if (hangLP[l]) delete hangLP[l];
       if (hcosAV[l]) delete hcosAV[l];
       if (hcosLP[l]) delete hcosLP[l];
+      if (allPMTs[l]) delete allPMTs[l];
+      if (badPMTs[l]) delete badPMTs[l];
     }
     return 0;
 }
