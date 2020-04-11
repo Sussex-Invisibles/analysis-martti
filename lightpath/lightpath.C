@@ -35,9 +35,11 @@ int main(int argc, char** argv) {
     string fpath = "/home/mn372/Software/SNOP/work/data/";
     string fname = "Calibration_r0000256984_s000_p000.root";
     string fibre = argv[1];
+    cout << "Opening file " << fpath << fname << "..." << flush;
     
     // Initialise RAT
     RAT::DU::DSReader dsreader(fpath+fname);
+    cout << " done." << endl;
     RAT::DU::Utility::Get()->BeginOfRun();
     const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     RAT::DU::GroupVelocity gv = RAT::DU::Utility::Get()->GetGroupVelocity();
