@@ -144,7 +144,7 @@ int main() {
         double transitTime = gv.CalcByDistance(distInInnerAV, distInAV, distInWater, ENERGY);
         double totalDist = distInInnerAV + distInAV + distInWater;
         
-        // Get light bucket time (as done in DQLaserBallProc->cc)
+        // Get light bucket time (as done in DQLaserBallProc.cc)
         TVector3 endDir = lpc.GetIncidentVecOnPMT();        // end direction at PMT
         double thetaAtPMT = endDir.Angle(pmtDir)*180./pi;   // incident angle with bucket face
         double bucketTime = gv.PMTBucketTime(thetaAtPMT);   // DocDB 3138
