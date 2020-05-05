@@ -13,6 +13,7 @@ const int NLOC = 5;
 const int NBINS = 1000;
 const int locality[NLOC] = {0,5,10,15,20};
 const int col[NLOC] = {12,50,75,63,92};
+const float offset[NLOC] = {0.02,0.01,0.00,-0.01,-0.02};
 string lightPathType[8] = { "Scint/InnerAV->AV->Water",
                             "AV->Water",
                             "AV->Scint/InnerAV->AV->Water",
@@ -23,19 +24,27 @@ string lightPathType[8] = { "Scint/InnerAV->AV->Water",
                             "Light Path Uninitialised"
                           };
   
-int main() {
+int main(int argc, char** argv) {
+
+    if (argc != 2) {
+      cout << "ERROR - Needs a fibre name as input argument!" << endl;
+      return 1;
+    }
 
     // Select a TELLIE file/fibre
-    string fname = "../../data/Calibration_r0000204420_s000_p000.root";
-    string fibre = "FT008A";
+    string fpath = "/home/mn372/Software/SNOP/work/data/";
+    string fname = "Calibration_r0000256984_s000_p000.root";
+    string fibre = argv[1];
+    cout << "Opening file " << fpath << fname << "..." << flush;
     
     // Initialise RAT
-    RAT::DU::DSReader dsreader(fname);
+    RAT::DU::DSReader dsreader(fpath+fname);
+    cout << " done." << endl;
     RAT::DU::Utility::Get()->BeginOfRun();
+    const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     RAT::DU::GroupVelocity gv = RAT::DU::Utility::Get()->GetGroupVelocity();
     RAT::DU::LightPathCalculator lpc = RAT::DU::Utility::Get()->GetLightPathCalculator();
     lpc.SetELLIEEvent(true); // event originates outside AV (see PR #2621)
-    const RAT::DU::PMTInfo& pmtinfo = RAT::DU::Utility::Get()->GetPMTInfo();
     const int NPMTS = pmtinfo.GetCount();
     cout << NPMTS << " PMTs found" << endl;
     
@@ -46,7 +55,16 @@ int main() {
     TVector3 fibrePos(entry->GetD("x"), entry->GetD("y"), entry->GetD("z")); // position of fibre [mm]
     TVector3 fibreDir(entry->GetD("u"), entry->GetD("v"), entry->GetD("w")); // direction of fibre
     //TVector3 lightPos = fibrePos + 2*fibrePos.Mag()*fibreDir;                // projected light spot centre
-    cout << "RATDB: fibre " << fibre << ", pos " << printVector(fibrePos) << ", dir " << printVector(fibreDir) << endl;
+    cout << "RATDB: fibre " << fibre;
+    cout << ", pos " << printVector(fibrePos);
+    cout << ", dir " << printVector(fibreDir);
+    cout << endl;
+    
+    // Project to flatmap
+    TVector2 fibrePosFlat;
+    RAT::SphereToIcosahedron(fibrePos, fibrePosFlat, 1, 2.12);
+    TGraph *fibreMarker = new TGraph();
+    fibreMarker->SetPoint(0,fibrePosFlat.X(),fibrePosFlat.Y());
     
     // Declare variables
     int pmtcount[NLOC] = {0};
@@ -69,6 +87,18 @@ int main() {
     TH1D *hangLP[NLOC] = {NULL};
     TH1D *hcosAV[NLOC] = {NULL};
     TH1D *hcosLP[NLOC] = {NULL};
+    
+    TGraph *gValid[NLOC] = {NULL};
+    TGraph *gTIR[NLOC] = {NULL};
+    TGraph *gResV[NLOC] = {NULL};
+    TGraph *gLine[NLOC] = {NULL};
+    TGraph *gEllie[NLOC] = {NULL};
+    TGraph *gType[NLOC] = {NULL};
+    TGraph *gPrec[NLOC] = {NULL};
+    TGraph *gToF[NLOC] = {NULL};
+    
+    TGraph *allPMTs[NLOC] = {NULL};
+    TGraph *badPMTs[NLOC] = {NULL};
     
     string hname = "";
     
@@ -109,6 +139,26 @@ int main() {
       hname = Form("hcosLP_%d",l);
       hcosLP[l] = new TH1D(hname.c_str(),"",100,-1,1);
       
+      hname = Form("gValid_%d",l);
+      gValid[l] = new TGraph();
+      hname = Form("gTIR_%d",l);
+      gTIR[l] = new TGraph();
+      hname = Form("gResV_%d",l);
+      gResV[l] = new TGraph();
+      hname = Form("gLine_%d",l);
+      gLine[l] = new TGraph();
+      hname = Form("gEllie_%d",l);
+      gEllie[l] = new TGraph();
+      hname = Form("gType_%d",l);
+      gType[l] = new TGraph();
+      hname = Form("gPrec_%d",l);
+      gPrec[l] = new TGraph();
+      hname = Form("gToF_%d",l);
+      gToF[l] = new TGraph();
+      
+      allPMTs[l] = new TGraph();
+      badPMTs[l] = new TGraph();
+      
       // Loop over PMTs
       for (int it=0; it<NPMTS; it++) {
       
@@ -127,8 +177,25 @@ int main() {
         
         // Calculate light path
         lpc.CalcByPosition(fibrePos,pmtPos,ENERGY,locality[l]);
-        if (!lpc.GetPathValid()) continue;
-        goodLP[l]++;
+        
+        // Project PMT position onto flatmap
+        TVector2 pmtPosFlat;
+        //std::cout << "PMT #" << it << " before " << printVector(pmtPos);
+        RAT::SphereToIcosahedron(pmtPos, pmtPosFlat, 1, 2.12);
+        //std::cout << " and after " << printVector(pmtPos) << std::endl;
+        allPMTs[l]->SetPoint(allPMTs[l]->GetN(), pmtPosFlat.X(), pmtPosFlat.Y());
+        
+        if (!lpc.GetPathValid()) {
+          // Fill failed light paths in separate flatmap
+          badPMTs[l]->SetPoint(badPMTs[l]->GetN(), pmtPosFlat.X(), pmtPosFlat.Y());
+        } else if (std::isnan(lpc.GetLightPathEndPos().Mag())) {
+          // Warning for problematic fit results
+          std::cout << "*** WARNING - Valid light path with NaN entries! ";
+          std::cout << "PMT #" << it << " at angle " << pmtAng << std::endl;
+        } else {
+          // Successful light path calculation
+          goodLP[l]++;
+        }
         
         // Get light path type
         string type = lpc.GetLightPathType();
@@ -153,11 +220,27 @@ int main() {
         TVector3 startDir = lpc.GetInitialLightVec();
         double thetaLPC = fibreDir.Angle(startDir)*180./pi; // angle w.r.t. fibre
         
-        /*
-        if (fabs(thetaLPC-thetaLine)>10) {
-          cout << "PMT #" << it << " has angles " << thetaLine << " - " << thetaLPC << " = " << thetaLPC-thetaLine << " degrees!" << endl;
-        }
-        */
+        // Get other light path parameters
+        double valid = lpc.GetPathValid(); // valid light path found
+        int tir = (int)lpc.GetTIR(); // total internal reflection detected
+        int resvhit = (int)lpc.GetResvHit(); // end point not within locality
+        int line = (int)lpc.GetStraightLine(); // straight line method used
+        int ellie = (int)lpc.GetELLIEEvent(); // is ELLIE event
+        double precision = lpc.GetPathPrecision(); // locality value
+        
+        // Fill graphs
+        gValid[l]->SetPoint(gValid[l]->GetN(),cos(fibrePos.Angle(pmtPos)),valid+offset[l]);
+        gTIR[l]->SetPoint(gTIR[l]->GetN(),cos(fibrePos.Angle(pmtPos)),tir+offset[l]);
+        gResV[l]->SetPoint(gResV[l]->GetN(),cos(fibrePos.Angle(pmtPos)),resvhit+offset[l]);
+        gLine[l]->SetPoint(gLine[l]->GetN(),cos(fibrePos.Angle(pmtPos)),line+offset[l]);
+        gEllie[l]->SetPoint(gEllie[l]->GetN(),cos(fibrePos.Angle(pmtPos)),ellie+offset[l]);
+        gType[l]->SetPoint(gType[l]->GetN(),cos(fibrePos.Angle(pmtPos)),k+7*offset[l]);
+        gPrec[l]->SetPoint(gPrec[l]->GetN(),cos(fibrePos.Angle(pmtPos)),precision+offset[l]);
+        gToF[l]->SetPoint(gToF[l]->GetN(),cos(fibrePos.Angle(pmtPos)),transitTime+100*offset[l]);
+        //std::cout << "Loop value = " << loop << ", ceiling " << lpc.GetLoopCeiling() << std::endl;
+        
+        // Skip rest for invalid light paths
+        if (!lpc.GetPathValid()) continue;
         
         // Fill histograms
         hang[l]->Fill(thetaLine,thetaLPC);
@@ -193,12 +276,31 @@ int main() {
     lpType.SetTextSize(0.048);
     lpType.SetTextColor(kRed+2);
     
+    c = new TCanvas("c","",640,1280);
+    c->Divide(1,5);
+    for (int l=0; l<NLOC; l++) {
+      c->cd(l+1)->DrawFrame(0,0,1,0.45,Form(";LPC failures with locality %d mm;",locality[l]));
+      allPMTs[l]->SetMarkerStyle(6);
+      allPMTs[l]->SetMarkerColor(19);
+      allPMTs[l]->Draw("P same");
+      fibreMarker->SetMarkerStyle(34);
+      fibreMarker->SetMarkerColor(1);
+      fibreMarker->Draw("P same");
+      if (badPMTs[l]->GetN()==0) continue;
+      badPMTs[l]->SetMarkerStyle(6);
+      badPMTs[l]->SetMarkerColor(col[l]);
+      badPMTs[l]->Draw("P same");
+    }
+    c->Print(Form("lightpath_fail_%s.png",fibre.c_str()));
+    c->Close();
+    
     c = new TCanvas("c","",1600,1200);
     c->Divide(3,2);
     // Angle comparison
     c->cd(1)->SetGrid();
     c->cd(1)->DrawFrame(0,0,100,100,"Angle comparison;(StraightLine) PMT angle from fibre [deg];LightPath initial direction from fibre [deg]");
     for (int l=NLOC-1; l>=0; l--) {
+      hang[l]->SetLineWidth(2);
       hang[l]->SetMarkerStyle(6);
       hang[l]->SetMarkerColor(col[l]);
       hang[l]->SetLineColor(col[l]);
@@ -334,7 +436,6 @@ int main() {
       hinner[l]->SetLineColor(col[l]);
       hinner[l]->Draw("scat same");
     }
-    //leg.DrawLegend(0.58,0.88,0.58,0.88);
     // Angle comparison
     c->cd(2)->SetGrid();
     c->cd(2)->DrawFrame(0,0,100,2,"Angle comparison;(StraightLine) PMT angle from fibre [deg];Path in AV [m]");
@@ -424,8 +525,67 @@ int main() {
     //c->Print("lightpath_param.pdf");
     c->Close();
     
+    // Draw LPC parameters as function of angle (for debugging)
+    c = new TCanvas("c","",1600,1200);
+    c->Divide(3,2);
+    c->cd(1)->SetGrid();
+    c->cd(1)->DrawFrame(-1,-0.1,1,1.1,";Angle #angle(Fibre, PMT) seen from AV centre, cos(#theta);LightPathCalculator::GetPathValid()");
+    for (int l=0; l<NLOC; l++) {
+      gValid[l]->SetMarkerStyle(6);
+      gValid[l]->SetMarkerColor(col[l]);
+      gValid[l]->Draw("P same");
+    }
+    gPad->Update();
+    //tl->SetX1NDC(0.01);
+    leg.Draw();
+    leg.SetX1(-0.795);
+    leg.SetX2(0.395);
+    leg.SetY1(0.205);
+    leg.SetY2(0.795);
+    gPad->Modified();
+    c->cd(2)->SetGrid();
+    c->cd(2)->DrawFrame(-1,-0.1,1,1.1,";Angle #angle(Fibre, PMT) seen from AV centre, cos(#theta);LightPathCalculator::GetTIR()");
+    for (int l=0; l<NLOC; l++) {
+      gTIR[l]->SetMarkerStyle(6);
+      gTIR[l]->SetMarkerColor(col[l]);
+      gTIR[l]->Draw("P same");
+    }
+    c->cd(3)->SetGrid();
+    c->cd(3)->DrawFrame(-1,-0.1,1,1.1,";Angle #angle(Fibre, PMT) seen from AV centre, cos(#theta);LightPathCalculator::GetResvHit()");
+    for (int l=0; l<NLOC; l++) {
+      gResV[l]->SetMarkerStyle(6);
+      gResV[l]->SetMarkerColor(col[l]);
+      gResV[l]->Draw("P same");
+    }
+    c->cd(4)->SetGrid();
+    c->cd(4)->DrawFrame(-1,-0.1,1,1.1,";Angle #angle(Fibre, PMT) seen from AV centre, cos(#theta);LightPathCalculator::GetStraightLine()");
+    for (int l=0; l<NLOC; l++) {
+      gLine[l]->SetMarkerStyle(6);
+      gLine[l]->SetMarkerColor(col[l]);
+      gLine[l]->Draw("P same");
+    }
+    c->cd(5)->SetGrid();
+    c->cd(5)->DrawFrame(-1,-0.1,1,7.9,";Angle #angle(Fibre, PMT) seen from AV centre, cos(#theta);LightPathCalculator::GetLightPathType()");
+    for (int l=0; l<NLOC; l++) {
+      gType[l]->SetMarkerStyle(6);
+      gType[l]->SetMarkerColor(col[l]);
+      gType[l]->Draw("P same");
+    }
+    lpType.SetTextColor(13);
+    for (int m=0; m<8; m++) lpType.DrawText(-0.9,m+0.25,lightPathType[m].c_str());
+    c->cd(6)->SetGrid();
+    c->cd(6)->DrawFrame(-1,0,1,90,";Angle #angle(Fibre, PMT) seen from AV centre, cos(#theta);Transit time [ns]");
+    for (int l=0; l<NLOC; l++) {
+      gToF[l]->SetMarkerStyle(6);
+      gToF[l]->SetMarkerColor(col[l]);
+      gToF[l]->Draw("P same");
+    }
+    c->Print(Form("lightpath_params_%s.png",fibre.c_str()));
+    c->Close();
+    
     // Free memory
     if (c) delete c;
+    if (fibreMarker) delete fibreMarker;
     for (int l=0; l<NLOC; l++) {
       if (hang[l]) delete hang[l];
       if (hbin[l]) delete hbin[l];
@@ -441,6 +601,16 @@ int main() {
       if (hangLP[l]) delete hangLP[l];
       if (hcosAV[l]) delete hcosAV[l];
       if (hcosLP[l]) delete hcosLP[l];
+      if (allPMTs[l]) delete allPMTs[l];
+      if (badPMTs[l]) delete badPMTs[l];
+      if (gValid[l]) delete gValid[l];
+      if (gTIR[l]) delete gTIR[l];
+      if (gResV[l]) delete gResV[l];
+      if (gLine[l]) delete gLine[l];
+      if (gEllie[l]) delete gEllie[l];
+      if (gType[l]) delete gType[l];
+      if (gPrec[l]) delete gPrec[l];
+      if (gToF[l]) delete gToF[l];
     }
     return 0;
 }

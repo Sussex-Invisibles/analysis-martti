@@ -38,6 +38,7 @@
 #include "RAT/DS/Entry.hh"
 #include "RAT/DS/MC.hh"
 #include <RAT/PhysicsUtil.hh>
+#include <RAT/FlatMap.hh>
 
 // Helpful functions
 #include "Xianguo.C"
